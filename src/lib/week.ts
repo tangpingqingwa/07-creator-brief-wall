@@ -15,20 +15,21 @@ const WEEK_ID_RE = /^(\d{4})-W(\d{2})$/;
 const LISTING_SELECT = `SELECT id, week_id, brand, terms, brief_url, platforms, bid_usd, clicks, created_at, updated_at
          FROM listings`;
 
+/** Split so Next/webpack cannot replace `process.env.WEEK_NOW` at build time. */
+const WEEK_NOW_KEY = ["WEEK", "NOW"].join("_");
+
 /**
  * Operator / test clock. `WEEK_NOW` is an ISO-8601 instant.
  * Reset is a `week_id` query filter, not a delete.
- * Read via `env["WEEK_NOW"]` so `next start` cannot inline a build-time empty
- * value; a Monday roll after restart must see the new clock.
  */
 export function nowUtc(env: NodeJS.ProcessEnv = process.env): Date {
-  const raw = env["WEEK_NOW"];
+  const raw = env[WEEK_NOW_KEY];
   if (raw === undefined || raw.trim() === "") {
     return new Date();
   }
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) {
-    throw new Error(`invalid WEEK_NOW: ${raw}`);
+    throw new Error(`invalid ${WEEK_NOW_KEY}: ${raw}`);
   }
   return parsed;
 }
@@ -108,5 +109,7 @@ export function listLiveBoard(
   const rows = db
     .prepare(`${LISTING_SELECT} WHERE week_id = ?`)
     .all(weekId) as ListingRow[];
-  return rankListings(rows.map(listingFromRow));
+  return rankListings(
+    rows.map(listingFromRow).filter((row) => row.weekId === weekId),
+  );
 }

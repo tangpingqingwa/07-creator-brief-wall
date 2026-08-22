@@ -346,27 +346,52 @@ if [[ -f package.json ]]; then
   log_file="$(mktemp "${TMPDIR:-/tmp}/cbw-next.XXXXXX.log")"
   db_file="$(mktemp "${TMPDIR:-/tmp}/cbw.XXXXXX.sqlite")"
   server_pid=""
+  kill_tree() {
+    local pid="${1:-}"
+    local child
+    [[ -n "${pid}" ]] || return 0
+    for child in $(pgrep -P "${pid}" 2>/dev/null || true); do
+      kill_tree "${child}"
+    done
+    kill "${pid}" 2>/dev/null || true
+  }
+
+  listeners_on_port() {
+    lsof -nP -iTCP:"${port}" -sTCP:LISTEN -t 2>/dev/null \
+      || fuser "${port}/tcp" 2>/dev/null \
+      || true
+  }
+
   stop_http() {
     local pid="${1:-}"
-    [[ -n "${pid}" ]] || return 0
-    # `npx next start` is a parent; the listener is often a child next-server.
-    # Killing only the parent leaves the old week still bound to the port.
-    local kids
-    kids="$(pgrep -P "${pid}" 2>/dev/null || true)"
-    if [[ -n "${kids}" ]]; then
-      kill ${kids} 2>/dev/null || true
+    # `npx next start` is a parent; the listener is often a grandchild.
+    # Killing only the parent leaves last week's board still bound to the port.
+    if [[ -n "${pid}" ]]; then
+      kill_tree "${pid}"
+      wait "${pid}" 2>/dev/null || true
+      kill_tree "${pid}"
+      kill -9 "${pid}" 2>/dev/null || true
     fi
-    kill "${pid}" 2>/dev/null || true
-    wait "${pid}" 2>/dev/null || true
-    if [[ -n "${kids}" ]]; then
-      kill -9 ${kids} 2>/dev/null || true
-    fi
-    kill -9 "${pid}" 2>/dev/null || true
     local leftover
-    leftover="$(lsof -nP -iTCP:"${port}" -sTCP:LISTEN -t 2>/dev/null || true)"
+    leftover="$(listeners_on_port)"
     if [[ -n "${leftover}" ]]; then
       kill -9 ${leftover} 2>/dev/null || true
     fi
+    if command -v fuser >/dev/null 2>&1; then
+      fuser -k "${port}/tcp" >/dev/null 2>&1 || true
+    fi
+    local _
+    for _ in $(seq 1 50); do
+      if ! curl -sf --max-time 1 "http://127.0.0.1:${port}/healthz" >/dev/null 2>&1; then
+        leftover="$(listeners_on_port)"
+        [[ -z "${leftover}" ]] && return 0
+      fi
+      leftover="$(listeners_on_port)"
+      if [[ -n "${leftover}" ]]; then
+        kill -9 ${leftover} 2>/dev/null || true
+      fi
+      sleep 0.1
+    done
   }
   cleanup_http() {
     stop_http "${server_pid}"
@@ -378,7 +403,7 @@ if [[ -f package.json ]]; then
   export DATABASE_PATH="${db_file}"
   export NEXT_TELEMETRY_DISABLED=1
   npx next build
-  PORT="${port}" npx next start --port "${port}" --hostname 127.0.0.1 \
+  PORT="${port}" node ./node_modules/next/dist/bin/next start --port "${port}" --hostname 127.0.0.1 \
     >"${log_file}" 2>&1 &
   server_pid=$!
 
@@ -689,8 +714,10 @@ if [[ -f package.json ]]; then
   echo "== WEEK_NOW roll hides previous week from the live board =="
   stop_http "${server_pid}"
   server_pid=""
+  # New listener on a fresh port so a leftover next-server cannot serve last week.
+  port=$((port + 1))
   export WEEK_NOW="2099-01-05T00:00:00.000Z"
-  PORT="${port}" npx next start --port "${port}" --hostname 127.0.0.1 \
+  PORT="${port}" node ./node_modules/next/dist/bin/next start --port "${port}" --hostname 127.0.0.1 \
     >"${log_file}" 2>&1 &
   server_pid=$!
   ready=0
