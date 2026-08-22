@@ -42,7 +42,8 @@ export function BoardChrome({ children }: { children: ReactNode }) {
       <p className="lede">This week’s briefs, ranked by money.</p>
       {children}
       <p className="rules-note">
-        Rank is the bid. Minimum $5. The board resets Monday 00:00 UTC.
+        Rank is the bid. Minimum $5. The board resets Monday 00:00 UTC.{" "}
+        <a href="/about">About</a> · <a href="/rules">Rules</a>
       </p>
     </main>
   );

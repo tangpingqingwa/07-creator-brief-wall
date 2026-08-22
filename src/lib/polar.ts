@@ -11,6 +11,7 @@ import {
   type CheckoutQuote,
   type Listing,
 } from "./rank";
+import { canonicalizeBriefUrl, UrlError } from "./urls";
 
 export type PolarEnv = Record<string, string | undefined>;
 
@@ -158,7 +159,7 @@ export function parseCheckoutInput(input: {
 }): ListingDraft {
   const brand = readRequiredText(input.brand, "brand", 80);
   const terms = readRequiredText(input.terms, "terms", 280);
-  const briefUrl = readRequiredText(input.briefUrl, "briefUrl", 2048);
+  const briefUrl = readBriefUrl(input.briefUrl);
   const bidUsd = parseBidUsd(input.bidUsd);
   return {
     weekId: input.weekId ?? utcWeekId(),
@@ -182,6 +183,18 @@ function readRequiredText(
     throw new CheckoutError("missing_field", 400, `Missing ${field}`);
   }
   return text;
+}
+
+function readBriefUrl(value: unknown): string {
+  const raw = readRequiredText(value, "briefUrl", 2048);
+  try {
+    return canonicalizeBriefUrl(raw);
+  } catch (error) {
+    if (error instanceof UrlError) {
+      throw new CheckoutError(error.code, error.httpStatus, error.message);
+    }
+    throw error;
+  }
 }
 
 type DraftRow = {

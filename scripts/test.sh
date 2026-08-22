@@ -213,6 +213,58 @@ if [[ -f package.json ]]; then
   fi
   [[ -z "${POLAR_LIVE:-}" ]] || fail "POLAR_LIVE must stay unset in test.sh"
 
+  echo "== about, rules, URL hygiene =="
+  for f in \
+    src/app/about/page.tsx \
+    src/app/rules/page.tsx \
+    src/lib/urls.ts \
+    tests/urls.test.ts
+  do
+    [[ -f "$f" ]] || fail "missing $f"
+  done
+  grep -q 'export function canonicalizeBriefUrl' src/lib/urls.ts \
+    || fail "urls.ts must export canonicalizeBriefUrl"
+  grep -q 'utm_' src/lib/urls.ts || fail "urls.ts must strip utm_*"
+  grep -q 'fbclid' src/lib/urls.ts || fail "urls.ts must strip fbclid"
+  grep -q 'https' src/lib/urls.ts || fail "urls.ts must require https"
+  grep -q 'bit.ly' src/lib/urls.ts || fail "urls.ts must reject bit.ly"
+  grep -q 'canonicalizeBriefUrl' src/lib/polar.ts \
+    || fail "checkout must apply URL hygiene before persist"
+  grep -q 'no ads' src/app/about/page.tsx || fail "about must state no ads"
+  grep -q 'no API keys' src/app/about/page.tsx || fail "about must state no API keys"
+  grep -q 'no revenue share' src/app/about/page.tsx \
+    || fail "about must state no revenue share"
+  grep -q 'Rank is the bid' src/app/about/page.tsx \
+    || fail "about must state rank is the bid"
+  grep -q 'not affiliated' src/app/about/page.tsx \
+    || fail "about must state independence from platforms"
+  grep -q 'creator-brief-wall' src/app/about/page.tsx \
+    || fail "about must name the creator-brief-wall vertical"
+  grep -q '\$5' src/app/rules/page.tsx || fail "rules must state min \$5"
+  grep -q 'Rank is the bid' src/app/rules/page.tsx \
+    || fail "rules must state rank is the bid"
+  grep -q 'Older wins ties' src/app/rules/page.tsx \
+    || fail "rules must state older wins ties"
+  grep -q 'Raise pays difference' src/app/rules/page.tsx \
+    || fail "rules must state raise pays difference"
+  grep -q 'Monday 00:00' src/app/rules/page.tsx \
+    || fail "rules must state weekly UTC reset"
+  grep -q 'NSFW' src/app/rules/page.tsx || fail "rules must document NSFW rejects"
+  grep -q 'Telegram' src/app/rules/page.tsx \
+    || fail "rules must document chat-link rejects"
+  grep -q 'utm_' tests/urls.test.ts || fail "url tests must strip tracking query"
+  grep -q 't.me' tests/urls.test.ts || fail "url tests must reject Telegram"
+  grep -q 'onlyfans' tests/urls.test.ts || fail "url tests must reject NSFW"
+  grep -q 'bit.ly' tests/urls.test.ts || fail "url tests must reject shorteners"
+  if grep -nE '[^a-zA-Z_]fetch\(' src/lib/urls.ts >/dev/null; then
+    fail "urls.ts must not call global fetch (tests stay offline)"
+  fi
+  if [[ -f src/lib/week.ts ]] || [[ -f src/lib/clicks.ts ]] \
+    || [[ -f src/app/r/\[id\]/route.ts ]]; then
+    fail "PR 6 must not start weekly reset + clicks"
+  fi
+  [[ -z "${POLAR_LIVE:-}" ]] || fail "POLAR_LIVE must stay unset in test.sh"
+
   echo "== GET /healthz and empty board =="
   port="${TEST_PORT:-34567}"
   log_file="$(mktemp "${TMPDIR:-/tmp}/cbw-next.XXXXXX.log")"
@@ -262,6 +314,26 @@ if [[ -f package.json ]]; then
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${home_body}"; then
     fail "GET / must not invent follower or reach numbers"
   fi
+
+  echo "== GET /about and /rules =="
+  about_body="$(mktemp)"
+  about_code="$(curl -sS -o "${about_body}" -w '%{http_code}' "http://127.0.0.1:${port}/about")"
+  [[ "${about_code}" == "200" ]] || fail "GET /about expected 200 got ${about_code}"
+  grep -q 'data-page="about"' "${about_body}" || fail "GET /about missing about page"
+  grep -qi 'rank is the bid' "${about_body}" || fail "GET /about must say rank is the bid"
+  grep -qi 'no ads' "${about_body}" || fail "GET /about must say no ads"
+  grep -qi 'not affiliated' "${about_body}" || fail "GET /about must state independence"
+  grep -q 'creator-brief-wall' "${about_body}" \
+    || fail "GET /about must name the creator-brief-wall vertical"
+
+  rules_body="$(mktemp)"
+  rules_code="$(curl -sS -o "${rules_body}" -w '%{http_code}' "http://127.0.0.1:${port}/rules")"
+  [[ "${rules_code}" == "200" ]] || fail "GET /rules expected 200 got ${rules_code}"
+  grep -q 'data-page="rules"' "${rules_body}" || fail "GET /rules missing rules page"
+  grep -q '\$5' "${rules_body}" || fail "GET /rules must state min \$5"
+  grep -qi 'rank is the bid' "${rules_body}" || fail "GET /rules must say rank is the bid"
+  grep -qi 'older wins' "${rules_body}" || fail "GET /rules must say older wins ties"
+  grep -qi 'difference' "${rules_body}" || fail "GET /rules must say raise pays difference"
 
   echo "== fixture \$5 appears on the board after completion =="
   unpaid_body="$(mktemp)"
@@ -411,10 +483,66 @@ if [[ -f package.json ]]; then
   grep -E -q 'data-rank="2"[^>]*data-brand="Acme"|data-brand="Acme"[^>]*data-rank="2"' \
     "${take_home}" || fail "\$7 incumbent must drop to #2 after a \$8 full bid"
 
-  rm -f "${health_body}" "${home_body}" "${unpaid_body}" "${unpaid_home}" \
+  echo "== reject chat / NSFW / shortener / http brief URLs =="
+  for bad in \
+    'https://t.me/acmebriefs|chat_link_forbidden' \
+    'https://onlyfans.com/creator|nsfw_forbidden' \
+    'https://bit.ly/acme-brief|shortener_forbidden' \
+    'http://example.com/insecure|invalid_url'
+  do
+    bad_url="${bad%%|*}"
+    bad_code_name="${bad##*|}"
+    bad_body="$(mktemp)"
+    bad_http="$(curl -sS -o "${bad_body}" -w '%{http_code}' \
+      -X POST "http://127.0.0.1:${port}/checkout" \
+      -H 'content-type: application/x-www-form-urlencoded' \
+      --data-urlencode 'brand=Rejected' \
+      --data-urlencode 'terms=must not list' \
+      --data-urlencode "briefUrl=${bad_url}" \
+      --data-urlencode 'bidUsd=5')"
+    [[ "${bad_http}" == "400" ]] \
+      || fail "POST ${bad_url} expected 400 got ${bad_http}"
+    grep -q "${bad_code_name}" "${bad_body}" \
+      || fail "POST ${bad_url} must report ${bad_code_name}"
+    rm -f "${bad_body}"
+  done
+  reject_home="$(mktemp)"
+  curl -sS -o "${reject_home}" "http://127.0.0.1:${port}/"
+  if grep -q 'Rejected' "${reject_home}"; then
+    fail "rejected chat/NSFW/shortener/http URLs must not list"
+  fi
+
+  echo "== tracking query is stripped before persist =="
+  track_headers="$(mktemp)"
+  track_code="$(curl -sS -D "${track_headers}" -o /dev/null -w '%{http_code}' \
+    -X POST "http://127.0.0.1:${port}/checkout" \
+    -H 'content-type: application/x-www-form-urlencoded' \
+    --data-urlencode 'brand=CleanUrl' \
+    --data-urlencode 'terms=stripped tracking' \
+    --data-urlencode 'briefUrl=https://example.com/clean?utm_source=x&fbclid=abc' \
+    --data-urlencode 'bidUsd=5')"
+  [[ "${track_code}" == "303" ]] || fail "tracking POST /checkout expected 303 got ${track_code}"
+  track_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${track_headers}")"
+  [[ -n "${track_location}" ]] || fail "tracking POST /checkout missing Location"
+  if [[ "${track_location}" != http* ]]; then
+    track_location="http://127.0.0.1:${port}${track_location}"
+  fi
+  curl -sS -o /dev/null "${track_location}"
+  track_home="$(mktemp)"
+  curl -sS -o "${track_home}" "http://127.0.0.1:${port}/"
+  grep -q 'CleanUrl' "${track_home}" || fail "stripped tracking URL must still list"
+  grep -q 'https://example.com/clean' "${track_home}" \
+    || fail "stored brief URL must keep origin + path after strip"
+  if grep -qE 'utm_|fbclid' "${track_home}"; then
+    fail "stored brief URL must not keep tracking query"
+  fi
+
+  rm -f "${health_body}" "${home_body}" "${about_body}" "${rules_body}" \
+    "${unpaid_body}" "${unpaid_home}" \
     "${paid_headers}" "${return_body}" "${listed_body}" \
     "${same_bid_body}" "${raise_headers}" "${raise_return}" "${raised_body}" \
-    "${steal_headers}" "${steal_home}" "${take_headers}" "${take_home}"
+    "${steal_headers}" "${steal_home}" "${take_headers}" "${take_home}" \
+    "${reject_home}" "${track_headers}" "${track_home}"
 fi
 
 echo "OK: buildable and testable"
