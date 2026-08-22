@@ -12,6 +12,9 @@ import {
   type Listing,
 } from "./rank";
 import { canonicalizeBriefUrl, UrlError } from "./urls";
+import { utcWeekId } from "./week";
+
+export { utcWeekId } from "./week";
 
 export type PolarEnv = Record<string, string | undefined>;
 
@@ -100,20 +103,6 @@ export function requirePolarSecret(
     throw new Error(`BLOCKED-SECRET: ${name}`);
   }
   return value;
-}
-
-/** ISO week id in UTC, e.g. 2026-W34. */
-export function utcWeekId(now: Date = new Date()): string {
-  const date = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const weekNo = Math.ceil(
-    ((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7,
-  );
-  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 }
 
 export function parseBidUsd(raw: unknown): number {

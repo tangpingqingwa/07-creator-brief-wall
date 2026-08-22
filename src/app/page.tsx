@@ -1,21 +1,21 @@
-import type { ListingRow } from "../lib/db";
+import { unstable_noStore as noStore } from "next/cache";
+import { headers } from "next/headers";
+import { connection } from "next/server";
 import { getDb } from "../lib/db";
-import { listingFromRow, rankListings } from "../lib/rank";
+import { currentWeekUtc, listLiveBoard, nowUtc } from "../lib/week";
 import { Board } from "./board";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
-function loadRankedListings() {
-  const rows = getDb()
-    .prepare(
-      `SELECT id, week_id, brand, terms, brief_url, platforms, bid_usd, clicks, created_at, updated_at
-       FROM listings`,
-    )
-    .all() as ListingRow[];
-  return rankListings(rows.map(listingFromRow));
-}
-
-export default function HomePage() {
-  return <Board listings={loadRankedListings()} />;
+export default async function HomePage() {
+  noStore();
+  await connection();
+  await headers();
+  const week = currentWeekUtc(nowUtc());
+  return (
+    <Board listings={listLiveBoard(getDb(), week.weekId)} weekId={week.weekId} />
+  );
 }

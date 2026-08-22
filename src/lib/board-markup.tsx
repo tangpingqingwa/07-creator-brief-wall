@@ -25,8 +25,14 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
           <span className="brand">{listing.brand}</span>
           <p className="terms">{listing.terms}</p>
           <span className="bid">${listing.bidUsd}</span>
-          <span className="clicks">{listing.clicks} clicks</span>
-          <a className="brief-url" href={listing.briefUrl}>
+          <span className="clicks" data-clicks={listing.clicks}>
+            {listing.clicks} clicks
+          </span>
+          <a
+            className="brief-url"
+            href={`/r/${listing.id}`}
+            data-brief-url={listing.briefUrl}
+          >
             Open brief
           </a>
         </li>
@@ -35,9 +41,15 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
   );
 }
 
-export function BoardChrome({ children }: { children: ReactNode }) {
+export function BoardChrome({
+  children,
+  weekId,
+}: {
+  children: ReactNode;
+  weekId?: string;
+}) {
   return (
-    <main className="board">
+    <main className="board" data-week-id={weekId}>
       <h1>Creator Brief Wall</h1>
       <p className="lede">This week’s briefs, ranked by money.</p>
       {children}
