@@ -2,7 +2,7 @@
 
 This repo is developed on GitHub. **`main` must always be buildable and testable.** Nothing lands on `main` except through a green pull request.
 
-The product contract is [SPEC.md](./SPEC.md). If SPEC and code disagree, fix one of them in the same PR.
+The product contract is [SPEC.md](./SPEC.md). Implementation plan: [BUILD.md](./BUILD.md). If SPEC and code disagree, fix one of them in the same PR.
 
 ## Default branch
 
