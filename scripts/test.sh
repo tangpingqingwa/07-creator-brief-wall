@@ -93,8 +93,39 @@ if [[ -f package.json ]]; then
   [[ ${#test_files[@]} -gt 0 ]] || fail "no tests/*.test.ts files"
   test_log="$(mktemp "${TMPDIR:-/tmp}/cbw-unit.XXXXXX")"
   set +e
-  npx tsx --test --test-force-exit --test-reporter spec "${test_files[@]}" | tee "${test_log}"
-  test_status=${PIPESTATUS[0]}
+  test_status=0
+  for test_file in "${test_files[@]}"; do
+    echo "-- ${test_file} --"
+    file_ok=0
+    attempt=1
+    while [[ "${attempt}" -le 3 ]]; do
+      file_log="$(mktemp "${TMPDIR:-/tmp}/cbw-unit-file.XXXXXX")"
+      npx tsx --test --test-force-exit --test-reporter spec "${test_file}" \
+        >"${file_log}" 2>&1
+      file_status=$?
+      cat "${file_log}" | tee -a "${test_log}"
+      if [[ ${file_status} -eq 0 ]]; then
+        file_ok=1
+        rm -f "${file_log}"
+        break
+      fi
+      # Node 24 + better-sqlite3 can abort in Database::~Database during GC.
+      # The file's assertions already passed; retry the process once or twice.
+      if grep -q 'RemoveEnvironmentCleanupHook' "${file_log}" \
+        && grep -q 'Database::~Database' "${file_log}"
+      then
+        echo "retry ${attempt}/3 ${test_file} after better-sqlite3 GC abort" >&2
+        rm -f "${file_log}"
+        attempt=$((attempt + 1))
+        continue
+      fi
+      rm -f "${file_log}"
+      break
+    done
+    if [[ "${file_ok}" -ne 1 ]]; then
+      test_status=1
+    fi
+  done
   set -e
   [[ ${test_status} -eq 0 ]] || fail "unit tests failed"
   grep -Eq 'tests[[:space:]]+[1-9][0-9]*' "${test_log}" \
@@ -259,9 +290,54 @@ if [[ -f package.json ]]; then
   if grep -nE '[^a-zA-Z_]fetch\(' src/lib/urls.ts >/dev/null; then
     fail "urls.ts must not call global fetch (tests stay offline)"
   fi
-  if [[ -f src/lib/week.ts ]] || [[ -f src/lib/clicks.ts ]] \
-    || [[ -f src/app/r/\[id\]/route.ts ]]; then
-    fail "PR 6 must not start weekly reset + clicks"
+
+  echo "== weekly reset + public brief-URL clicks =="
+  for f in \
+    src/lib/week.ts \
+    src/lib/clicks.ts \
+    src/app/r/\[id\]/route.ts \
+    tests/week.test.ts \
+    tests/board.test.ts
+  do
+    [[ -f "$f" ]] || fail "missing $f"
+  done
+  grep -q 'export function utcWeekId' src/lib/week.ts \
+    || fail "week.ts must export utcWeekId"
+  grep -q 'Monday 00:00' src/lib/week.ts \
+    || fail "week.ts must document Monday 00:00 UTC reset"
+  grep -q 'WEEK_NOW' src/lib/week.ts \
+    || fail "week.ts must honor WEEK_NOW as the operator/test clock"
+  grep -q 'week_id = ?' src/lib/week.ts \
+    || fail "live board must filter by week_id, not delete"
+  grep -q 'currentWeekUtc' src/app/page.tsx \
+    || fail "page.tsx must use currentWeekUtc"
+  grep -q 'listLiveBoard' src/app/page.tsx \
+    || fail "page.tsx must load the current week only"
+  grep -q 'export function incrementPublicClick' src/lib/clicks.ts \
+    || fail "clicks.ts must export incrementPublicClick"
+  grep -q 'outboundBriefUrl' src/lib/clicks.ts \
+    || fail "clicks must redirect to the canonical brief URL"
+  grep -q 'export function GET' src/app/r/\[id\]/route.ts \
+    || fail "/r/:id must handle GET"
+  grep -q 'export function POST' src/app/r/\[id\]/route.ts \
+    || fail "/r/:id must handle POST"
+  grep -q '302' src/app/r/\[id\]/route.ts \
+    || fail "/r/:id must 302"
+  grep -q 'href={`/r/${listing.id}`}' src/lib/board-markup.tsx \
+    || fail "Open brief must go through /r/:id"
+  grep -q 'Monday 00:00 UTC rolls weekId' tests/week.test.ts \
+    || fail "week tests must cover Monday 00:00 UTC roll"
+  grep -q 'previous week rows are absent from the live board' tests/week.test.ts \
+    || fail "week tests must hide previous week rows"
+  grep -q 'incrementPublicClick' tests/board.test.ts \
+    || fail "board tests must cover public clicks"
+  if grep -nE '[^a-zA-Z_]fetch\(' src/lib/week.ts src/lib/clicks.ts \
+    src/app/r/\[id\]/route.ts >/dev/null
+  then
+    fail "week/clicks must stay offline (no fetch)"
+  fi
+  if [[ -f scripts/live-smoke.sh ]]; then
+    fail "PR 7 live-smoke must not start in this change"
   fi
   [[ -z "${POLAR_LIVE:-}" ]] || fail "POLAR_LIVE must stay unset in test.sh"
 
@@ -537,12 +613,97 @@ if [[ -f package.json ]]; then
     fail "stored brief URL must not keep tracking query"
   fi
 
+  echo "== GET|POST /r/:id increments public clicks and 302s without trackers =="
+  listing_id="$(
+    grep -oE 'data-brand="CleanUrl"[^>]*data-id="[^"]+"|data-id="[^"]+"[^>]*data-brand="CleanUrl"' \
+      "${track_home}" \
+      | grep -oE 'data-id="[^"]+"' \
+      | head -n 1 \
+      | sed -E 's/data-id="([^"]+)"/\1/'
+  )"
+  if [[ -z "${listing_id}" ]]; then
+    listing_id="$(
+      grep -oE 'data-id="[^"]+"' "${track_home}" | tail -n 1 | sed -E 's/data-id="([^"]+)"/\1/'
+    )"
+  fi
+  [[ -n "${listing_id}" ]] || fail "paid board missing data-id for click hop"
+  grep -q "href=\"/r/${listing_id}\"" "${track_home}" \
+    || fail "Open brief must point at /r/:id"
+  grep -q 'data-clicks="0"' "${track_home}" || fail "new listing clicks must start at 0"
+
+  click_headers="$(mktemp)"
+  click_code="$(curl -sS -D "${click_headers}" -o /dev/null -w '%{http_code}' \
+    --max-redirs 0 \
+    "http://127.0.0.1:${port}/r/${listing_id}")"
+  [[ "${click_code}" == "302" ]] || fail "GET /r/:id expected 302 got ${click_code}"
+  click_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${click_headers}")"
+  [[ "${click_location}" == "https://example.com/clean" ]] \
+    || fail "GET /r/:id must 302 to canonical brief URL, got ${click_location}"
+  if echo "${click_location}" | grep -qE 'utm_|fbclid|gclid'; then
+    fail "GET /r/:id must not add tracking query"
+  fi
+
+  after_get="$(mktemp)"
+  curl -sS -o "${after_get}" "http://127.0.0.1:${port}/"
+  grep -q 'data-clicks="1"' "${after_get}" || fail "GET /r/:id must increment public clicks"
+
+  post_headers="$(mktemp)"
+  post_code="$(curl -sS -D "${post_headers}" -o /dev/null -w '%{http_code}' \
+    --max-redirs 0 \
+    -X POST "http://127.0.0.1:${port}/r/${listing_id}")"
+  [[ "${post_code}" == "302" ]] || fail "POST /r/:id expected 302 got ${post_code}"
+  post_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${post_headers}")"
+  [[ "${post_location}" == "https://example.com/clean" ]] \
+    || fail "POST /r/:id must 302 to canonical brief URL, got ${post_location}"
+
+  after_post="$(mktemp)"
+  curl -sS -o "${after_post}" "http://127.0.0.1:${port}/"
+  grep -q 'data-clicks="2"' "${after_post}" || fail "POST /r/:id must increment public clicks"
+  grep -q 'CleanUrl' "${after_post}" || fail "clicked listing must stay on the live board"
+
+  missing_code="$(curl -sS -o /dev/null -w '%{http_code}' \
+    --max-redirs 0 \
+    "http://127.0.0.1:${port}/r/does-not-exist")"
+  [[ "${missing_code}" == "404" ]] || fail "unknown /r/:id expected 404 got ${missing_code}"
+
+  echo "== WEEK_NOW roll hides previous week from the live board =="
+  kill "${server_pid}" 2>/dev/null || true
+  wait "${server_pid}" 2>/dev/null || true
+  server_pid=""
+  export WEEK_NOW="2099-01-05T00:00:00.000Z"
+  PORT="${port}" npx next start --port "${port}" --hostname 127.0.0.1 \
+    >"${log_file}" 2>&1 &
+  server_pid=$!
+  ready=0
+  for _ in $(seq 1 60); do
+    if ! kill -0 "${server_pid}" 2>/dev/null; then
+      fail "next start after WEEK_NOW exited early: $(cat "${log_file}")"
+    fi
+    if curl -sf "http://127.0.0.1:${port}/healthz" >/dev/null; then
+      ready=1
+      break
+    fi
+    sleep 1
+  done
+  [[ "${ready}" -eq 1 ]] || fail "GET /healthz after WEEK_NOW did not become ready: $(cat "${log_file}")"
+  rolled_body="$(mktemp)"
+  rolled_code="$(curl -sS -o "${rolled_body}" -w '%{http_code}' "http://127.0.0.1:${port}/")"
+  [[ "${rolled_code}" == "200" ]] || fail "GET / after week roll expected 200 got ${rolled_code}"
+  grep -q 'data-empty-week="true"' "${rolled_body}" \
+    || fail "week roll must hide previous week from the live board"
+  if grep -qE 'Acme|Rival|CleanUrl' "${rolled_body}"; then
+    fail "previous week listings must be absent from the live board"
+  fi
+  unset WEEK_NOW
+
   rm -f "${health_body}" "${home_body}" "${about_body}" "${rules_body}" \
     "${unpaid_body}" "${unpaid_home}" \
     "${paid_headers}" "${return_body}" "${listed_body}" \
     "${same_bid_body}" "${raise_headers}" "${raise_return}" "${raised_body}" \
     "${steal_headers}" "${steal_home}" "${take_headers}" "${take_home}" \
-    "${reject_home}" "${track_headers}" "${track_home}"
+    "${reject_home}" "${track_headers}" "${track_home}" \
+    "${click_headers}" "${after_get}" "${post_headers}" "${after_post}" \
+    "${rolled_body}"
 fi
 
 echo "OK: buildable and testable"
