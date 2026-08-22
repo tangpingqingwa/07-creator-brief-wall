@@ -4,6 +4,32 @@ import Database from "better-sqlite3";
 
 export type AppDb = InstanceType<typeof Database>;
 
+export type ListingRow = {
+  id: string;
+  week_id: string;
+  brand: string;
+  terms: string;
+  brief_url: string;
+  platforms: string | null;
+  bid_usd: number;
+  clicks: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PaymentRow = {
+  id: string;
+  listing_id: string | null;
+  week_id: string;
+  brief_url: string;
+  amount_usd: number;
+  kind: "place" | "raise";
+  status: "pending" | "completed" | "canceled";
+  polar_checkout_id: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
 const SCHEMA_PATH = join(process.cwd(), "src", "db", "schema.sql");
 
 export function defaultDatabasePath(): string {
