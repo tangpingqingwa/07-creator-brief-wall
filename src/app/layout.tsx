@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import "./board.css";
 
 export const metadata: Metadata = {
   title: "Creator Brief Wall",
