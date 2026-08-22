@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS listings (
   UNIQUE (week_id, brief_url)
 );
 
+-- listing_id is set when a completed payment claims rank; unpaid rows stay off the board
 CREATE TABLE IF NOT EXISTS payments (
   id TEXT PRIMARY KEY,
   listing_id TEXT,
@@ -22,7 +23,7 @@ CREATE TABLE IF NOT EXISTS payments (
   amount_usd INTEGER NOT NULL CHECK (amount_usd >= 1),
   kind TEXT NOT NULL CHECK (kind IN ('place', 'raise')),
   status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'canceled')),
-  polar_checkout_id TEXT,
+  polar_checkout_id TEXT UNIQUE,
   created_at TEXT NOT NULL,
   completed_at TEXT,
   FOREIGN KEY (listing_id) REFERENCES listings (id)
