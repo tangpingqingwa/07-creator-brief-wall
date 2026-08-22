@@ -187,6 +187,32 @@ if [[ -f package.json ]]; then
   [[ -z "${POLAR_ACCESS_TOKEN:-}" ]] || fail "POLAR_ACCESS_TOKEN must stay unset"
   [[ -z "${POLAR_WEBHOOK_SECRET:-}" ]] || fail "POLAR_WEBHOOK_SECRET must stay unset"
 
+  echo "== raise-bid + difference =="
+  grep -q 'export function raise' src/lib/rank.ts \
+    || fail "rank.ts missing raise"
+  grep -q 'export function quoteCheckout' src/lib/rank.ts \
+    || fail "rank.ts missing quoteCheckout"
+  grep -q 'chargeUsd' src/lib/rank.ts \
+    || fail "rank.ts must charge new − current on raise"
+  grep -q 'planCheckout' src/lib/polar.ts src/app/api/checkout/route.ts \
+    || fail "checkout raise path missing planCheckout"
+  grep -q 'kind === "raise"' src/lib/polar.ts \
+    || fail "checkout must apply a raise after payment"
+  grep -q 'raise pays difference' tests/rank.test.ts \
+    || fail "rank tests must cover raise pays difference"
+  grep -q 'cannot steal #1' tests/rank.test.ts \
+    || fail "rank tests must cover steal-by-difference"
+  grep -q 'same brief URL raise' tests/checkout.test.ts \
+    || fail "checkout tests must cover same-URL raise"
+  grep -q 'raise_too_small' tests/checkout.test.ts \
+    || fail "checkout tests must reject a same-or-lower raise"
+  if grep -nE 'fetch\(|polar\.sh|api\.polar' src/app/api/checkout/route.ts \
+    src/app/api/webhooks/polar/route.ts >/dev/null
+  then
+    fail "raise checkout must stay offline in routes"
+  fi
+  [[ -z "${POLAR_LIVE:-}" ]] || fail "POLAR_LIVE must stay unset in test.sh"
+
   echo "== GET /healthz and empty board =="
   port="${TEST_PORT:-34567}"
   log_file="$(mktemp "${TMPDIR:-/tmp}/cbw-next.XXXXXX.log")"
@@ -289,8 +315,106 @@ if [[ -f package.json ]]; then
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${listed_body}"; then
     fail "paid board must not invent follower or reach numbers"
   fi
+
+  echo "== same brief URL raise pays the difference only =="
+  same_bid_body="$(mktemp)"
+  same_bid_code="$(curl -sS -o "${same_bid_body}" -w '%{http_code}' \
+    -X POST "http://127.0.0.1:${port}/checkout" \
+    -H 'content-type: application/x-www-form-urlencoded' \
+    --data-urlencode 'brand=Acme' \
+    --data-urlencode 'terms=$800 flat, 1 TikTok' \
+    --data-urlencode 'briefUrl=https://example.com/acme' \
+    --data-urlencode 'bidUsd=5')"
+  [[ "${same_bid_code}" == "400" ]] || fail "same-or-lower raise expected 400 got ${same_bid_code}"
+  grep -q 'raise_too_small' "${same_bid_body}" \
+    || fail "same-or-lower raise must report raise_too_small"
+
+  raise_headers="$(mktemp)"
+  raise_code="$(curl -sS -D "${raise_headers}" -o /dev/null -w '%{http_code}' \
+    -X POST "http://127.0.0.1:${port}/checkout" \
+    -H 'content-type: application/x-www-form-urlencoded' \
+    --data-urlencode 'brand=Acme' \
+    --data-urlencode 'terms=$800 flat, 1 TikTok' \
+    --data-urlencode 'briefUrl=https://example.com/acme' \
+    --data-urlencode 'bidUsd=7')"
+  [[ "${raise_code}" == "303" ]] || fail "raise POST /checkout expected 303 got ${raise_code}"
+  raise_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${raise_headers}")"
+  [[ -n "${raise_location}" ]] || fail "raise POST /checkout missing Location"
+  if [[ "${raise_location}" != http* ]]; then
+    raise_location="http://127.0.0.1:${port}${raise_location}"
+  fi
+  raise_return="$(mktemp)"
+  raise_return_code="$(curl -sS -o "${raise_return}" -w '%{http_code}' "${raise_location}")"
+  [[ "${raise_return_code}" == "200" ]] || fail "raise return expected 200 got ${raise_return_code}"
+  grep -q 'data-return="success"' "${raise_return}" \
+    || fail "raise return must be paid success"
+
+  raised_body="$(mktemp)"
+  raised_code="$(curl -sS -o "${raised_body}" -w '%{http_code}' "http://127.0.0.1:${port}/")"
+  [[ "${raised_code}" == "200" ]] || fail "GET / after raise expected 200 got ${raised_code}"
+  grep -q 'data-bid="7"' "${raised_body}" || fail "board must show raised \$7"
+  if grep -q 'data-bid="5"' "${raised_body}"; then
+    fail "raised listing must leave the old \$5 bid"
+  fi
+  grep -q 'Acme' "${raised_body}" || fail "raised listing must stay on the board"
+
+  echo "== rival paying only the difference cannot steal #1 =="
+  steal_headers="$(mktemp)"
+  steal_code="$(curl -sS -D "${steal_headers}" -o /dev/null -w '%{http_code}' \
+    -X POST "http://127.0.0.1:${port}/checkout" \
+    -H 'content-type: application/x-www-form-urlencoded' \
+    --data-urlencode 'brand=Rival' \
+    --data-urlencode 'terms=tries to pay only the difference' \
+    --data-urlencode 'briefUrl=https://example.com/rival' \
+    --data-urlencode 'bidUsd=5')"
+  [[ "${steal_code}" == "303" ]] || fail "rival POST /checkout expected 303 got ${steal_code}"
+  steal_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${steal_headers}")"
+  [[ -n "${steal_location}" ]] || fail "rival POST /checkout missing Location"
+  if [[ "${steal_location}" != http* ]]; then
+    steal_location="http://127.0.0.1:${port}${steal_location}"
+  fi
+  curl -sS -o /dev/null "${steal_location}"
+  steal_home="$(mktemp)"
+  curl -sS -o "${steal_home}" "http://127.0.0.1:${port}/"
+  grep -q 'Rival' "${steal_home}" || fail "rival \$5 must still list at its own rank"
+  grep -q 'data-bid="7"' "${steal_home}" || fail "incumbent must stay at \$7 after rival \$5"
+  grep -q 'data-bid="5"' "${steal_home}" || fail "rival \$5 must list at its own full bid"
+  grep -E -q 'data-rank="1"[^>]*data-brand="Acme"|data-brand="Acme"[^>]*data-rank="1"' \
+    "${steal_home}" || fail "\$7 incumbent must stay #1 after a rival \$5 full bid"
+  if grep -E -q 'data-rank="1"[^>]*data-brand="Rival"|data-brand="Rival"[^>]*data-rank="1"' \
+    "${steal_home}"
+  then
+    fail "rival paying \$5 must not steal #1"
+  fi
+
+  echo "== raise to top + \$1 becomes #1 =="
+  take_headers="$(mktemp)"
+  take_code="$(curl -sS -D "${take_headers}" -o /dev/null -w '%{http_code}' \
+    -X POST "http://127.0.0.1:${port}/checkout" \
+    -H 'content-type: application/x-www-form-urlencoded' \
+    --data-urlencode 'brand=Rival' \
+    --data-urlencode 'terms=full bid above the top' \
+    --data-urlencode 'briefUrl=https://example.com/rival' \
+    --data-urlencode 'bidUsd=8')"
+  [[ "${take_code}" == "303" ]] || fail "rival raise expected 303 got ${take_code}"
+  take_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${take_headers}")"
+  [[ -n "${take_location}" ]] || fail "rival raise missing Location"
+  if [[ "${take_location}" != http* ]]; then
+    take_location="http://127.0.0.1:${port}${take_location}"
+  fi
+  curl -sS -o /dev/null "${take_location}"
+  take_home="$(mktemp)"
+  curl -sS -o "${take_home}" "http://127.0.0.1:${port}/"
+  grep -q 'data-bid="8"' "${take_home}" || fail "board must show rival at \$8"
+  grep -E -q 'data-rank="1"[^>]*data-brand="Rival"|data-brand="Rival"[^>]*data-rank="1"' \
+    "${take_home}" || fail "\$8 must become #1 over the \$7 incumbent"
+  grep -E -q 'data-rank="2"[^>]*data-brand="Acme"|data-brand="Acme"[^>]*data-rank="2"' \
+    "${take_home}" || fail "\$7 incumbent must drop to #2 after a \$8 full bid"
+
   rm -f "${health_body}" "${home_body}" "${unpaid_body}" "${unpaid_home}" \
-    "${paid_headers}" "${return_body}" "${listed_body}"
+    "${paid_headers}" "${return_body}" "${listed_body}" \
+    "${same_bid_body}" "${raise_headers}" "${raise_return}" "${raised_body}" \
+    "${steal_headers}" "${steal_home}" "${take_headers}" "${take_home}"
 fi
 
 echo "OK: buildable and testable"

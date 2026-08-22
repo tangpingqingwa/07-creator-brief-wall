@@ -15,6 +15,7 @@ import {
   handleCheckoutReturn,
   isPolarLive,
   parseBidUsd,
+  planCheckout,
 } from "../src/lib/polar";
 import { listingFromRow, rankListings } from "../src/lib/rank";
 
@@ -390,6 +391,205 @@ test("/checkout/return markup shows success or cancel", async () => {
   assert.match(cancelHtml, /data-return="cancel"/);
   assert.match(cancelHtml, /No rank change/);
   assert.match(cancelHtml, /does not list/);
+});
+
+test("same brief URL raise charges new − current; rival pays a full bid", async () => {
+  const db = openDatabase(":memory:");
+  const polar = new FakePolarPort(db);
+  const first = await polar.createCheckout({
+    amountUsd: 5,
+    listingDraft: draft(),
+    successUrl: SUCCESS_URL,
+  });
+  const placed = await polar.completeCheckout(first.checkoutId);
+  assert.ok(placed);
+  assert.equal(placed.bidUsd, 5);
+
+  const raiseQuote = planCheckout(db, draft({ bidUsd: 7 }));
+  assert.deepEqual(raiseQuote, {
+    ok: true,
+    kind: "raise",
+    bidUsd: 7,
+    chargeUsd: 2,
+    currentBidUsd: 5,
+  });
+
+  await assert.rejects(
+    () =>
+      polar.createCheckout({
+        amountUsd: 7,
+        listingDraft: draft({ bidUsd: 7 }),
+        successUrl: SUCCESS_URL,
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof CheckoutError);
+      assert.equal(err.code, "raise_charge_mismatch");
+      return true;
+    },
+  );
+
+  const raisedStart = await polar.createCheckout({
+    amountUsd: 2,
+    listingDraft: draft({ brand: "Acme Raised", bidUsd: 7 }),
+    successUrl: SUCCESS_URL,
+  });
+  assert.equal(polar.getCheckout(raisedStart.checkoutId)?.amountUsd, 2);
+  const raised = await polar.completeCheckout(raisedStart.checkoutId);
+  assert.ok(raised);
+  assert.equal(raised.id, placed.id);
+  assert.equal(raised.bidUsd, 7);
+  assert.equal(raised.createdAt, placed.createdAt);
+  assert.equal(raised.brand, "Acme Raised");
+
+  const rivalQuote = planCheckout(
+    db,
+    draft({
+      brand: "Rival",
+      briefUrl: "https://example.com/rival",
+      bidUsd: 8,
+    }),
+  );
+  assert.deepEqual(rivalQuote, {
+    ok: true,
+    kind: "place",
+    bidUsd: 8,
+    chargeUsd: 8,
+  });
+
+  const stealStart = await polar.createCheckout({
+    amountUsd: 8,
+    listingDraft: draft({
+      brand: "Rival",
+      briefUrl: "https://example.com/rival",
+      bidUsd: 8,
+    }),
+    successUrl: SUCCESS_URL,
+  });
+  assert.equal(polar.getCheckout(stealStart.checkoutId)?.amountUsd, 8);
+  const rival = await polar.completeCheckout(stealStart.checkoutId);
+  assert.ok(rival);
+  assert.notEqual(rival.id, placed.id);
+  assert.equal(rival.bidUsd, 8);
+
+  const rows = db
+    .prepare(
+      `SELECT id, week_id, brand, terms, brief_url, platforms, bid_usd, clicks, created_at, updated_at
+       FROM listings`,
+    )
+    .all() as ListingRow[];
+  const ranked = rankListings(rows.map(listingFromRow));
+  assert.deepEqual(
+    ranked.map((row) => ({ brand: row.brand, rank: row.rank, bidUsd: row.bidUsd })),
+    [
+      { brand: "Rival", rank: 1, bidUsd: 8 },
+      { brand: "Acme Raised", rank: 2, bidUsd: 7 },
+    ],
+  );
+
+  const charges = db
+    .prepare(
+      `SELECT amount_usd, kind, status FROM payments
+       WHERE listing_id = ? AND status = 'completed' ORDER BY created_at`,
+    )
+    .all(placed.id) as { amount_usd: number; kind: string; status: string }[];
+  assert.deepEqual(charges, [
+    { amount_usd: 5, kind: "place", status: "completed" },
+    { amount_usd: 2, kind: "raise", status: "completed" },
+  ]);
+});
+
+test("unpaid raise does not change rank", async () => {
+  const db = openDatabase(":memory:");
+  const polar = new FakePolarPort(db);
+  const first = await polar.createCheckout({
+    amountUsd: 5,
+    listingDraft: draft(),
+    successUrl: SUCCESS_URL,
+  });
+  await polar.completeCheckout(first.checkoutId);
+
+  const raiseStart = await polar.createCheckout({
+    amountUsd: 2,
+    listingDraft: draft({ bidUsd: 7 }),
+    successUrl: SUCCESS_URL,
+  });
+  await polar.abandonCheckout(raiseStart.checkoutId);
+  assert.equal(await polar.completeCheckout(raiseStart.checkoutId), null);
+  const row = db
+    .prepare("SELECT bid_usd FROM listings WHERE brief_url = ?")
+    .get("https://example.com/acme") as { bid_usd: number };
+  assert.equal(row.bid_usd, 5);
+});
+
+test("POST /checkout raise of the same brief URL charges the difference", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "cbw-raise-"));
+  const dbPath = join(dir, "app.sqlite");
+  await withDatabasePath(dbPath, async () => {
+    const polar = new FakePolarPort();
+    const placed = await polar.createCheckout({
+      amountUsd: 5,
+      listingDraft: draft({ briefUrl: "https://example.com/route-raise" }),
+      successUrl: SUCCESS_URL,
+    });
+    await polar.completeCheckout(placed.checkoutId);
+
+    const { POST } = await import("../src/app/api/checkout/route");
+    const tooSmall = await POST(
+      new Request("http://127.0.0.1/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          brand: "Route Co",
+          terms: "$800 flat, 1 TikTok",
+          briefUrl: "https://example.com/route-raise",
+          bidUsd: "5",
+        }),
+      }),
+    );
+    assert.equal(tooSmall.status, 400);
+    const tooSmallBody = (await tooSmall.json()) as { code: string };
+    assert.equal(tooSmallBody.code, "raise_too_small");
+
+    const response = await POST(
+      new Request("http://127.0.0.1/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          brand: "Route Co",
+          terms: "$800 flat, 1 TikTok",
+          briefUrl: "https://example.com/route-raise",
+          bidUsd: "8",
+        }),
+      }),
+    );
+    assert.equal(response.status, 303);
+    const location = response.headers.get("location");
+    assert.ok(location);
+    const checkoutId = new URL(location, "http://127.0.0.1").searchParams.get(
+      "checkoutId",
+    );
+    assert.ok(checkoutId);
+    const pending = polar.getCheckout(checkoutId);
+    assert.equal(pending?.amountUsd, 3);
+    assert.equal(pending?.listingDraft.bidUsd, 8);
+
+    const listing = await polar.completeCheckout(checkoutId);
+    assert.equal(listing?.bidUsd, 8);
+    const db = openDatabase(dbPath);
+    const payments = db
+      .prepare(
+        `SELECT amount_usd, kind FROM payments
+         WHERE brief_url = ? AND status = 'completed' ORDER BY created_at`,
+      )
+      .all("https://example.com/route-raise") as {
+      amount_usd: number;
+      kind: string;
+    }[];
+    assert.deepEqual(payments, [
+      { amount_usd: 5, kind: "place" },
+      { amount_usd: 3, kind: "raise" },
+    ]);
+  });
 });
 
 test("parseBidUsd enforces whole dollars and SPEC min/max", () => {

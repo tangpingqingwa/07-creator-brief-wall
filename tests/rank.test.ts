@@ -4,8 +4,10 @@ import { openDatabase } from "../src/lib/db";
 import {
   listingFromRow,
   place,
+  quoteCheckout,
   raise,
   rankListings,
+  takesNumberOne,
   type Listing,
 } from "../src/lib/rank";
 import {
@@ -101,6 +103,19 @@ test("raise pays difference only", () => {
   });
   assert.equal(raise(listingRow, 5).ok, false);
   assert.equal(raise(listingRow, 5.5).ok, false);
+  assert.deepEqual(quoteCheckout(listingRow, 7), {
+    ok: true,
+    kind: "raise",
+    bidUsd: 7,
+    chargeUsd: 2,
+    currentBidUsd: 5,
+  });
+  assert.deepEqual(quoteCheckout(undefined, 5), {
+    ok: true,
+    kind: "place",
+    bidUsd: 5,
+    chargeUsd: 5,
+  });
 });
 
 test("raise that matches an older equal bid still sorts below it", () => {
@@ -176,4 +191,77 @@ test("fixture insert + raise: $5 lists, $6 is #1, raise to $7 pays $2 difference
     { amount_usd: 5, kind: "place" },
     { amount_usd: 2, kind: "raise" },
   ]);
+});
+
+test("new bid must be at least current + $1, and top + $1 to become #1", () => {
+  const current = listing({
+    id: "raiser",
+    bidUsd: 5,
+    createdAt: "2026-08-17T00:00:00.000Z",
+  });
+  const top = listing({
+    id: "incumbent",
+    bidUsd: 10,
+    createdAt: "2026-08-16T00:00:00.000Z",
+  });
+
+  assert.equal(raise(current, 5).ok, false);
+  assert.equal(quoteCheckout(current, 5).ok, false);
+  assert.deepEqual(raise(current, 6), {
+    ok: true,
+    newBidUsd: 6,
+    chargeUsd: 1,
+  });
+
+  assert.equal(takesNumberOne(10, top.bidUsd), false);
+  assert.equal(takesNumberOne(11, top.bidUsd), true);
+  assert.equal(takesNumberOne(5, undefined), true);
+
+  const tied = rankListings([
+    top,
+    { ...current, bidUsd: 10, updatedAt: "2026-08-18T00:00:00.000Z" },
+  ]);
+  assert.equal(tied[0]?.id, "incumbent");
+  assert.equal(tied[1]?.id, "raiser");
+
+  const overtaken = rankListings([
+    top,
+    { ...current, bidUsd: 11, updatedAt: "2026-08-18T00:00:00.000Z" },
+  ]);
+  assert.equal(overtaken[0]?.id, "raiser");
+  assert.equal(overtaken[0]?.bidUsd, 11);
+});
+
+test("cannot steal #1 by paying only the incumbent’s difference", () => {
+  const incumbent = listing({
+    id: "incumbent",
+    brand: "Incumbent",
+    briefUrl: "https://example.com/incumbent",
+    bidUsd: 20,
+    createdAt: "2026-08-17T00:00:00.000Z",
+  });
+  const rivalPlace = quoteCheckout(undefined, 5);
+  assert.deepEqual(rivalPlace, {
+    ok: true,
+    kind: "place",
+    bidUsd: 5,
+    chargeUsd: 5,
+  });
+  assert.notEqual(rivalPlace.ok && rivalPlace.chargeUsd, 1);
+  assert.equal(takesNumberOne(5, incumbent.bidUsd), false);
+
+  const ranked = rankListings([
+    incumbent,
+    listing({
+      id: "rival",
+      brand: "Rival",
+      briefUrl: "https://example.com/rival",
+      bidUsd: 5,
+      createdAt: "2026-08-18T00:00:00.000Z",
+    }),
+  ]);
+  assert.equal(ranked[0]?.id, "incumbent");
+  assert.equal(ranked[0]?.bidUsd, 20);
+  assert.equal(ranked[1]?.id, "rival");
+  assert.equal(ranked[1]?.bidUsd, 5);
 });
