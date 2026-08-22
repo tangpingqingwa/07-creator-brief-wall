@@ -28,6 +28,17 @@ export type RaiseResult =
   | { ok: true; newBidUsd: number; chargeUsd: number }
   | { ok: false; error: string };
 
+export type CheckoutQuote =
+  | { ok: true; kind: "place"; bidUsd: number; chargeUsd: number }
+  | {
+      ok: true;
+      kind: "raise";
+      bidUsd: number;
+      chargeUsd: number;
+      currentBidUsd: number;
+    }
+  | { ok: false; error: string };
+
 const PLATFORMS = new Set<Platform>([
   "tiktok",
   "youtube",
@@ -84,6 +95,50 @@ export function rankListings(listings: readonly Listing[]): RankedListing[] {
     return 0;
   });
   return ordered.map((listing, index) => ({ ...listing, rank: index + 1 }));
+}
+
+/** Same week + brief URL raises. A new URL always pays a full bid. */
+export function quoteCheckout(
+  existing: Pick<Listing, "bidUsd"> | undefined,
+  newBid: number,
+): CheckoutQuote {
+  if (!existing) {
+    const check = place(newBid);
+    if (!check.ok) {
+      return check;
+    }
+    return {
+      ok: true,
+      kind: "place",
+      bidUsd: check.bidUsd,
+      chargeUsd: check.bidUsd,
+    };
+  }
+  const check = raise(existing, newBid);
+  if (!check.ok) {
+    return check;
+  }
+  return {
+    ok: true,
+    kind: "raise",
+    bidUsd: check.newBidUsd,
+    chargeUsd: check.chargeUsd,
+    currentBidUsd: existing.bidUsd,
+  };
+}
+
+/**
+ * Taking #1 from someone else requires a bid strictly above the current top.
+ * Equal to the top keeps the older listing higher (SPEC §6.4–5).
+ */
+export function takesNumberOne(
+  newBidUsd: number,
+  topBidUsd: number | undefined,
+): boolean {
+  if (topBidUsd === undefined) {
+    return newBidUsd >= MIN_BID_USD;
+  }
+  return newBidUsd >= topBidUsd + 1;
 }
 
 export function place(bidUsd: number): PlaceResult {

@@ -6,6 +6,9 @@ import {
   MAX_BID_USD,
   MIN_BID_USD,
   place,
+  quoteCheckout,
+  raise,
+  type CheckoutQuote,
   type Listing,
 } from "./rank";
 
@@ -208,46 +211,103 @@ function draftFromRow(row: DraftRow): ListingDraft {
   };
 }
 
-export function applyPaidListing(
+const LISTING_SELECT = `SELECT id, week_id, brand, terms, brief_url, platforms, bid_usd, clicks, created_at, updated_at
+         FROM listings`;
+
+export function findListingByBrief(
+  db: AppDb,
+  weekId: string,
+  briefUrl: string,
+): Listing | undefined {
+  const row = db
+    .prepare(`${LISTING_SELECT} WHERE week_id = ? AND brief_url = ?`)
+    .get(weekId, briefUrl) as ListingRow | undefined;
+  return row ? listingFromRow(row) : undefined;
+}
+
+export function getListingById(
+  db: AppDb,
+  listingId: string,
+): Listing | undefined {
+  const row = db
+    .prepare(`${LISTING_SELECT} WHERE id = ?`)
+    .get(listingId) as ListingRow | undefined;
+  return row ? listingFromRow(row) : undefined;
+}
+
+/** Same canonical brief URL this week is a raise; a new URL pays a full bid. */
+export function planCheckout(
   db: AppDb,
   draft: ListingDraft,
-  checkoutId: string,
-  paidAt: string,
-): Listing {
-  const check = place(draft.bidUsd);
-  if (!check.ok) {
-    throw new CheckoutError("invalid_bid", 400, check.error);
+): Extract<CheckoutQuote, { ok: true }> {
+  const existing = findListingByBrief(db, draft.weekId, draft.briefUrl);
+  const quote = quoteCheckout(existing, draft.bidUsd);
+  if (!quote.ok) {
+    throw new CheckoutError(checkoutErrorCode(draft.bidUsd, existing), 400, quote.error);
   }
+  return quote;
+}
 
+function checkoutErrorCode(
+  bidUsd: number,
+  existing: Listing | undefined,
+): string {
+  if (!Number.isInteger(bidUsd)) {
+    return "invalid_bid";
+  }
+  if (bidUsd > MAX_BID_USD) {
+    return "bid_above_max";
+  }
+  if (existing) {
+    return "raise_too_small";
+  }
+  if (bidUsd < MIN_BID_USD) {
+    return "bid_below_min";
+  }
+  return "invalid_bid";
+}
+
+function loadListingForCompletedCheckout(
+  db: AppDb,
+  checkoutId: string,
+): Listing | undefined {
   const existingPayment = db
     .prepare(
       `SELECT listing_id FROM payments
        WHERE polar_checkout_id = ? AND status = 'completed'`,
     )
     .get(checkoutId) as { listing_id: string | null } | undefined;
-  if (existingPayment?.listing_id) {
-    const row = db
-      .prepare(
-        `SELECT id, week_id, brand, terms, brief_url, platforms, bid_usd, clicks, created_at, updated_at
-         FROM listings WHERE id = ?`,
-      )
-      .get(existingPayment.listing_id) as ListingRow | undefined;
-    if (row) {
-      return listingFromRow(row);
-    }
+  if (!existingPayment?.listing_id) {
+    return undefined;
+  }
+  return getListingById(db, existingPayment.listing_id);
+}
+
+export function applyPaidListing(
+  db: AppDb,
+  draft: ListingDraft,
+  checkoutId: string,
+  paidAt: string,
+): Listing {
+  const replayed = loadListingForCompletedCheckout(db, checkoutId);
+  if (replayed) {
+    return replayed;
   }
 
-  const existingListing = db
-    .prepare(`SELECT id FROM listings WHERE week_id = ? AND brief_url = ?`)
-    .get(draft.weekId, draft.briefUrl) as { id: string } | undefined;
-  if (existingListing) {
-    throw new CheckoutError(
-      "already_listed",
-      400,
-      "This brief is already on the board this week",
-    );
+  const quote = planCheckout(db, draft);
+  if (quote.kind === "raise") {
+    return applyPaidRaise(db, draft, quote, checkoutId, paidAt);
   }
+  return applyPaidPlace(db, draft, quote, checkoutId, paidAt);
+}
 
+function applyPaidPlace(
+  db: AppDb,
+  draft: ListingDraft,
+  quote: Extract<CheckoutQuote, { ok: true; kind: "place" }>,
+  checkoutId: string,
+  paidAt: string,
+): Listing {
   const listingId = newId("lst");
   const apply = db.transaction(() => {
     db.prepare(
@@ -261,45 +321,19 @@ export function applyPaidListing(
       draft.terms,
       draft.briefUrl,
       null,
-      draft.bidUsd,
+      quote.bidUsd,
       0,
       paidAt,
       paidAt,
     );
-
-    const pending = db
-      .prepare(`SELECT id FROM payments WHERE polar_checkout_id = ?`)
-      .get(checkoutId) as { id: string } | undefined;
-    if (pending) {
-      db.prepare(
-        `UPDATE payments
-         SET listing_id = ?, status = 'completed', completed_at = ?
-         WHERE polar_checkout_id = ?`,
-      ).run(listingId, paidAt, checkoutId);
-    } else {
-      db.prepare(
-        `INSERT INTO payments (
-          id, listing_id, week_id, brief_url, amount_usd, kind, status, polar_checkout_id, created_at, completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        newId("pay"),
-        listingId,
-        draft.weekId,
-        draft.briefUrl,
-        draft.bidUsd,
-        "place",
-        "completed",
-        checkoutId,
-        paidAt,
-        paidAt,
-      );
-    }
-
-    db.prepare(
-      `UPDATE checkout_drafts
-       SET status = 'paid', listing_id = ?, completed_at = ?
-       WHERE checkout_id = ?`,
-    ).run(listingId, paidAt, checkoutId);
+    completePayment(db, {
+      checkoutId,
+      listingId,
+      draft,
+      amountUsd: quote.chargeUsd,
+      kind: "place",
+      paidAt,
+    });
   });
   apply();
 
@@ -309,11 +343,127 @@ export function applyPaidListing(
     brand: draft.brand,
     terms: draft.terms,
     briefUrl: draft.briefUrl,
-    bidUsd: draft.bidUsd,
+    bidUsd: quote.bidUsd,
     clicks: 0,
     createdAt: paidAt,
     updatedAt: paidAt,
   };
+}
+
+function applyPaidRaise(
+  db: AppDb,
+  draft: ListingDraft,
+  quote: Extract<CheckoutQuote, { ok: true; kind: "raise" }>,
+  checkoutId: string,
+  paidAt: string,
+): Listing {
+  const existing = findListingByBrief(db, draft.weekId, draft.briefUrl);
+  if (!existing) {
+    throw new CheckoutError(
+      "raise_too_small",
+      400,
+      "Raise without paying the difference",
+    );
+  }
+  const check = raise(existing, draft.bidUsd);
+  if (!check.ok || check.chargeUsd !== quote.chargeUsd) {
+    throw new CheckoutError(
+      "raise_too_small",
+      400,
+      check.ok ? "Raise without paying the difference" : check.error,
+    );
+  }
+
+  const apply = db.transaction(() => {
+    db.prepare(
+      `UPDATE listings
+       SET brand = ?, terms = ?, bid_usd = ?, updated_at = ?
+       WHERE id = ?`,
+    ).run(draft.brand, draft.terms, check.newBidUsd, paidAt, existing.id);
+    completePayment(db, {
+      checkoutId,
+      listingId: existing.id,
+      draft,
+      amountUsd: check.chargeUsd,
+      kind: "raise",
+      paidAt,
+    });
+  });
+  apply();
+
+  return {
+    ...existing,
+    brand: draft.brand,
+    terms: draft.terms,
+    bidUsd: check.newBidUsd,
+    updatedAt: paidAt,
+  };
+}
+
+function completePayment(
+  db: AppDb,
+  input: {
+    checkoutId: string;
+    listingId: string;
+    draft: ListingDraft;
+    amountUsd: number;
+    kind: "place" | "raise";
+    paidAt: string;
+  },
+): void {
+  const pending = db
+    .prepare(
+      `SELECT id, amount_usd, kind, status FROM payments WHERE polar_checkout_id = ?`,
+    )
+    .get(input.checkoutId) as
+    | { id: string; amount_usd: number; kind: string; status: string }
+    | undefined;
+  if (pending) {
+    if (
+      pending.status === "pending" &&
+      pending.amount_usd !== input.amountUsd
+    ) {
+      throw new CheckoutError(
+        "raise_charge_mismatch",
+        400,
+        "Raise without paying the difference",
+      );
+    }
+    db.prepare(
+      `UPDATE payments
+       SET listing_id = ?, status = 'completed', completed_at = ?, kind = ?, amount_usd = ?
+       WHERE polar_checkout_id = ?`,
+    ).run(
+      input.listingId,
+      input.paidAt,
+      input.kind,
+      input.amountUsd,
+      input.checkoutId,
+    );
+  } else {
+    db.prepare(
+      `INSERT INTO payments (
+        id, listing_id, week_id, brief_url, amount_usd, kind, status, polar_checkout_id, created_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      newId("pay"),
+      input.listingId,
+      input.draft.weekId,
+      input.draft.briefUrl,
+      input.amountUsd,
+      input.kind,
+      "completed",
+      input.checkoutId,
+      input.paidAt,
+      input.paidAt,
+    );
+  }
+
+  db.prepare(
+    `UPDATE checkout_drafts
+     SET status = 'paid', listing_id = ?, completed_at = ?
+     WHERE checkout_id = ?`,
+  ).run(input.listingId, input.paidAt, input.checkoutId);
 }
 
 export function recordOpenCheckout(
@@ -325,7 +475,7 @@ export function recordOpenCheckout(
   if (loadDraft(db, checkoutId)) {
     return;
   }
-  insertOpenDraft(db, checkoutId, draft, createdAt);
+  insertOpenDraft(db, checkoutId, draft, createdAt, planCheckout(db, draft));
 }
 
 function insertOpenDraft(
@@ -333,7 +483,9 @@ function insertOpenDraft(
   checkoutId: string,
   draft: ListingDraft,
   createdAt: string,
+  quote?: Extract<CheckoutQuote, { ok: true }>,
 ): void {
+  const planned = quote ?? planCheckout(db, draft);
   db.prepare(
     `INSERT INTO checkout_drafts (
       checkout_id, week_id, brand, terms, brief_url, bid_usd, status, listing_id, created_at, completed_at
@@ -350,12 +502,13 @@ function insertOpenDraft(
   db.prepare(
     `INSERT INTO payments (
       id, listing_id, week_id, brief_url, amount_usd, kind, status, polar_checkout_id, created_at, completed_at
-    ) VALUES (?, NULL, ?, ?, ?, 'place', 'pending', ?, ?, NULL)`,
+    ) VALUES (?, NULL, ?, ?, ?, ?, 'pending', ?, ?, NULL)`,
   ).run(
     newId("pay"),
     draft.weekId,
     draft.briefUrl,
-    draft.bidUsd,
+    planned.chargeUsd,
+    planned.kind,
     checkoutId,
     createdAt,
   );
@@ -384,8 +537,16 @@ export class FakePolarPort implements PolarPort {
   async createCheckout(input: CreateCheckoutInput): Promise<CheckoutStart> {
     const draft = input.listingDraft;
     parseCheckoutInput(draft);
+    const quote = planCheckout(this.db, draft);
+    if (input.amountUsd !== quote.chargeUsd) {
+      throw new CheckoutError(
+        "raise_charge_mismatch",
+        400,
+        "Raise without paying the difference",
+      );
+    }
     const checkoutId = newId("chk");
-    insertOpenDraft(this.db, checkoutId, draft, new Date().toISOString());
+    insertOpenDraft(this.db, checkoutId, draft, new Date().toISOString(), quote);
     return { checkoutId, url: checkoutUrl(input.successUrl, checkoutId) };
   }
 
@@ -430,9 +591,14 @@ export class FakePolarPort implements PolarPort {
     if (!row) {
       return undefined;
     }
+    const payment = this.db
+      .prepare(
+        `SELECT amount_usd FROM payments WHERE polar_checkout_id = ?`,
+      )
+      .get(checkoutId) as { amount_usd: number } | undefined;
     return {
       checkoutId: row.checkout_id,
-      amountUsd: row.bid_usd,
+      amountUsd: payment?.amount_usd ?? row.bid_usd,
       listingDraft: draftFromRow(row),
       successUrl: "",
       status: row.status,
@@ -504,6 +670,7 @@ export class LivePolarPort implements PolarPort {
           briefUrl: input.listingDraft.briefUrl,
           bidUsd: String(input.listingDraft.bidUsd),
           weekId: input.listingDraft.weekId,
+          chargeUsd: String(input.amountUsd),
         },
       }),
     });

@@ -5,6 +5,7 @@ import {
   getPolarPort,
   isPolarLive,
   parseCheckoutInput,
+  planCheckout,
   recordOpenCheckout,
   type ListingDraft,
 } from "../../../lib/polar";
@@ -16,11 +17,12 @@ export async function POST(request: Request): Promise<Response> {
   const origin = new URL(request.url).origin;
   try {
     const draft = await readDraft(request);
+    const quote = planCheckout(getDb(), draft);
     const port = getPolarPort();
     const successUrl =
       process.env.POLAR_SUCCESS_URL?.trim() || `${origin}/checkout/return`;
     const started = await port.createCheckout({
-      amountUsd: draft.bidUsd,
+      amountUsd: quote.chargeUsd,
       listingDraft: draft,
       successUrl,
     });
