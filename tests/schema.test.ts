@@ -51,7 +51,6 @@ test("memory db accepts a valid listing and payment", () => {
     .prepare("SELECT brand, bid_usd, clicks FROM listings WHERE id = ?")
     .get("lst_1") as { brand: string; bid_usd: number; clicks: number };
   assert.deepEqual(listing, { brand: "Acme", bid_usd: 5, clicks: 0 });
-  db.close();
 });
 
 test("schema rejects a bid below $5", () => {
@@ -74,7 +73,6 @@ test("schema rejects a bid below $5", () => {
       "2026-08-17T00:00:00.000Z",
     );
   });
-  db.close();
 });
 
 test("unpaid checkout does not require a listings row", () => {
@@ -97,7 +95,6 @@ test("unpaid checkout does not require a listings row", () => {
   );
   const count = db.prepare("SELECT COUNT(*) AS n FROM listings").get() as { n: number };
   assert.equal(count.n, 0);
-  db.close();
 });
 
 test("same brief URL cannot list twice in one week", () => {
@@ -133,5 +130,4 @@ test("same brief URL cannot list twice in one week", () => {
       "2026-08-17T01:00:00.000Z",
     );
   });
-  db.close();
 });
