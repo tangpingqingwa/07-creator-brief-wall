@@ -56,14 +56,35 @@ file -b --mime-encoding README.md SPEC.md CONTRIBUTING.md BUILD.md | grep -qiE '
   || fail "docs are not UTF-8/ASCII"
 
 echo "== live-smoke stays operator-only =="
+[[ -f scripts/live-smoke.sh ]] || fail "missing scripts/live-smoke.sh"
+[[ -x scripts/live-smoke.sh ]] || fail "scripts/live-smoke.sh must be executable"
+[[ -f docs/live-smoke.md ]] || fail "missing docs/live-smoke.md"
+[[ -s docs/live-smoke.md ]] || fail "empty docs/live-smoke.md"
+if grep -Eq '^\s*(bash )?(\./)?scripts/live-smoke\.sh' scripts/test.sh; then
+  fail "test.sh must not invoke live-smoke.sh"
+fi
+if grep -E '^[[:space:]]*(export[[:space:]]+)?POLAR_LIVE=1' scripts/test.sh >/dev/null; then
+  fail "test.sh must not set POLAR_LIVE=1"
+fi
 if [[ -f .github/workflows/ci.yml ]]; then
   if grep -nE 'live-smoke|POLAR_LIVE=1' .github/workflows/ci.yml >/dev/null; then
     fail "CI must not run live-smoke or set POLAR_LIVE=1"
   fi
 fi
-if [[ -f scripts/live-smoke.sh ]]; then
-  [[ -x scripts/live-smoke.sh ]] || fail "scripts/live-smoke.sh must be executable"
-fi
+grep -q 'BLOCKED-SECRET: POLAR_ACCESS_TOKEN' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must name BLOCKED-SECRET: POLAR_ACCESS_TOKEN"
+grep -q 'POLAR_LIVE' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must gate live Polar on POLAR_LIVE"
+grep -q 'live-smoke refuses CI=true' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must refuse CI=true"
+grep -q 'live-smoke must not run in GitHub Actions' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must refuse GITHUB_ACTIONS=true"
+grep -q 'PASS-ERROR' docs/live-smoke.md || fail "docs/live-smoke.md missing PASS-ERROR"
+grep -q 'BLOCKED-SECRET' docs/live-smoke.md || fail "docs/live-smoke.md missing BLOCKED-SECRET"
+for flow in Health 'Empty board' 'About / rules' 'Place $5' Outbid Raise Tie Click Reject Reset Secret; do
+  grep -q "${flow}" docs/live-smoke.md \
+    || fail "docs/live-smoke.md missing SPEC §11 flow: ${flow}"
+done
 
 if [[ -f package.json ]]; then
   echo "== install =="
@@ -335,9 +356,6 @@ if [[ -f package.json ]]; then
     src/app/r/\[id\]/route.ts >/dev/null
   then
     fail "week/clicks must stay offline (no fetch)"
-  fi
-  if [[ -f scripts/live-smoke.sh ]]; then
-    fail "PR 7 live-smoke must not start in this change"
   fi
   [[ -z "${POLAR_LIVE:-}" ]] || fail "POLAR_LIVE must stay unset in test.sh"
 
