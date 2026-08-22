@@ -55,9 +55,13 @@ let cachedPath: string | undefined;
 export function getDb(): AppDb {
   const dbPath = defaultDatabasePath();
   if (!cached || cachedPath !== dbPath) {
-    cached?.close();
     cached = openDatabase(dbPath);
     cachedPath = dbPath;
   }
   return cached;
+}
+
+export function resetDbCache(): void {
+  cached = undefined;
+  cachedPath = undefined;
 }

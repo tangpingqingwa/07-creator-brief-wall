@@ -176,5 +176,4 @@ test("fixture insert + raise: $5 lists, $6 is #1, raise to $7 pays $2 difference
     { amount_usd: 5, kind: "place" },
     { amount_usd: 2, kind: "raise" },
   ]);
-  db.close();
 });

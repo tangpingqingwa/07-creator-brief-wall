@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test --test-reporter spec tests/*.test.ts"
+    "test": "tsx --test --test-force-exit --test-reporter spec tests/*.test.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",

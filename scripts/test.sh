@@ -78,6 +78,8 @@ if [[ -f package.json ]]; then
   unset POLAR_LIVE
   unset POLAR_ACCESS_TOKEN
   unset POLAR_WEBHOOK_SECRET
+  unset POLAR_SUCCESS_URL
+  unset POLAR_PRODUCT_ID
 
   if [[ -f tsconfig.json ]]; then
     echo "== tsc --noEmit =="
@@ -91,7 +93,7 @@ if [[ -f package.json ]]; then
   [[ ${#test_files[@]} -gt 0 ]] || fail "no tests/*.test.ts files"
   test_log="$(mktemp "${TMPDIR:-/tmp}/cbw-unit.XXXXXX")"
   set +e
-  npx tsx --test --test-reporter spec "${test_files[@]}" | tee "${test_log}"
+  npx tsx --test --test-force-exit --test-reporter spec "${test_files[@]}" | tee "${test_log}"
   test_status=${PIPESTATUS[0]}
   set -e
   [[ ${test_status} -eq 0 ]] || fail "unit tests failed"
@@ -145,6 +147,46 @@ if [[ -f package.json ]]; then
     fail "board UI must not render follower or reach fields"
   fi
 
+  echo "== Polar checkout + fixture =="
+  for f in \
+    src/lib/polar.ts \
+    src/app/api/checkout/route.ts \
+    src/app/api/webhooks/polar/route.ts \
+    src/app/checkout/return/page.tsx \
+    tests/checkout.test.ts \
+    .env.example
+  do
+    [[ -f "$f" ]] || fail "missing $f"
+  done
+  grep -q 'export class FakePolarPort' src/lib/polar.ts \
+    || fail "polar.ts must export FakePolarPort"
+  grep -q 'export class LivePolarPort' src/lib/polar.ts \
+    || fail "polar.ts must export LivePolarPort"
+  grep -q 'POLAR_ACCESS_TOKEN' .env.example \
+    || fail ".env.example missing POLAR_ACCESS_TOKEN"
+  grep -q 'POLAR_WEBHOOK_SECRET' .env.example \
+    || fail ".env.example missing POLAR_WEBHOOK_SECRET"
+  grep -q 'POLAR_SUCCESS_URL' .env.example \
+    || fail ".env.example missing POLAR_SUCCESS_URL"
+  grep -q 'POLAR_PRODUCT_ID' .env.example \
+    || fail ".env.example missing POLAR_PRODUCT_ID"
+  grep -q 'You' src/app/checkout/return/page.tsx \
+    || fail "return page must show paid copy"
+  grep -q 'No rank change' src/app/checkout/return/page.tsx \
+    || fail "return page must show canceled copy"
+  grep -q 'unpaid' tests/checkout.test.ts \
+    || fail "checkout tests must cover unpaid sessions"
+  grep -q 'FakePolarPort' tests/checkout.test.ts \
+    || fail "checkout tests must use FakePolarPort"
+  if grep -nE 'fetch\(|polar\.sh|api\.polar' src/app/api/checkout/route.ts \
+    src/app/api/webhooks/polar/route.ts >/dev/null
+  then
+    fail "checkout/webhook routes must not call Polar over the network"
+  fi
+  [[ -z "${POLAR_LIVE:-}" ]] || fail "POLAR_LIVE must stay unset in test.sh"
+  [[ -z "${POLAR_ACCESS_TOKEN:-}" ]] || fail "POLAR_ACCESS_TOKEN must stay unset"
+  [[ -z "${POLAR_WEBHOOK_SECRET:-}" ]] || fail "POLAR_WEBHOOK_SECRET must stay unset"
+
   echo "== GET /healthz and empty board =="
   port="${TEST_PORT:-34567}"
   log_file="$(mktemp "${TMPDIR:-/tmp}/cbw-next.XXXXXX.log")"
@@ -194,7 +236,61 @@ if [[ -f package.json ]]; then
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${home_body}"; then
     fail "GET / must not invent follower or reach numbers"
   fi
-  rm -f "${health_body}" "${home_body}"
+
+  echo "== fixture \$5 appears on the board after completion =="
+  unpaid_body="$(mktemp)"
+  unpaid_code="$(curl -sS -o "${unpaid_body}" -w '%{http_code}' \
+    -X POST "http://127.0.0.1:${port}/checkout" \
+    -H 'content-type: application/x-www-form-urlencoded' \
+    --data-urlencode 'brand=Ghost' \
+    --data-urlencode 'terms=unpaid session' \
+    --data-urlencode 'briefUrl=https://example.com/unpaid' \
+    --data-urlencode 'bidUsd=5')"
+  [[ "${unpaid_code}" == "303" ]] || fail "unpaid POST /checkout expected 303 got ${unpaid_code}"
+  unpaid_home="$(mktemp)"
+  curl -sS -o "${unpaid_home}" "http://127.0.0.1:${port}/"
+  grep -q 'data-empty-week="true"' "${unpaid_home}" \
+    || fail "unpaid checkout must not list"
+  if grep -q 'Ghost' "${unpaid_home}"; then
+    fail "unpaid checkout leaked Ghost onto the board"
+  fi
+
+  paid_headers="$(mktemp)"
+  paid_code="$(curl -sS -D "${paid_headers}" -o /dev/null -w '%{http_code}' \
+    -X POST "http://127.0.0.1:${port}/checkout" \
+    -H 'content-type: application/x-www-form-urlencoded' \
+    --data-urlencode 'brand=Acme' \
+    --data-urlencode 'terms=$800 flat, 1 TikTok' \
+    --data-urlencode 'briefUrl=https://example.com/acme' \
+    --data-urlencode 'bidUsd=5')"
+  [[ "${paid_code}" == "303" ]] || fail "POST /checkout expected 303 got ${paid_code}"
+  paid_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${paid_headers}")"
+  [[ -n "${paid_location}" ]] || fail "POST /checkout missing Location"
+  if [[ "${paid_location}" != http* ]]; then
+    paid_location="http://127.0.0.1:${port}${paid_location}"
+  fi
+  return_body="$(mktemp)"
+  return_code="$(curl -sS -o "${return_body}" -w '%{http_code}' "${paid_location}")"
+  [[ "${return_code}" == "200" ]] || fail "GET /checkout/return expected 200 got ${return_code}"
+  grep -q 'data-return="success"' "${return_body}" \
+    || fail "fixture return must be paid success"
+  grep -qi 'on the board' "${return_body}" \
+    || fail "fixture return must say you're on the board"
+
+  listed_body="$(mktemp)"
+  listed_code="$(curl -sS -o "${listed_body}" -w '%{http_code}' "http://127.0.0.1:${port}/")"
+  [[ "${listed_code}" == "200" ]] || fail "GET / after pay expected 200 got ${listed_code}"
+  grep -q 'Acme' "${listed_body}" || fail "fixture \$5 must appear on the board"
+  grep -q '\$5' "${listed_body}" || fail "board must show \$5 after fixture pay"
+  grep -q 'data-bid="5"' "${listed_body}" || fail "board card missing data-bid=5"
+  if grep -q 'data-empty-week="true"' "${listed_body}"; then
+    fail "board must leave empty-week after a paid fixture"
+  fi
+  if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${listed_body}"; then
+    fail "paid board must not invent follower or reach numbers"
+  fi
+  rm -f "${health_body}" "${home_body}" "${unpaid_body}" "${unpaid_home}" \
+    "${paid_headers}" "${return_body}" "${listed_body}"
 fi
 
 echo "OK: buildable and testable"

@@ -1,16 +1,8 @@
-"use client";
-
-import type { FormEvent } from "react";
 import { MIN_BID_USD } from "../lib/rank";
 
 export function OutbidForm() {
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
-    // Unpaid fixture: no Polar in this PR. Submitting must not invent a listing.
-    event.preventDefault();
-  }
-
   return (
-    <form className="outbid-form" method="post" action="/" onSubmit={onSubmit}>
+    <form className="outbid-form" method="post" action="/checkout">
       <label className="brand">
         Brand
         <input name="brand" type="text" required maxLength={80} autoComplete="organization" />

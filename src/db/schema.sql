@@ -29,8 +29,26 @@ CREATE TABLE IF NOT EXISTS payments (
   FOREIGN KEY (listing_id) REFERENCES listings (id)
 );
 
+-- Draft for an open Polar / fixture session. Rank is written only after paid.
+CREATE TABLE IF NOT EXISTS checkout_drafts (
+  checkout_id TEXT PRIMARY KEY,
+  week_id TEXT NOT NULL,
+  brand TEXT NOT NULL CHECK (length(brand) BETWEEN 1 AND 80),
+  terms TEXT NOT NULL CHECK (length(terms) BETWEEN 1 AND 280),
+  brief_url TEXT NOT NULL,
+  bid_usd INTEGER NOT NULL CHECK (bid_usd >= 5 AND bid_usd <= 50000),
+  status TEXT NOT NULL CHECK (status IN ('open', 'paid', 'canceled')),
+  listing_id TEXT,
+  created_at TEXT NOT NULL,
+  completed_at TEXT,
+  FOREIGN KEY (listing_id) REFERENCES listings (id)
+);
+
 CREATE INDEX IF NOT EXISTS listings_week_rank
   ON listings (week_id, bid_usd DESC, created_at ASC, id ASC);
 
 CREATE INDEX IF NOT EXISTS payments_listing_status
   ON payments (listing_id, status);
+
+CREATE INDEX IF NOT EXISTS checkout_drafts_status
+  ON checkout_drafts (status);
