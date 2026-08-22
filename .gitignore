@@ -8,4 +8,9 @@ dist/
 *.log
 .vercel
 coverage/
+data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+tsconfig.tsbuildinfo
 

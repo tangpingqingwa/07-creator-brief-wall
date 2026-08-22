@@ -85,9 +85,88 @@ if [[ -f package.json ]]; then
   fi
 
   echo "== unit tests =="
-  if compgen -G 'tests/**/*.test.ts' >/dev/null; then
-    npx tsx --test 'tests/**/*.test.ts'
+  shopt -s nullglob
+  test_files=(tests/*.test.ts)
+  shopt -u nullglob
+  [[ ${#test_files[@]} -gt 0 ]] || fail "no tests/*.test.ts files"
+  test_log="$(mktemp "${TMPDIR:-/tmp}/cbw-unit.XXXXXX.log")"
+  set +e
+  npx tsx --test --test-reporter spec "${test_files[@]}" | tee "${test_log}"
+  test_status=${PIPESTATUS[0]}
+  set -e
+  [[ ${test_status} -eq 0 ]] || fail "unit tests failed"
+  grep -Eq 'tests[[:space:]]+[1-9][0-9]*' "${test_log}" \
+    || fail "test runner reported 0 tests"
+  rm -f "${test_log}"
+
+  echo "== skeleton files =="
+  for f in \
+    src/db/schema.sql \
+    src/lib/db.ts \
+    src/app/healthz/route.ts \
+    src/app/page.tsx
+  do
+    [[ -f "$f" ]] || fail "missing $f"
+  done
+  grep -q 'CREATE TABLE IF NOT EXISTS listings' src/db/schema.sql \
+    || fail "schema.sql missing listings"
+  grep -q 'CREATE TABLE IF NOT EXISTS payments' src/db/schema.sql \
+    || fail "schema.sql missing payments"
+  if grep -qiE 'follower|subscriber|engagement rate|estimated reach' src/db/schema.sql; then
+    fail "schema.sql must not store invented audience metrics"
   fi
+  [[ "${POLAR_LIVE:-}" != "1" ]] || fail "POLAR_LIVE must stay unset in test.sh"
+
+  echo "== GET /healthz and empty board =="
+  port="${TEST_PORT:-34567}"
+  log_file="$(mktemp "${TMPDIR:-/tmp}/cbw-next.XXXXXX.log")"
+  db_file="$(mktemp "${TMPDIR:-/tmp}/cbw.XXXXXX.sqlite")"
+  server_pid=""
+  cleanup_http() {
+    if [[ -n "${server_pid}" ]]; then
+      kill "${server_pid}" 2>/dev/null || true
+      wait "${server_pid}" 2>/dev/null || true
+    fi
+    rm -f "${log_file}" "${db_file}" "${db_file}-wal" "${db_file}-shm"
+  }
+  trap cleanup_http EXIT
+
+  export DATABASE_PATH="${db_file}"
+  export NEXT_TELEMETRY_DISABLED=1
+  npx next build
+  PORT="${port}" npx next start --port "${port}" --hostname 127.0.0.1 \
+    >"${log_file}" 2>&1 &
+  server_pid=$!
+
+  ready=0
+  for _ in $(seq 1 60); do
+    if ! kill -0 "${server_pid}" 2>/dev/null; then
+      fail "next start exited early: $(cat "${log_file}")"
+    fi
+    if curl -sf "http://127.0.0.1:${port}/healthz" >/dev/null; then
+      ready=1
+      break
+    fi
+    sleep 1
+  done
+  [[ "${ready}" -eq 1 ]] || fail "GET /healthz did not become ready: $(cat "${log_file}")"
+
+  health_body="$(mktemp)"
+  health_code="$(curl -sS -o "${health_body}" -w '%{http_code}' "http://127.0.0.1:${port}/healthz")"
+  [[ "${health_code}" == "200" ]] || fail "GET /healthz expected 200 got ${health_code}"
+  grep -q '"ok":true' "${health_body}" || fail "GET /healthz body must be {\"ok\":true}"
+
+  home_body="$(mktemp)"
+  home_code="$(curl -sS -o "${home_body}" -w '%{http_code}' "http://127.0.0.1:${port}/")"
+  [[ "${home_code}" == "200" ]] || fail "GET / expected 200 got ${home_code}"
+  grep -q 'data-empty-week="true"' "${home_body}" \
+    || fail "GET / must render the honest empty-week state"
+  grep -qi 'board is empty' "${home_body}" \
+    || fail "GET / must say this week’s board is empty"
+  if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${home_body}"; then
+    fail "GET / must not invent follower or reach numbers"
+  fi
+  rm -f "${health_body}" "${home_body}"
 fi
 
 echo "OK: buildable and testable"
