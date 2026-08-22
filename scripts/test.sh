@@ -89,7 +89,7 @@ if [[ -f package.json ]]; then
   test_files=(tests/*.test.ts)
   shopt -u nullglob
   [[ ${#test_files[@]} -gt 0 ]] || fail "no tests/*.test.ts files"
-  test_log="$(mktemp "${TMPDIR:-/tmp}/cbw-unit.XXXXXX.log")"
+  test_log="$(mktemp "${TMPDIR:-/tmp}/cbw-unit.XXXXXX")"
   set +e
   npx tsx --test --test-reporter spec "${test_files[@]}" | tee "${test_log}"
   test_status=${PIPESTATUS[0]}
@@ -116,6 +116,34 @@ if [[ -f package.json ]]; then
     fail "schema.sql must not store invented audience metrics"
   fi
   [[ "${POLAR_LIVE:-}" != "1" ]] || fail "POLAR_LIVE must stay unset in test.sh"
+
+  echo "== board UI + ranking =="
+  for f in \
+    src/lib/rank.ts \
+    src/lib/board-markup.tsx \
+    src/app/board.css \
+    src/app/board.tsx \
+    src/app/outbid-form.tsx \
+    tests/rank.test.ts \
+    tests/board.test.ts
+  do
+    [[ -f "$f" ]] || fail "missing $f"
+  done
+  grep -q 'bidUsd' src/lib/rank.ts || fail "rank.ts missing bidUsd sort"
+  grep -q 'createdAt' src/lib/rank.ts || fail "rank.ts missing createdAt older-wins-ties"
+  grep -q 'Outbid' src/app/board.tsx src/app/outbid-form.tsx \
+    || fail "board missing Outbid button"
+  grep -q 'name="brand"' src/app/outbid-form.tsx || fail "form missing brand"
+  grep -q 'name="terms"' src/app/outbid-form.tsx || fail "form missing terms"
+  grep -q 'name="briefUrl"' src/app/outbid-form.tsx || fail "form missing brief URL"
+  grep -q 'name="bidUsd"' src/app/outbid-form.tsx || fail "form missing amount"
+  grep -q 'clicks' src/lib/board-markup.tsx || fail "cards missing clicks"
+  grep -q 'older' tests/rank.test.ts || fail "rank tests missing older-wins-ties"
+  if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach|\bcpm\b' \
+    src/lib/board-markup.tsx src/app/outbid-form.tsx src/lib/rank.ts src/app/board.css
+  then
+    fail "board UI must not render follower or reach fields"
+  fi
 
   echo "== GET /healthz and empty board =="
   port="${TEST_PORT:-34567}"

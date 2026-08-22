@@ -1,0 +1,195 @@
+:root {
+  color-scheme: dark;
+  --bg: #0a0a0a;
+  --fg: #f4f4f5;
+  --muted: #a1a1aa;
+  --line: #27272a;
+  --card: #141416;
+  --accent: #22c55e;
+  --accent-ink: #052e16;
+  --input: #18181b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+.board {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+.board h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.75rem;
+  letter-spacing: -0.03em;
+}
+
+.lede,
+.rules-note {
+  color: var(--muted);
+  margin: 0 0 1.25rem;
+  line-height: 1.45;
+}
+
+.outbid-form {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1.4fr 6.5rem auto;
+  gap: 0.5rem;
+  margin: 1.5rem 0 1.75rem;
+}
+
+.outbid-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.outbid-form input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--input);
+  color: var(--fg);
+  border-radius: 0.45rem;
+  padding: 0.7rem 0.75rem;
+  font: inherit;
+  font-size: 0.95rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.outbid-form input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.outbid-form .amount input {
+  font-variant-numeric: tabular-nums;
+}
+
+.outbid {
+  align-self: end;
+  border: 0;
+  border-radius: 0.45rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: 700;
+  padding: 0.75rem 1.1rem;
+  cursor: pointer;
+}
+
+.outbid:hover {
+  filter: brightness(1.06);
+}
+
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  grid-template-areas:
+    "rank brand bid"
+    "rank terms clicks"
+    "rank url url";
+  gap: 0.15rem 0.85rem;
+  padding: 0.9rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+}
+
+.card .rank {
+  grid-area: rank;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.card .brand {
+  grid-area: brand;
+  font-weight: 650;
+}
+
+.card .terms {
+  grid-area: terms;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.card .bid {
+  grid-area: bid;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  justify-self: end;
+}
+
+.card .clicks {
+  grid-area: clicks;
+  color: var(--muted);
+  font-size: 0.85rem;
+  justify-self: end;
+}
+
+.card .brief-url {
+  grid-area: url;
+  color: var(--accent);
+  font-size: 0.85rem;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card .brief-url:hover {
+  text-decoration: underline;
+}
+
+.empty {
+  margin: 0 0 1.25rem;
+  padding: 1rem;
+  border: 1px dashed var(--line);
+  border-radius: 0.65rem;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .outbid-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .outbid-form .url,
+  .outbid-form .terms {
+    grid-column: 1 / -1;
+  }
+
+  .outbid {
+    grid-column: 1 / -1;
+  }
+}
