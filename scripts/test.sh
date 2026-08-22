@@ -346,11 +346,31 @@ if [[ -f package.json ]]; then
   log_file="$(mktemp "${TMPDIR:-/tmp}/cbw-next.XXXXXX.log")"
   db_file="$(mktemp "${TMPDIR:-/tmp}/cbw.XXXXXX.sqlite")"
   server_pid=""
-  cleanup_http() {
-    if [[ -n "${server_pid}" ]]; then
-      kill "${server_pid}" 2>/dev/null || true
-      wait "${server_pid}" 2>/dev/null || true
+  stop_http() {
+    local pid="${1:-}"
+    [[ -n "${pid}" ]] || return 0
+    # `npx next start` is a parent; the listener is often a child next-server.
+    # Killing only the parent leaves the old week still bound to the port.
+    local kids
+    kids="$(pgrep -P "${pid}" 2>/dev/null || true)"
+    if [[ -n "${kids}" ]]; then
+      kill ${kids} 2>/dev/null || true
     fi
+    kill "${pid}" 2>/dev/null || true
+    wait "${pid}" 2>/dev/null || true
+    if [[ -n "${kids}" ]]; then
+      kill -9 ${kids} 2>/dev/null || true
+    fi
+    kill -9 "${pid}" 2>/dev/null || true
+    local leftover
+    leftover="$(lsof -nP -iTCP:"${port}" -sTCP:LISTEN -t 2>/dev/null || true)"
+    if [[ -n "${leftover}" ]]; then
+      kill -9 ${leftover} 2>/dev/null || true
+    fi
+  }
+  cleanup_http() {
+    stop_http "${server_pid}"
+    server_pid=""
     rm -f "${log_file}" "${db_file}" "${db_file}-wal" "${db_file}-shm"
   }
   trap cleanup_http EXIT
@@ -667,8 +687,7 @@ if [[ -f package.json ]]; then
   [[ "${missing_code}" == "404" ]] || fail "unknown /r/:id expected 404 got ${missing_code}"
 
   echo "== WEEK_NOW roll hides previous week from the live board =="
-  kill "${server_pid}" 2>/dev/null || true
-  wait "${server_pid}" 2>/dev/null || true
+  stop_http "${server_pid}"
   server_pid=""
   export WEEK_NOW="2099-01-05T00:00:00.000Z"
   PORT="${port}" npx next start --port "${port}" --hostname 127.0.0.1 \

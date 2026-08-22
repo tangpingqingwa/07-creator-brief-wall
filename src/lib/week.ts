@@ -18,9 +18,11 @@ const LISTING_SELECT = `SELECT id, week_id, brand, terms, brief_url, platforms, 
 /**
  * Operator / test clock. `WEEK_NOW` is an ISO-8601 instant.
  * Reset is a `week_id` query filter, not a delete.
+ * Read via `env["WEEK_NOW"]` so `next start` cannot inline a build-time empty
+ * value; a Monday roll after restart must see the new clock.
  */
 export function nowUtc(env: NodeJS.ProcessEnv = process.env): Date {
-  const raw = env.WEEK_NOW;
+  const raw = env["WEEK_NOW"];
   if (raw === undefined || raw.trim() === "") {
     return new Date();
   }
