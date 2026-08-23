@@ -220,6 +220,18 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover the live #1 claim amount"
   grep -q 'occupied wall puts flyers' tests/board.test.ts \
     || fail "board tests must cover flyer-first occupied reading order"
+  grep -q 'one flyer has a single labeled Open brief hop' tests/board.test.ts \
+    || fail "board tests must cover the labeled Open brief hop"
+  grep -q 'open-label' src/lib/board-markup.tsx \
+    || fail "Open brief must be the labeled hop on a flyer"
+  grep -q 'data-open-brief' src/lib/board-markup.tsx \
+    || fail "Open brief hop must be marked data-open-brief"
+  grep -q 'className="brief-url"' src/lib/board-markup.tsx \
+    || fail "Open brief must stay the flyer hop"
+  if grep -nE 'href=\{listing\.briefUrl\}|href=\{`\$\{listing\.briefUrl' src/lib/board-markup.tsx >/dev/null
+  then
+    fail "flyer must not hop the raw brief URL"
+  fi
   grep -q 'wall-occupied' src/app/board.css \
     || fail "occupied wall CSS must put flyers in the first reading slot"
   grep -q 'data-occupied' src/lib/board-markup.tsx \
@@ -590,6 +602,10 @@ PY
     || fail "paid board must mark the wall occupied"
   grep -q 'wall-occupied' "${listed_body}" \
     || fail "paid board must use flyer-first occupied layout"
+  grep -q 'data-open-brief=""' "${listed_body}" \
+    || fail "paid flyer must expose a labeled Open brief hop"
+  grep -q 'class="open-label">Open brief' "${listed_body}" \
+    || fail "paid flyer must say Open brief on the hop"
   python3 - "${listed_body}" <<'PY' || fail "paid board must put flyers before the claim strip"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()
@@ -770,6 +786,10 @@ PY
   [[ -n "${listing_id}" ]] || fail "paid board missing data-id for click hop"
   grep -q "href=\"/r/${listing_id}\"" "${track_home}" \
     || fail "Open brief must point at /r/:id"
+  grep -q 'data-open-brief=""' "${track_home}" \
+    || fail "paid flyer must mark the Open brief hop"
+  grep -q 'class="open-label">Open brief' "${track_home}" \
+    || fail "paid flyer must label the hop Open brief"
   grep -q 'data-clicks="0"' "${track_home}" || fail "new listing clicks must start at 0"
 
   click_headers="$(mktemp)"

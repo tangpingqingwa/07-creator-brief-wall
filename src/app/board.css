@@ -292,8 +292,7 @@ body {
   grid-template-areas:
     "rank brand bid"
     "terms terms terms"
-    "url url clicks"
-    "host host host";
+    "url url clicks";
   gap: 0.2rem 0.55rem;
   min-height: 13.5rem;
   padding: 1.35rem 0.95rem 0.85rem;
@@ -376,25 +375,36 @@ body {
 
 .card .brief-url {
   grid-area: url;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12rem;
+  align-self: end;
+  margin-top: 0.55rem;
   color: var(--bid);
-  font-size: 0.88rem;
+  font-size: 0.98rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   text-decoration: none;
-  border-bottom: 1px dashed currentColor;
   justify-self: start;
 }
 
-.card .brief-url:hover {
-  text-decoration: none;
+.card .open-label {
+  border-bottom: 2px dashed currentColor;
+  text-underline-offset: 0.18em;
+}
+
+.card .brief-url:hover .open-label {
   border-bottom-style: solid;
 }
 
-.card .host {
-  grid-area: host;
+.card .brief-url .host {
   color: var(--muted);
   font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .brief-url-text {
