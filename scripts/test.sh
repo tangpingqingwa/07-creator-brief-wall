@@ -249,7 +249,7 @@ if [[ -f package.json ]]; then
     || fail "Open brief must concentrate after Post is the first write"
   grep -q 'data-first-read={listing.rank === 1 ? "open" : undefined}' src/lib/board-markup.tsx \
     || fail "Open brief must stamp the first read after Post"
-  grep -q 'data-open-after-post-two' src/lib/board-markup.tsx \
+  grep -q 'data-open-after-post-two-stamp' src/lib/board-markup.tsx \
     || fail "Open brief must concentrate after Post is re-concentrated"
   grep -q 'data-first-click="open"' src/app/board.css \
     || fail "CSS must make Open brief win the first click"
@@ -652,7 +652,7 @@ if [[ -f package.json ]]; then
   if grep -q 'data-first-read="open"' "${home_body}"; then
     fail "empty plaster has no flyer; do not stamp first-read Open brief"
   fi
-  if grep -q 'data-open-after-post-two' "${home_body}"; then
+  if grep -q 'data-open-after-post-two-stamp' "${home_body}"; then
     fail "empty plaster has no flyer; do not concentrate Open brief after Post is re-concentrated"
   fi
   if grep -q 'data-terms=""' "${home_body}"; then
@@ -767,7 +767,7 @@ PY
     || fail "paid #1 flyer must concentrate Open brief after Post first write"
   grep -q 'data-first-read="open"' "${listed_body}" \
     || fail "paid #1 flyer must stamp Open brief as the first read"
-  grep -q 'data-open-after-post-two=""' "${listed_body}" \
+  grep -q 'data-open-after-post-two-stamp=""' "${listed_body}" \
     || fail "paid #1 flyer must concentrate Open brief after Post is re-concentrated"
   grep -q 'class="brief-url open-after-terms open-after-post-first open-after-post-two"' "${listed_body}" \
     || fail "paid #1 Open brief hop must stay the re-concentrated flyer hop"
@@ -800,7 +800,7 @@ note = card.find('class="open-after-note">after Terms')
 first = card.find('data-first-click="open"')
 open_stamp = card.find('data-open-after-post-first=""')
 first_read = card.find('data-first-read="open"')
-open_two = card.find('data-open-after-post-two=""')
+open_two = card.find('data-open-after-post-two-stamp=""')
 bid = card.find('class="bid">$')
 if terms < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or bid < 0:
     raise SystemExit(1)
@@ -819,7 +819,7 @@ if html.count('data-open-after-post-first=""') != 1:
     raise SystemExit(1)
 if html.count('data-first-read="open"') != 1:
     raise SystemExit(1)
-if html.count('data-open-after-post-two=""') != 1:
+if html.count('data-open-after-post-two-stamp=""') != 1:
     raise SystemExit(1)
 PY
   grep -q 'data-post-brief=""' "${listed_body}" \
@@ -860,7 +860,7 @@ flyers = html.find('aria-label="Paid briefs this week"')
 first = html.find('data-first-click="open"')
 open_stamp = html.find('data-open-after-post-first=""')
 first_read = html.find('data-first-read="open"')
-open_two = html.find('data-open-after-post-two=""')
+open_two = html.find('data-open-after-post-two-stamp=""')
 open_hop = html.find('class="open-label">Open brief')
 claim = html.find('id="claim"')
 if nav < 0 or nav_end < 0 or hop < 0 or stamp < 0 or write < 0 or two < 0 or flyers < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or claim < 0:
@@ -891,7 +891,7 @@ if html.count('data-open-after-post-first=""') != 1:
     raise SystemExit(1)
 if html.count('data-first-read="open"') != 1:
     raise SystemExit(1)
-if html.count('data-open-after-post-two=""') != 1:
+if html.count('data-open-after-post-two-stamp=""') != 1:
     raise SystemExit(1)
 PY
   python3 - "${listed_body}" <<'PY' || fail "paid board must put flyers before the claim strip"

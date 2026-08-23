@@ -73,7 +73,7 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
               data-first-click={listing.rank === 1 ? "open" : undefined}
               data-open-after-post-first={listing.rank === 1 ? "" : undefined}
               data-first-read={listing.rank === 1 ? "open" : undefined}
-              data-open-after-post-two={listing.rank === 1 ? "" : undefined}
+              data-open-after-post-two-stamp={listing.rank === 1 ? "" : undefined}
               aria-label={`Open brief at ${hostLabel(listing.briefUrl)}`}
             >
               <span className="open-after-note">after Terms</span>
