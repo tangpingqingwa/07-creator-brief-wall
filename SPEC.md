@@ -73,6 +73,7 @@ GET  /rules                    ranking, money, URL, NSFW, reset
 GET  /checkout/return          Polar return (paid | canceled)
 POST /checkout                 start Polar (live) or fixture session
 POST /webhooks/polar           Polar webhook → claim rank
+GET  /r/:id                    confirm sheet: terms + brief URL before leaving
 POST /r/:id                    increment public click, 302 to canonical brief URL
 GET  /healthz                  200 if process up
 ```
@@ -143,7 +144,7 @@ Apply before persist and before redirect.
 | Shorteners | Reject known shorteners (`bit.ly`, `t.co`, `tinyurl.com`, `lnkd.in`, etc.). Do not silently replace in v1 — fail the submit. |
 | App-store / platform paths | Key by origin + path so two different briefs on the same host do not share a bid. |
 
-Outbound click (`POST /r/:id` or `GET /r/:id`) **302**s to the stored canonical URL with **no** tracking params added by us. Increment `clicks` by 1 per successful redirect decision (idempotent enough: one increment per request). Clicks are public on the card.
+`GET /r/:id` is a confirm sheet: brand, terms, and the canonical brief URL first. It does **not** increment `clicks`. `POST /r/:id` is the confirmed leave: increment `clicks` by 1, then **302** to the stored canonical URL with **no** tracking params added by us. Clicks are public on the card.
 
 ---
 
@@ -168,7 +169,7 @@ Env (live only): `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_SUCCESS_UR
 
 ### Board (`/`)
 
-Outbid-like: one brief URL field, brand, terms, amount, **Outbid** button. Ranked cards show rank, brand, terms, **$bid**, **clicks**, and the brief URL (or a “Open brief” control that goes through the click counter).
+Outbid-like: one brief URL field, brand, terms, amount, **Outbid** button. Ranked cards show rank, brand, terms, **$bid**, **clicks**, and the brief URL (or a “Open brief” control that goes to the confirm sheet at `/r/:id`).
 
 Empty week: honest empty state. Do not seed fake briefs.
 
@@ -183,6 +184,10 @@ Publish §6–§7 in operator language. Include min $5, older-wins-ties, raise =
 ### Checkout return
 
 Paid → “You’re on the board” + link home. Canceled → no rank change.
+
+### Confirm brief (`GET /r/:id`)
+
+A first-time creator who opens a flyer sees the terms and the full brief URL before leaving. Rank and public hops sit after that confirm. Leave is `POST /r/:id` (“Leave to the brief”). A GET does not count as a click.
 
 ---
 
@@ -217,7 +222,7 @@ Operator-only (`scripts/live-smoke.sh`). Not called from `scripts/test.sh` or Ac
 | Outbid | second brief at $6 is #1; first stays on the board |
 | Raise | first listing pays **$1** difference to $7 and becomes #1 |
 | Tie | two $8 bids: older stays higher |
-| Click | follow brief URL via `/r/:id`; public clicks increment; destination has no tracking junk we added |
+| Click | confirm on `GET /r/:id`, then `POST /r/:id`; public clicks increment on the confirmed leave; destination has no tracking junk we added |
 | Reject | chat URL and NSFW URL do not list |
 | Reset | after week roll (test clock or documented operator hook), board empty |
 | Secret | live Polar missing token → `BLOCKED-SECRET: POLAR_ACCESS_TOKEN` (or the frozen name) |

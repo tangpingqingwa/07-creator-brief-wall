@@ -587,28 +587,46 @@ else
   record "tie" "FAIL" "a=${eight_a_rank}/${eight_a_bid} b=${eight_b_rank}/${eight_b_bid} pay=${eight_a_pay}/${eight_b_pay}"
 fi
 
-# --- click: GET /r/:id increments; 302 to canonical URL; no added trackers ---
+# --- click: GET /r/:id confirms; POST increments; 302 to canonical URL ---
 five_id_click="$(card_attr "$board8" "$FIVE_BRAND" "id" || true)"
 if [[ -z "$five_id_click" ]]; then
   record "click" "FAIL" "no listing id for GET /r/:id"
 else
   before_clicks="$(card_attr "$board8" "$FIVE_BRAND" "clicks" || true)"
+  confirm_body="${WORKDIR}/confirm.body"
+  confirm_hdrs="${WORKDIR}/confirm.hdrs"
+  confirm_code="$(http_get_headers "$BASE" "/r/${five_id_click}" "$confirm_body" "$confirm_hdrs" || true)"
+  confirm_loc="$(header_value "$confirm_hdrs" "location" || true)"
+  board_confirm="${WORKDIR}/board-confirm.html"
+  http_get "$BASE" "/" "$board_confirm" >/dev/null || true
+  mid_clicks="$(card_attr "$board_confirm" "$FIVE_BRAND" "clicks" || true)"
   click_body="${WORKDIR}/click.body"
   click_hdrs="${WORKDIR}/click.hdrs"
-  click_code="$(http_get_headers "$BASE" "/r/${five_id_click}" "$click_body" "$click_hdrs" || true)"
+  click_code="$(
+    curl -sS -D "$click_hdrs" -o "$click_body" -w "%{http_code}" \
+      --connect-timeout 5 --max-time 20 --max-redirs 0 \
+      -X POST "${BASE}/r/${five_id_click}" || true
+  )"
   click_loc="$(header_value "$click_hdrs" "location" || true)"
   board_click="${WORKDIR}/board-click.html"
   http_get "$BASE" "/" "$board_click" >/dev/null || true
   after_clicks="$(card_attr "$board_click" "$FIVE_BRAND" "clicks" || true)"
-  if [[ "$click_code" == "302" ]] \
+  if [[ "$confirm_code" == "200" ]] \
+    && [[ -z "$confirm_loc" ]] \
+    && html_has "$confirm_body" "Confirm this brief" \
+    && html_has "$confirm_body" "data-confirm-brief" \
+    && html_has "$confirm_body" "$FIVE_URL" \
+    && html_has "$confirm_body" "Leave to the brief" \
+    && [[ "$mid_clicks" == "$before_clicks" ]] \
+    && [[ "$click_code" == "302" ]] \
     && [[ "$click_loc" == "$FIVE_URL" ]] \
     && [[ "$click_loc" != *utm_* ]] \
     && [[ "$click_loc" != *fbclid* ]] \
     && [[ "$before_clicks" =~ ^[0-9]+$ && "$after_clicks" =~ ^[0-9]+$ ]] \
     && [[ "$after_clicks" -eq $((before_clicks + 1)) ]]; then
-    record "click" "PASS" "GET /r/${five_id_click} 302 → ${FIVE_URL}; clicks ${before_clicks}→${after_clicks}"
+    record "click" "PASS" "GET /r/${five_id_click} confirms; POST 302 → ${FIVE_URL}; clicks ${before_clicks}→${after_clicks}"
   else
-    record "click" "FAIL" "GET /r/${five_id_click} HTTP ${click_code} loc=${click_loc} clicks ${before_clicks}→${after_clicks}"
+    record "click" "FAIL" "GET ${confirm_code} loc=${confirm_loc}; POST ${click_code} loc=${click_loc} clicks ${before_clicks}/${mid_clicks}→${after_clicks}"
   fi
 fi
 

@@ -125,7 +125,7 @@ if [[ -f package.json ]]; then
     echo "-- ${test_file} --"
     file_ok=0
     attempt=1
-    while [[ "${attempt}" -le 3 ]]; do
+    while [[ "${attempt}" -le 8 ]]; do
       file_log="$(mktemp "${TMPDIR:-/tmp}/cbw-unit-file.XXXXXX")"
       npx tsx --test --test-force-exit --test-reporter spec "${test_file}" \
         >"${file_log}" 2>&1
@@ -137,11 +137,11 @@ if [[ -f package.json ]]; then
         break
       fi
       # Node 24 + better-sqlite3 can abort in Database/Statement dtors during GC.
-      # The file's assertions already passed; retry the process once or twice.
+      # The file's assertions already passed; retry the process.
       if grep -q 'RemoveEnvironmentCleanupHook' "${file_log}" \
         && grep -qE 'Database::~Database|Statement::~Statement' "${file_log}"
       then
-        echo "retry ${attempt}/3 ${test_file} after better-sqlite3 GC abort" >&2
+        echo "retry ${attempt}/8 ${test_file} after better-sqlite3 GC abort" >&2
         rm -f "${file_log}"
         attempt=$((attempt + 1))
         continue
@@ -222,6 +222,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover flyer-first occupied reading order"
   grep -q 'one flyer has a single labeled Open brief hop' tests/board.test.ts \
     || fail "board tests must cover the labeled Open brief hop"
+  grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
+    || fail "board tests must cover the confirm sheet"
   grep -q 'occupied wall names one Post a brief hop' tests/board.test.ts \
     || fail "board tests must cover the occupied Post a brief hop"
   grep -q 'data-post-brief' src/lib/board-markup.tsx \
@@ -250,7 +252,8 @@ if [[ -f package.json ]]; then
     || fail "wall stage must mark occupied vs empty plaster"
   grep -q 'older' tests/rank.test.ts || fail "rank tests missing older-wins-ties"
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach|\bcpm\b' \
-    src/lib/board-markup.tsx src/app/outbid-form.tsx src/lib/rank.ts src/app/board.css
+    src/lib/board-markup.tsx src/app/outbid-form.tsx src/lib/rank.ts src/app/board.css \
+    src/lib/confirm-brief.ts
   then
     fail "board UI must not render follower or reach fields"
   fi
@@ -380,6 +383,7 @@ if [[ -f package.json ]]; then
   for f in \
     src/lib/week.ts \
     src/lib/clicks.ts \
+    src/lib/confirm-brief.ts \
     src/app/r/\[id\]/route.ts \
     tests/week.test.ts \
     tests/board.test.ts
@@ -400,24 +404,43 @@ if [[ -f package.json ]]; then
     || fail "page.tsx must load the current week only"
   grep -q 'export function incrementPublicClick' src/lib/clicks.ts \
     || fail "clicks.ts must export incrementPublicClick"
+  grep -q 'export function getPublicListing' src/lib/clicks.ts \
+    || fail "clicks.ts must export getPublicListing"
   grep -q 'outboundBriefUrl' src/lib/clicks.ts \
     || fail "clicks must redirect to the canonical brief URL"
-  grep -q 'export function GET' src/app/r/\[id\]/route.ts \
+  grep -qE 'export (async )?function GET' src/app/r/\[id\]/route.ts \
     || fail "/r/:id must handle GET"
-  grep -q 'export function POST' src/app/r/\[id\]/route.ts \
+  grep -qE 'export (async )?function POST' src/app/r/\[id\]/route.ts \
     || fail "/r/:id must handle POST"
   grep -q '302' src/app/r/\[id\]/route.ts \
     || fail "/r/:id must 302"
+  grep -q 'confirmBriefHtml' src/app/r/\[id\]/route.ts \
+    || fail "GET /r/:id must render the confirm sheet"
+  grep -q 'incrementPublicClick' src/app/r/\[id\]/route.ts \
+    || fail "POST /r/:id must increment on the confirmed leave"
+  grep -q 'data-confirm-brief' src/lib/confirm-brief.ts \
+    || fail "confirm sheet must mark data-confirm-brief"
+  grep -q 'Leave to the brief' src/lib/confirm-brief.ts \
+    || fail "confirm sheet must say Leave to the brief"
+  grep -q 'method="post"' src/lib/confirm-brief.ts \
+    || fail "confirm leave must POST /r/:id"
+  grep -q 'public hops — not reach' src/lib/confirm-brief.ts \
+    || fail "confirm sheet must not dress clicks as reach"
   grep -q 'href={`/r/${listing.id}`}' src/lib/board-markup.tsx \
     || fail "Open brief must go through /r/:id"
+  if grep -nE '[^a-zA-Z_]fetch\(' src/lib/confirm-brief.ts >/dev/null; then
+    fail "confirm sheet must stay offline (no fetch)"
+  fi
   grep -q 'Monday 00:00 UTC rolls weekId' tests/week.test.ts \
     || fail "week tests must cover Monday 00:00 UTC roll"
   grep -q 'previous week rows are absent from the live board' tests/week.test.ts \
     || fail "week tests must hide previous week rows"
   grep -q 'incrementPublicClick' tests/board.test.ts \
     || fail "board tests must cover public clicks"
+  grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
+    || fail "board tests must cover the GET confirm sheet"
   if grep -nE '[^a-zA-Z_]fetch\(' src/lib/week.ts src/lib/clicks.ts \
-    src/app/r/\[id\]/route.ts >/dev/null
+    src/lib/confirm-brief.ts src/app/r/\[id\]/route.ts >/dev/null
   then
     fail "week/clicks must stay offline (no fetch)"
   fi
@@ -811,7 +834,7 @@ PY
     fail "stored brief URL must not keep tracking query"
   fi
 
-  echo "== GET|POST /r/:id increments public clicks and 302s without trackers =="
+  echo "== GET /r/:id confirms terms; POST increments and 302s without trackers =="
   listing_id="$(
     grep -oE 'data-brand="CleanUrl"[^>]*data-id="[^"]+"|data-id="[^"]+"[^>]*data-brand="CleanUrl"' \
       "${track_home}" \
@@ -833,21 +856,53 @@ PY
     || fail "paid flyer must label the hop Open brief"
   grep -q 'data-clicks="0"' "${track_home}" || fail "new listing clicks must start at 0"
 
-  click_headers="$(mktemp)"
-  click_code="$(curl -sS -D "${click_headers}" -o /dev/null -w '%{http_code}' \
+  confirm_body="$(mktemp)"
+  confirm_headers="$(mktemp)"
+  confirm_code="$(curl -sS -D "${confirm_headers}" -o "${confirm_body}" -w '%{http_code}' \
     --max-redirs 0 \
     "http://127.0.0.1:${port}/r/${listing_id}")"
-  [[ "${click_code}" == "302" ]] || fail "GET /r/:id expected 302 got ${click_code}"
-  click_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${click_headers}")"
-  [[ "${click_location}" == "https://example.com/clean" ]] \
-    || fail "GET /r/:id must 302 to canonical brief URL, got ${click_location}"
-  if echo "${click_location}" | grep -qE 'utm_|fbclid|gclid'; then
-    fail "GET /r/:id must not add tracking query"
+  [[ "${confirm_code}" == "200" ]] || fail "GET /r/:id expected 200 confirm got ${confirm_code}"
+  confirm_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${confirm_headers}")"
+  [[ -z "${confirm_location}" ]] || fail "GET /r/:id must not redirect, got ${confirm_location}"
+  grep -q 'data-confirm-brief=""' "${confirm_body}" \
+    || fail "GET /r/:id must render the confirm sheet"
+  grep -q 'Confirm this brief' "${confirm_body}" \
+    || fail "GET /r/:id must say Confirm this brief"
+  grep -q 'stripped tracking' "${confirm_body}" \
+    || fail "GET /r/:id must show the brand terms first"
+  grep -q 'https://example.com/clean' "${confirm_body}" \
+    || fail "GET /r/:id must show the canonical brief URL"
+  grep -q 'Leave to the brief' "${confirm_body}" \
+    || fail "GET /r/:id must offer Leave to the brief"
+  grep -q "action=\"/r/${listing_id}\"" "${confirm_body}" \
+    || fail "confirm leave must POST back to /r/:id"
+  grep -q 'data-leave-brief=""' "${confirm_body}" \
+    || fail "confirm leave hop must be marked"
+  grep -q 'public hops — not reach' "${confirm_body}" \
+    || fail "confirm sheet must not dress clicks as reach"
+  if grep -qE 'utm_|fbclid' "${confirm_body}"; then
+    fail "GET /r/:id must not show tracking query"
   fi
+  python3 - "${confirm_body}" <<'PY' || fail "confirm sheet must put terms and URL before the leave hop"
+import sys
+html = open(sys.argv[1], encoding="utf-8").read()
+terms = html.find("stripped tracking")
+url = html.find("https://example.com/clean")
+leave = html.find('data-leave-brief=""')
+bid = html.find('class="confirm-bid">$5')
+if terms < 0 or url < 0 or leave < 0 or bid < 0:
+    raise SystemExit(1)
+if not (terms < url < leave < bid):
+    raise SystemExit(1)
+PY
 
   after_get="$(mktemp)"
   curl -sS -o "${after_get}" "http://127.0.0.1:${port}/"
-  grep -q 'data-clicks="1"' "${after_get}" || fail "GET /r/:id must increment public clicks"
+  grep -q 'data-clicks="0"' "${after_get}" \
+    || fail "GET /r/:id must not increment public clicks"
+  if grep -q 'data-clicks="1"' "${after_get}"; then
+    fail "GET confirm must not count as a hop"
+  fi
 
   post_headers="$(mktemp)"
   post_code="$(curl -sS -D "${post_headers}" -o /dev/null -w '%{http_code}' \
@@ -857,10 +912,13 @@ PY
   post_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${post_headers}")"
   [[ "${post_location}" == "https://example.com/clean" ]] \
     || fail "POST /r/:id must 302 to canonical brief URL, got ${post_location}"
+  if echo "${post_location}" | grep -qE 'utm_|fbclid|gclid'; then
+    fail "POST /r/:id must not add tracking query"
+  fi
 
   after_post="$(mktemp)"
   curl -sS -o "${after_post}" "http://127.0.0.1:${port}/"
-  grep -q 'data-clicks="2"' "${after_post}" || fail "POST /r/:id must increment public clicks"
+  grep -q 'data-clicks="1"' "${after_post}" || fail "POST /r/:id must increment public clicks"
   grep -q 'CleanUrl' "${after_post}" || fail "clicked listing must stay on the live board"
 
   missing_code="$(curl -sS -o /dev/null -w '%{http_code}' \
@@ -905,7 +963,8 @@ PY
     "${same_bid_body}" "${raise_headers}" "${raise_return}" "${raised_body}" \
     "${steal_headers}" "${steal_home}" "${take_headers}" "${take_home}" \
     "${reject_home}" "${track_headers}" "${track_home}" \
-    "${click_headers}" "${after_get}" "${post_headers}" "${after_post}" \
+    "${confirm_body}" "${confirm_headers}" "${after_get}" \
+    "${post_headers}" "${after_post}" \
     "${rolled_body}"
 fi
 
