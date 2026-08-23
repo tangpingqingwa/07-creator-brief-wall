@@ -101,6 +101,48 @@ test("claim strip defaults to this week’s real #1 price", () => {
   assert.doesNotMatch(occupied, FORBIDDEN);
 });
 
+test("occupied wall names one Post a brief hop to the claim strip", () => {
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.match(empty, /data-occupied="false"/);
+  assert.match(empty, /This week’s wall/);
+  assert.doesNotMatch(empty, /data-post-brief/);
+  assert.doesNotMatch(empty, /Post a brief/);
+  assert.match(empty, /Claim #1 for/);
+  assert.match(empty, /Blank plaster/);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const hop = occupied.indexOf('data-post-brief=""');
+  const flyers = occupied.indexOf('aria-label="Paid briefs this week"');
+  const claim = occupied.indexOf('id="claim"');
+  assert.ok(hop >= 0 && flyers >= 0 && claim >= 0);
+  assert.ok(hop < flyers && flyers < claim);
+  assert.equal((occupied.match(/data-post-brief=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/href="#claim"/g) ?? []).length, 1);
+  assert.match(occupied, /class="post-brief"[^>]*href="#claim"/);
+  assert.match(occupied, />Post a brief</);
+  assert.match(occupied, /Post a brief this week/);
+  assert.match(occupied, /Need \$8 to take #1/);
+  assert.match(occupied, /Open brief/);
+  assert.match(occupied, /Claim #1 for/);
+  assert.doesNotMatch(occupied, /This week’s wall/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+});
+
 test("occupied wall puts flyers ahead of the claim strip", () => {
   const empty = renderToStaticMarkup(
     createElement(Board, { listings: [], weekId: WEEK }),

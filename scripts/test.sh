@@ -222,6 +222,18 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover flyer-first occupied reading order"
   grep -q 'one flyer has a single labeled Open brief hop' tests/board.test.ts \
     || fail "board tests must cover the labeled Open brief hop"
+  grep -q 'occupied wall names one Post a brief hop' tests/board.test.ts \
+    || fail "board tests must cover the occupied Post a brief hop"
+  grep -q 'data-post-brief' src/lib/board-markup.tsx \
+    || fail "occupied wall must mark Post a brief"
+  grep -q 'href="#claim"' src/lib/board-markup.tsx \
+    || fail "Post a brief must hop to the claim strip"
+  grep -q 'Post a brief' src/lib/board-markup.tsx \
+    || fail "occupied mast must say Post a brief"
+  grep -q 'Post a brief this week' src/app/outbid-form.tsx \
+    || fail "occupied claim must say Post a brief this week"
+  grep -q 'post-brief' src/app/board.css \
+    || fail "CSS must style the Post a brief hop"
   grep -q 'open-label' src/lib/board-markup.tsx \
     || fail "Open brief must be the labeled hop on a flyer"
   grep -q 'data-open-brief' src/lib/board-markup.tsx \
@@ -513,6 +525,12 @@ if [[ -f package.json ]]; then
   if grep -q 'wall-occupied' "${home_body}"; then
     fail "empty week must not use flyer-first occupied layout"
   fi
+  if grep -q 'data-post-brief' "${home_body}"; then
+    fail "empty week must not show a Post a brief hop"
+  fi
+  if grep -qi 'Post a brief' "${home_body}"; then
+    fail "empty week Claim #1 is already first; do not add Post a brief"
+  fi
   python3 - "${home_body}" <<'PY' || fail "empty week must keep the claim strip before blank plaster"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()
@@ -606,6 +624,29 @@ PY
     || fail "paid flyer must expose a labeled Open brief hop"
   grep -q 'class="open-label">Open brief' "${listed_body}" \
     || fail "paid flyer must say Open brief on the hop"
+  grep -q 'data-post-brief=""' "${listed_body}" \
+    || fail "paid board must expose one Post a brief hop"
+  grep -q 'href="#claim"' "${listed_body}" \
+    || fail "Post a brief must hop to #claim"
+  grep -q 'class="post-brief"' "${listed_body}" \
+    || fail "Post a brief hop must be labeled on the mast"
+  grep -q '>Post a brief<' "${listed_body}" \
+    || fail "paid board must say Post a brief"
+  grep -q 'Post a brief this week' "${listed_body}" \
+    || fail "occupied claim must say Post a brief this week"
+  python3 - "${listed_body}" <<'PY' || fail "Post a brief must sit before flyers and #claim"
+import sys
+html = open(sys.argv[1], encoding="utf-8").read()
+hop = html.find('data-post-brief=""')
+flyers = html.find('aria-label="Paid briefs this week"')
+claim = html.find('id="claim"')
+if hop < 0 or flyers < 0 or claim < 0:
+    raise SystemExit(1)
+if hop >= flyers or flyers >= claim:
+    raise SystemExit(1)
+if html.count('data-post-brief=""') != 1 or html.count('href="#claim"') != 1:
+    raise SystemExit(1)
+PY
   python3 - "${listed_body}" <<'PY' || fail "paid board must put flyers before the claim strip"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()

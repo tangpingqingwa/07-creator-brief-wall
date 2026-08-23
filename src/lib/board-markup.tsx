@@ -79,6 +79,15 @@ export function BoardChrome({
           <a href="/">Wall</a>
           <a href="/about">About</a>
           <a href="/rules">Rules</a>
+          {occupied ? (
+            <a
+              className="post-brief"
+              href="#claim"
+              data-post-brief=""
+            >
+              Post a brief
+            </a>
+          ) : null}
         </nav>
       </header>
       <div
