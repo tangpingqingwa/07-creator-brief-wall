@@ -53,12 +53,15 @@ test("empty board is honest and has the Outbid form fields", () => {
   const html = renderBoard([]);
   assert.match(html, /data-empty-week="true"/);
   assert.match(html, /board is empty/i);
+  assert.match(html, /plaster is blank/i);
   assert.match(html, /Outbid/);
+  assert.match(formSource, /Claim #1 for/);
   assert.match(formSource, /name="brand"/);
   assert.match(formSource, /name="terms"/);
   assert.match(formSource, /name="briefUrl"/);
   assert.match(formSource, /name="bidUsd"/);
   assert.match(formSource, /Outbid/);
+  assert.match(formSource, /className="amount-stepper"/);
   assert.doesNotMatch(html, FORBIDDEN);
   assert.doesNotMatch(formSource, FORBIDDEN);
 });

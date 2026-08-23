@@ -198,6 +198,14 @@ if [[ -f package.json ]]; then
   grep -q 'name="briefUrl"' src/app/outbid-form.tsx || fail "form missing brief URL"
   grep -q 'name="bidUsd"' src/app/outbid-form.tsx || fail "form missing amount"
   grep -q 'clicks' src/lib/board-markup.tsx || fail "cards missing clicks"
+  grep -q 'className="plaster"' src/lib/board-markup.tsx \
+    || fail "empty week must be blank plaster"
+  grep -q 'plaster is blank' src/lib/board-markup.tsx \
+    || fail "empty week must say the plaster is blank"
+  grep -q 'className="card' src/lib/board-markup.tsx || fail "a brief must be a flyer card"
+  grep -q 'Claim #1 for' src/app/outbid-form.tsx || fail "form missing Claim #1"
+  grep -q 'amount-stepper' src/app/outbid-form.tsx || fail "form missing ± amount stepper"
+  grep -q 'amount-field' src/app/board.css || fail "CSS missing dashed amount field"
   grep -q 'older' tests/rank.test.ts || fail "rank tests missing older-wins-ties"
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach|\bcpm\b' \
     src/lib/board-markup.tsx src/app/outbid-form.tsx src/lib/rank.ts src/app/board.css
@@ -464,6 +472,9 @@ if [[ -f package.json ]]; then
     || fail "GET / must render the honest empty-week state"
   grep -qi 'board is empty' "${home_body}" \
     || fail "GET / must say this week’s board is empty"
+  grep -qi 'plaster is blank' "${home_body}" \
+    || fail "GET / empty week must read as blank plaster"
+  grep -q 'Outbid' src/app/outbid-form.tsx || fail "form missing Outbid"
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${home_body}"; then
     fail "GET / must not invent follower or reach numbers"
   fi
