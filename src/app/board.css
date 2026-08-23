@@ -484,6 +484,13 @@ a.post-brief.post-after-open-two {
   font-size: 1.22rem;
 }
 
+/* Same Open brief hop, concentrated after Post is re-concentrated. */
+.card .brief-url.open-after-post-two {
+  padding: 0.74rem 1.05rem 0.8rem;
+  border-width: 4px;
+  font-size: 1.32rem;
+}
+
 .card .open-label {
   border-bottom: 1px solid currentColor;
   text-underline-offset: 0.18em;
