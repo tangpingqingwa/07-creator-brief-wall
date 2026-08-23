@@ -37,18 +37,20 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
           <span className="rank">#{listing.rank}</span>
           <span className="brand">{listing.brand}</span>
           <p className="terms">{listing.terms}</p>
-          <span className="bid">${listing.bidUsd}</span>
-          <span className="clicks" data-clicks={listing.clicks}>
-            {listing.clicks} clicks
-          </span>
           <a
             className="brief-url"
             href={`/r/${listing.id}`}
             data-brief-url={listing.briefUrl}
+            data-open-brief=""
+            aria-label={`Open brief at ${hostLabel(listing.briefUrl)}`}
           >
-            Open brief
+            <span className="open-label">Open brief</span>
+            <span className="host">{hostLabel(listing.briefUrl)}</span>
           </a>
-          <span className="host">{hostLabel(listing.briefUrl)}</span>
+          <span className="bid">${listing.bidUsd}</span>
+          <span className="clicks" data-clicks={listing.clicks}>
+            {listing.clicks} clicks
+          </span>
           <span className="brief-url-text">{listing.briefUrl}</span>
         </li>
       ))}

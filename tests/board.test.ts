@@ -165,6 +165,41 @@ test("card has brand, terms, $, clicks; no follower fields", () => {
   assert.doesNotMatch(html, /data-followers/);
 });
 
+test("one flyer has a single labeled Open brief hop", () => {
+  const html = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_acme",
+          brand: "Acme",
+          terms: "$800 flat, 1 TikTok",
+          briefUrl: "https://briefs.example.com/acme?id=9",
+          bidUsd: 5,
+          clicks: 3,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const cardStart = html.indexOf('data-id="lst_acme"');
+  const card = html.slice(cardStart, html.indexOf("</li>", cardStart));
+  const brand = card.indexOf('class="brand">Acme');
+  const terms = card.indexOf("$800 flat, 1 TikTok");
+  const hop = card.indexOf('data-open-brief=""');
+  const open = card.indexOf('class="open-label">Open brief');
+  const host = card.indexOf('class="host">briefs.example.com');
+  const hops = card.match(/href="\/r\/lst_acme"/g) ?? [];
+  assert.ok(brand >= 0 && terms > brand && hop > terms);
+  assert.ok(open > hop && host > open);
+  assert.equal(hops.length, 1);
+  assert.equal((card.match(/class="host"/g) ?? []).length, 1);
+  assert.match(card, /data-open-brief=""/);
+  assert.match(card, /aria-label="Open brief at briefs.example.com"/);
+  assert.doesNotMatch(card, /href="https:\/\/briefs\.example\.com/);
+  assert.doesNotMatch(html, FORBIDDEN);
+});
+
 test("cards sort by bid; older wins ties", () => {
   const html = renderBoard([
     listing({
