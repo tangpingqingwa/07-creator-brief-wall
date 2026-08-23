@@ -9,6 +9,22 @@ function hostLabel(url: string): string {
   }
 }
 
+function PostBriefHop() {
+  return (
+    <a
+      className="post-brief post-after-open"
+      href="#claim"
+      data-post-brief=""
+      data-post-after-open=""
+      aria-label="Post a brief after Open brief"
+    >
+      <span className="post-after-note">after Open brief</span>
+      <span className="post-label">Post a brief</span>
+      <span className="post-dest">Claim #1</span>
+    </a>
+  );
+}
+
 export function BoardCards({ listings }: { listings: RankedListing[] }) {
   if (listings.length === 0) {
     return (
@@ -23,43 +39,47 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
     );
   }
   return (
-    <ol className="cards" aria-label="Paid briefs this week">
-      {listings.map((listing) => (
-        <li
-          key={listing.id}
-          className={`card${listing.rank === 1 ? " card-lead" : ""}`}
-          data-rank={listing.rank}
-          data-id={listing.id}
-          data-brand={listing.brand}
-          data-bid={listing.bidUsd}
-        >
-          <span className="tape" aria-hidden="true" />
-          <span className="rank">#{listing.rank}</span>
-          <span className="brand">{listing.brand}</span>
-          <p className="terms" data-terms="">
-            <span className="terms-label">Terms</span>
-            <span className="terms-copy">{listing.terms}</span>
-          </p>
-          <a
-            className="brief-url open-after-terms"
-            href={`/r/${listing.id}`}
-            data-brief-url={listing.briefUrl}
-            data-open-brief=""
-            data-open-after-terms=""
-            aria-label={`Open brief at ${hostLabel(listing.briefUrl)}`}
+    <div className="flyers">
+      <ol className="cards" aria-label="Paid briefs this week">
+        {listings.map((listing) => (
+          <li
+            key={listing.id}
+            className={`card${listing.rank === 1 ? " card-lead" : ""}`}
+            data-rank={listing.rank}
+            data-id={listing.id}
+            data-brand={listing.brand}
+            data-bid={listing.bidUsd}
           >
-            <span className="open-after-note">after Terms</span>
-            <span className="open-label">Open brief</span>
-            <span className="host">{hostLabel(listing.briefUrl)}</span>
-          </a>
-          <span className="bid">${listing.bidUsd}</span>
-          <span className="clicks" data-clicks={listing.clicks}>
-            {listing.clicks} clicks
-          </span>
-          <span className="brief-url-text">{listing.briefUrl}</span>
-        </li>
-      ))}
-    </ol>
+            <span className="tape" aria-hidden="true" />
+            <span className="rank">#{listing.rank}</span>
+            <span className="brand">{listing.brand}</span>
+            <p className="terms" data-terms="">
+              <span className="terms-label">Terms</span>
+              <span className="terms-copy">{listing.terms}</span>
+            </p>
+            <a
+              className="brief-url open-after-terms"
+              href={`/r/${listing.id}`}
+              data-brief-url={listing.briefUrl}
+              data-open-brief=""
+              data-open-after-terms=""
+              data-first-click={listing.rank === 1 ? "open" : undefined}
+              aria-label={`Open brief at ${hostLabel(listing.briefUrl)}`}
+            >
+              <span className="open-after-note">after Terms</span>
+              <span className="open-label">Open brief</span>
+              <span className="host">{hostLabel(listing.briefUrl)}</span>
+            </a>
+            <span className="bid">${listing.bidUsd}</span>
+            <span className="clicks" data-clicks={listing.clicks}>
+              {listing.clicks} clicks
+            </span>
+            <span className="brief-url-text">{listing.briefUrl}</span>
+          </li>
+        ))}
+      </ol>
+      <PostBriefHop />
+    </div>
   );
 }
 
@@ -85,19 +105,6 @@ export function BoardChrome({
           <a href="/about">About</a>
           <a href="/rules">Rules</a>
         </nav>
-        {occupied ? (
-          <a
-            className="post-brief post-after-open"
-            href="#claim"
-            data-post-brief=""
-            data-post-after-open=""
-            aria-label="Post a brief after Open brief"
-          >
-            <span className="post-after-note">after Open brief</span>
-            <span className="post-label">Post a brief</span>
-            <span className="post-dest">Claim #1</span>
-          </a>
-        ) : null}
       </header>
       <div
         className={occupied ? "wall-stage wall-occupied" : "wall-stage"}
