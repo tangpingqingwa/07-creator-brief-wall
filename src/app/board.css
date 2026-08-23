@@ -104,9 +104,8 @@ body {
   border-bottom: 1px dashed currentColor;
 }
 
-/* Post a brief is the hop after Open brief, not a quieter mast-nav link. */
+/* Post a brief follows Open brief. It is not the first click on occupied plaster. */
 a.post-brief.post-after-open {
-  grid-column: 1 / -1;
   justify-self: start;
   display: inline-flex;
   flex-direction: column;
@@ -455,6 +454,13 @@ a.post-brief .post-dest {
   text-transform: uppercase;
   text-decoration: none;
   justify-self: start;
+}
+
+/* Occupied #1: Open brief wins the first click. Same ink, louder box. */
+.card .brief-url[data-first-click="open"] {
+  padding: 0.5rem 0.7rem 0.55rem;
+  border-width: 2px;
+  font-size: 1.12rem;
 }
 
 .card .open-label {
