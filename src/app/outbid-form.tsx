@@ -27,7 +27,9 @@ export function OutbidForm({
       data-claim-amount={floor}
       data-top-bid={topBidUsd ?? ""}
     >
-      <p className="paste-kicker">This week’s wall</p>
+      <p className="paste-kicker">
+        {occupied ? "Post a brief this week" : "This week’s wall"}
+      </p>
       <h2>
         <span>Claim #1 for</span>
         <span className="amount-stepper">

@@ -104,6 +104,14 @@ body {
   border-bottom: 1px dashed currentColor;
 }
 
+.mast-nav a.post-brief {
+  margin-top: 0.35rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom-width: 2px;
+}
+
 .wall-stage {
   display: grid;
   grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
