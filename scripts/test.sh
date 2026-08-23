@@ -237,10 +237,18 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover Open brief winning the first click"
   grep -q 'occupied wall concentrates Post a brief after Open wins the first click' tests/board.test.ts \
     || fail "board tests must cover concentrated Post a brief after Open first click"
+  grep -q 'occupied wall concentrates Open brief after Post is concentrated' tests/board.test.ts \
+    || fail "board tests must cover concentrated Open brief after Post first write"
   grep -q 'data-first-click' src/lib/board-markup.tsx \
     || fail "occupied #1 Open brief must mark the first click"
+  grep -q 'data-open-after-post-first' src/lib/board-markup.tsx \
+    || fail "Open brief must concentrate after Post is the first write"
+  grep -q 'data-first-read={listing.rank === 1 ? "open" : undefined}' src/lib/board-markup.tsx \
+    || fail "Open brief must stamp the first read after Post"
   grep -q 'data-first-click="open"' src/app/board.css \
     || fail "CSS must make Open brief win the first click"
+  grep -q 'open-after-post-first' src/app/board.css \
+    || fail "CSS must concentrate Open brief after Post first write"
   grep -q 'data-post-brief' src/lib/board-markup.tsx \
     || fail "occupied wall must mark Post a brief"
   grep -q 'data-post-after-open' src/lib/board-markup.tsx \
@@ -283,8 +291,10 @@ if [[ -f package.json ]]; then
     || fail "Open brief after Terms must stay the flyer hop"
   grep -q 'open-after-note' src/app/board.css \
     || fail "CSS must style the after-Terms hop note"
-  grep -q 'className="brief-url open-after-terms"' src/lib/board-markup.tsx \
+  grep -q 'brief-url open-after-terms' src/lib/board-markup.tsx \
     || fail "Open brief must stay the flyer hop"
+  grep -q 'brief-url open-after-terms open-after-post-first' src/lib/board-markup.tsx \
+    || fail "occupied #1 Open brief must concentrate after Post"
   grep -q 'data-terms' src/lib/board-markup.tsx \
     || fail "flyer must mark the Terms prize"
   grep -q 'terms-label' src/lib/board-markup.tsx \
@@ -619,6 +629,12 @@ if [[ -f package.json ]]; then
   if grep -q 'data-first-click' "${home_body}"; then
     fail "empty plaster has no flyer; do not mark a first-click Open brief"
   fi
+  if grep -q 'data-open-after-post-first' "${home_body}"; then
+    fail "empty plaster has no flyer; do not concentrate Open brief after Post"
+  fi
+  if grep -q 'data-first-read="open"' "${home_body}"; then
+    fail "empty plaster has no flyer; do not stamp first-read Open brief"
+  fi
   if grep -q 'data-terms=""' "${home_body}"; then
     fail "empty plaster has no flyer; do not show Terms"
   fi
@@ -727,6 +743,12 @@ PY
     || fail "paid flyer must expose a labeled Open brief hop"
   grep -q 'data-first-click="open"' "${listed_body}" \
     || fail "paid #1 flyer must mark Open brief as the first click"
+  grep -q 'data-open-after-post-first=""' "${listed_body}" \
+    || fail "paid #1 flyer must concentrate Open brief after Post first write"
+  grep -q 'data-first-read="open"' "${listed_body}" \
+    || fail "paid #1 flyer must stamp Open brief as the first read"
+  grep -q 'class="brief-url open-after-terms open-after-post-first"' "${listed_body}" \
+    || fail "paid #1 Open brief hop must stay the concentrated flyer hop"
   grep -q 'data-open-after-terms=""' "${listed_body}" \
     || fail "paid flyer must mark Open brief after Terms"
   grep -q 'class="open-label">Open brief' "${listed_body}" \
@@ -754,15 +776,23 @@ hop = card.find('data-open-brief=""')
 after = card.find('data-open-after-terms=""')
 note = card.find('class="open-after-note">after Terms')
 first = card.find('data-first-click="open"')
+open_stamp = card.find('data-open-after-post-first=""')
+first_read = card.find('data-first-read="open"')
 bid = card.find('class="bid">$')
-if terms < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or bid < 0:
+if terms < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or open_stamp < 0 or first_read < 0 or bid < 0:
     raise SystemExit(1)
 open_label = card.find('class="open-label">Open brief')
 if not (terms < label < copy < hop <= after < note < open_label < bid):
     raise SystemExit(1)
-if not (hop <= first < open_label):
+if not (hop <= first <= open_stamp < first_read < open_label):
+    raise SystemExit(1)
+if open_stamp - first > 80:
     raise SystemExit(1)
 if not re.search(r'class="bid">\$(?:<!-- -->)?5', card):
+    raise SystemExit(1)
+if html.count('data-open-after-post-first=""') != 1:
+    raise SystemExit(1)
+if html.count('data-first-read="open"') != 1:
     raise SystemExit(1)
 PY
   grep -q 'data-post-brief=""' "${listed_body}" \
@@ -798,13 +828,17 @@ label = html.find('class="post-label">Post a brief')
 dest = html.find('class="post-dest">Claim #1')
 flyers = html.find('aria-label="Paid briefs this week"')
 first = html.find('data-first-click="open"')
+open_stamp = html.find('data-open-after-post-first=""')
+first_read = html.find('data-first-read="open"')
 open_hop = html.find('class="open-label">Open brief')
 claim = html.find('id="claim"')
-if nav < 0 or nav_end < 0 or hop < 0 or stamp < 0 or write < 0 or flyers < 0 or first < 0 or claim < 0:
+if nav < 0 or nav_end < 0 or hop < 0 or stamp < 0 or write < 0 or flyers < 0 or first < 0 or open_stamp < 0 or first_read < 0 or claim < 0:
     raise SystemExit(1)
-if not (nav < nav_end < flyers < first < open_hop < hop <= stamp < write < note < label < dest < claim):
+if not (nav < nav_end < flyers < first <= open_stamp < first_read < open_hop < hop <= stamp < write < note < label < dest < claim):
     raise SystemExit(1)
 if stamp - hop > 80:
+    raise SystemExit(1)
+if open_stamp - first > 80:
     raise SystemExit(1)
 if html.count('data-post-brief=""') != 1 or html.count('href="#claim"') != 1:
     raise SystemExit(1)
@@ -815,6 +849,10 @@ if html.count('data-post-after-open-first=""') != 1:
 if html.count('data-first-write="post"') != 1:
     raise SystemExit(1)
 if html.count('data-first-click="open"') != 1:
+    raise SystemExit(1)
+if html.count('data-open-after-post-first=""') != 1:
+    raise SystemExit(1)
+if html.count('data-first-read="open"') != 1:
     raise SystemExit(1)
 PY
   python3 - "${listed_body}" <<'PY' || fail "paid board must put flyers before the claim strip"

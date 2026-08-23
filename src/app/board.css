@@ -470,6 +470,13 @@ a.post-brief.post-after-open-first {
   font-size: 1.12rem;
 }
 
+/* Same Open brief hop, concentrated after Post is the first write. */
+.card .brief-url.open-after-post-first {
+  padding: 0.62rem 0.88rem 0.68rem;
+  border-width: 3px;
+  font-size: 1.22rem;
+}
+
 .card .open-label {
   border-bottom: 1px solid currentColor;
   text-underline-offset: 0.18em;

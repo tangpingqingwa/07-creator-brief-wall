@@ -60,12 +60,18 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
               <span className="terms-copy">{listing.terms}</span>
             </p>
             <a
-              className="brief-url open-after-terms"
+              className={
+                listing.rank === 1
+                  ? "brief-url open-after-terms open-after-post-first"
+                  : "brief-url open-after-terms"
+              }
               href={`/r/${listing.id}`}
               data-brief-url={listing.briefUrl}
               data-open-brief=""
               data-open-after-terms=""
               data-first-click={listing.rank === 1 ? "open" : undefined}
+              data-open-after-post-first={listing.rank === 1 ? "" : undefined}
+              data-first-read={listing.rank === 1 ? "open" : undefined}
               aria-label={`Open brief at ${hostLabel(listing.briefUrl)}`}
             >
               <span className="open-after-note">after Terms</span>
