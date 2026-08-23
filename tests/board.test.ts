@@ -233,16 +233,70 @@ test("one flyer names Terms as the prize before $bid", () => {
   const termsLabel = card.indexOf('class="terms-label">Terms');
   const termsCopy = card.indexOf('class="terms-copy">$800 flat, 1 TikTok');
   const hop = card.indexOf('data-open-brief=""');
+  const after = card.indexOf('class="open-after-note">after Terms');
+  const open = card.indexOf('class="open-label">Open brief');
   const bid = card.indexOf('class="bid">$5');
   const clicks = card.indexOf("3 clicks");
   assert.ok(brand >= 0 && termsMark > brand);
   assert.ok(termsLabel > termsMark && termsCopy > termsLabel);
-  assert.ok(hop > termsCopy && bid > hop && clicks > bid);
+  assert.ok(hop > termsCopy && after > hop && open > after && bid > open && clicks > bid);
   assert.match(card, /data-terms=""/);
   assert.match(card, /class="terms-label">Terms/);
   assert.match(card, /\$800 flat, 1 TikTok/);
   assert.match(card, /Open brief/);
+  assert.match(card, /after Terms/);
+  assert.match(card, /data-open-after-terms=""/);
   assert.match(card, /\$5/);
+  assert.doesNotMatch(html, FORBIDDEN);
+});
+
+test("one flyer opens the brief after Terms, not next to $bid", () => {
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.doesNotMatch(empty, /data-open-after-terms/);
+  assert.doesNotMatch(empty, /after Terms/);
+  assert.doesNotMatch(empty, /data-open-brief/);
+  assert.doesNotMatch(empty, /Open brief/);
+
+  const html = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_acme",
+          brand: "Acme",
+          terms: "$800 flat, 1 TikTok",
+          briefUrl: "https://briefs.example.com/acme?id=9",
+          bidUsd: 5,
+          clicks: 3,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+        listing({
+          id: "lst_two",
+          brand: "Two Co",
+          terms: "later rank",
+          briefUrl: "https://briefs.example.com/two",
+          bidUsd: 5,
+          createdAt: "2026-08-18T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const cardStart = html.indexOf('data-id="lst_acme"');
+  const card = html.slice(cardStart, html.indexOf("</li>", cardStart));
+  const terms = card.indexOf('data-terms=""');
+  const hop = card.indexOf('data-open-after-terms=""');
+  const after = card.indexOf('class="open-after-note">after Terms');
+  const open = card.indexOf('class="open-label">Open brief');
+  const bid = card.indexOf('class="bid">$5');
+  const clicks = card.indexOf("3 clicks");
+  assert.ok(terms >= 0 && hop > terms && after > hop);
+  assert.ok(open > after && bid > open && clicks > bid);
+  assert.match(card, /class="brief-url open-after-terms"/);
+  assert.match(card, /data-open-brief=""/);
+  assert.match(card, /href="\/r\/lst_acme"/);
+  assert.equal((html.match(/data-open-after-terms=""/g) ?? []).length, 2);
   assert.doesNotMatch(html, FORBIDDEN);
 });
 
@@ -277,6 +331,8 @@ test("one flyer has a single labeled Open brief hop", () => {
   assert.equal(hops.length, 1);
   assert.equal((card.match(/class="host"/g) ?? []).length, 1);
   assert.match(card, /data-open-brief=""/);
+  assert.match(card, /data-open-after-terms=""/);
+  assert.match(card, /after Terms/);
   assert.match(card, /aria-label="Open brief at briefs.example.com"/);
   assert.doesNotMatch(card, /href="https:\/\/briefs\.example\.com/);
   assert.doesNotMatch(html, FORBIDDEN);
