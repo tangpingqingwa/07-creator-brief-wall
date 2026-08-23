@@ -14,11 +14,10 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
     return (
       <section className="plaster" aria-label="This week’s wall">
         <p className="empty" data-empty-week="true">
-          This week’s board is empty. The plaster is blank. No brand has paid to
-          put a flyer up. We do not seed listings or invent follower counts.
+          This week’s board is empty. The plaster is blank.
         </p>
         <p className="empty-hint">
-          One way up: pay to paste a flyer. Rank is the bid.
+          No seeded briefs. Rank is the bid.
         </p>
       </section>
     );

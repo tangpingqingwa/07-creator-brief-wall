@@ -1,18 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { MIN_BID_USD } from "../lib/rank";
+import React, { useState } from "react";
+import { MAX_BID_USD, MIN_BID_USD } from "../lib/rank";
 
 function clampAmount(value: number): number {
   if (!Number.isFinite(value)) return MIN_BID_USD;
-  return Math.max(MIN_BID_USD, Math.min(50000, Math.trunc(value)));
+  return Math.max(MIN_BID_USD, Math.min(MAX_BID_USD, Math.trunc(value)));
 }
 
-export function OutbidForm() {
-  const [amount, setAmount] = useState(MIN_BID_USD);
+export function OutbidForm({
+  defaultAmount = MIN_BID_USD,
+  topBidUsd,
+}: {
+  defaultAmount?: number;
+  topBidUsd?: number;
+}) {
+  const [amount, setAmount] = useState(() => clampAmount(defaultAmount));
+  const floor = clampAmount(defaultAmount);
+  const occupied = topBidUsd !== undefined;
+  const takesLead = amount > (topBidUsd ?? floor - 1);
 
   return (
-    <aside className="paste-rail" id="claim">
+    <aside
+      className="paste-rail"
+      id="claim"
+      data-claim-amount={floor}
+      data-top-bid={topBidUsd ?? ""}
+    >
       <p className="paste-kicker">This week’s wall</p>
       <h2>
         <span>Claim #1 for</span>
@@ -34,7 +48,7 @@ export function OutbidForm() {
               pattern="[0-9]*"
               required
               min={MIN_BID_USD}
-              max={50000}
+              max={MAX_BID_USD}
               step={1}
               value={amount}
               onChange={(event) => {
@@ -54,8 +68,11 @@ export function OutbidForm() {
         </span>
       </h2>
       <p className="claim-note">
-        Pay to wheat-paste a flyer. New spots start at ${MIN_BID_USD}. Rank is
-        the bid.
+        {occupied
+          ? takesLead
+            ? `Need $${floor} to take #1. Pay $${amount} and this flyer is first.`
+            : `Need $${floor} to take #1. $${amount} still lists, below the top. New spots start at $${MIN_BID_USD}.`
+          : `Blank plaster. $${MIN_BID_USD} pastes the first flyer at #1.`}
       </p>
       <form
         id="brief-form"

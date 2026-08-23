@@ -141,6 +141,14 @@ export function takesNumberOne(
   return newBidUsd >= topBidUsd + 1;
 }
 
+/** Empty week: $5 claims #1. Occupied week: one dollar above the current top. */
+export function claimNumberOneUsd(topBidUsd: number | undefined): number {
+  if (topBidUsd === undefined) {
+    return MIN_BID_USD;
+  }
+  return Math.min(MAX_BID_USD, topBidUsd + 1);
+}
+
 export function place(bidUsd: number): PlaceResult {
   if (!Number.isInteger(bidUsd)) {
     return { ok: false, error: "Bid must be a whole US dollar amount" };

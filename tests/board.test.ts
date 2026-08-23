@@ -5,9 +5,10 @@ import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ClickError, incrementPublicClick } from "../src/lib/clicks";
+import { Board } from "../src/app/board";
 import { BoardCards, BoardChrome } from "../src/lib/board-markup";
 import { openDatabase } from "../src/lib/db";
-import { rankListings, type Listing } from "../src/lib/rank";
+import { claimNumberOneUsd, rankListings, type Listing } from "../src/lib/rank";
 import { insertFixtureListing } from "../src/lib/test-listings";
 import { listLiveBoard } from "../src/lib/week";
 
@@ -62,8 +63,42 @@ test("empty board is honest and has the Outbid form fields", () => {
   assert.match(formSource, /name="bidUsd"/);
   assert.match(formSource, /Outbid/);
   assert.match(formSource, /className="amount-stepper"/);
+  assert.match(formSource, /data-claim-amount/);
+  assert.match(formSource, /Blank plaster/);
   assert.doesNotMatch(html, FORBIDDEN);
   assert.doesNotMatch(formSource, FORBIDDEN);
+});
+
+test("claim strip defaults to this week’s real #1 price", () => {
+  assert.equal(claimNumberOneUsd(undefined), 5);
+  assert.equal(claimNumberOneUsd(7), 8);
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.match(empty, /data-claim-amount="5"/);
+  assert.match(empty, /Blank plaster/);
+  assert.match(empty, /\$5 pastes the first flyer at #1/);
+  assert.doesNotMatch(empty, /Need \$/);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  assert.match(occupied, /data-claim-amount="8"/);
+  assert.match(occupied, /data-top-bid="7"/);
+  assert.match(occupied, /Need \$8 to take #1/);
+  assert.doesNotMatch(occupied, /Blank plaster/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
 });
 
 test("card has brand, terms, $, clicks; no follower fields", () => {
