@@ -297,10 +297,12 @@ body {
   position: relative;
   display: grid;
   grid-template-columns: auto 1fr auto;
+  /* Terms is the prize. $bid stays a later fact, not the first row. */
   grid-template-areas:
-    "rank brand bid"
+    "rank brand brand"
     "terms terms terms"
-    "url url clicks";
+    "url url url"
+    "bid bid clicks";
   gap: 0.2rem 0.55rem;
   min-height: 13.5rem;
   padding: 1.35rem 0.95rem 0.85rem;
@@ -359,9 +361,24 @@ body {
 
 .card .terms {
   grid-area: terms;
-  margin: 0.45rem 0 0.7rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.18rem;
+  margin: 0.55rem 0 0.75rem;
   color: var(--ink);
-  font-size: 0.98rem;
+}
+
+.card .terms-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.card .terms-copy {
+  font-size: 1.12rem;
   line-height: 1.35;
 }
 
@@ -369,7 +386,8 @@ body {
   grid-area: bid;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  justify-self: end;
+  justify-self: start;
+  align-self: end;
   color: var(--bid);
 }
 
@@ -387,8 +405,8 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 0.12rem;
-  align-self: end;
-  margin-top: 0.55rem;
+  align-self: start;
+  margin-top: 0.15rem;
   color: var(--bid);
   font-size: 0.98rem;
   font-weight: 700;

@@ -169,7 +169,7 @@ Env (live only): `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_SUCCESS_UR
 
 ### Board (`/`)
 
-Outbid-like: one brief URL field, brand, terms, amount, **Outbid** button. Ranked cards show rank, brand, terms, **$bid**, **clicks**, and the brief URL (or a “Open brief” control that goes to the confirm sheet at `/r/:id`).
+Outbid-like: one brief URL field, brand, terms, amount, **Outbid** button. Ranked cards show rank, brand, **terms** as the labeled prize, then **$bid**, **clicks**, and the brief URL (or a “Open brief” control that goes to the confirm sheet at `/r/:id`). On the taped flyer, terms sit before $bid.
 
 Empty week: honest empty state. Do not seed fake briefs.
 
@@ -188,6 +188,8 @@ Paid → “You’re on the board” + link home. Canceled → no rank change.
 ### Confirm brief (`GET /r/:id`)
 
 A first-time creator who opens a flyer sees the terms and the full brief URL before leaving. Rank and public hops sit after that confirm. Leave is `POST /r/:id` (“Leave to the brief”). A GET does not count as a click.
+
+On the occupied wall, a first-time creator reads **Terms** as the labeled prize on the taped flyer. `$bid` and clicks stay later facts. They do not have to open the confirm sheet to know the payout summary.
 
 ---
 
