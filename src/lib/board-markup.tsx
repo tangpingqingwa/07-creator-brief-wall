@@ -59,9 +59,11 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
 export function BoardChrome({
   children,
   weekId,
+  occupied = false,
 }: {
   children: ReactNode;
   weekId?: string;
+  occupied?: boolean;
 }) {
   return (
     <main className="board" data-week-id={weekId}>
@@ -77,7 +79,12 @@ export function BoardChrome({
           <a href="/rules">Rules</a>
         </nav>
       </header>
-      <div className="wall-stage">{children}</div>
+      <div
+        className={occupied ? "wall-stage wall-occupied" : "wall-stage"}
+        data-occupied={occupied ? "true" : "false"}
+      >
+        {children}
+      </div>
       <p className="rules-note">
         Rank is the bid. Minimum $5. The board resets Monday 00:00 UTC.{" "}
         <a href="/about">About</a> · <a href="/rules">Rules</a>

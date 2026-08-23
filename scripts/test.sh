@@ -136,10 +136,10 @@ if [[ -f package.json ]]; then
         rm -f "${file_log}"
         break
       fi
-      # Node 24 + better-sqlite3 can abort in Database::~Database during GC.
+      # Node 24 + better-sqlite3 can abort in Database/Statement dtors during GC.
       # The file's assertions already passed; retry the process once or twice.
       if grep -q 'RemoveEnvironmentCleanupHook' "${file_log}" \
-        && grep -q 'Database::~Database' "${file_log}"
+        && grep -qE 'Database::~Database|Statement::~Statement' "${file_log}"
       then
         echo "retry ${attempt}/3 ${test_file} after better-sqlite3 GC abort" >&2
         rm -f "${file_log}"
@@ -218,6 +218,12 @@ if [[ -f package.json ]]; then
     || fail "empty claim must say blank plaster is #1 for the minimum"
   grep -q 'claim strip defaults to this week' tests/board.test.ts \
     || fail "board tests must cover the live #1 claim amount"
+  grep -q 'occupied wall puts flyers' tests/board.test.ts \
+    || fail "board tests must cover flyer-first occupied reading order"
+  grep -q 'wall-occupied' src/app/board.css \
+    || fail "occupied wall CSS must put flyers in the first reading slot"
+  grep -q 'data-occupied' src/lib/board-markup.tsx \
+    || fail "wall stage must mark occupied vs empty plaster"
   grep -q 'older' tests/rank.test.ts || fail "rank tests missing older-wins-ties"
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach|\bcpm\b' \
     src/lib/board-markup.tsx src/app/outbid-form.tsx src/lib/rank.ts src/app/board.css
@@ -490,6 +496,19 @@ if [[ -f package.json ]]; then
     || fail "empty week claim must default to \$5 for #1"
   grep -qi 'blank plaster' "${home_body}" \
     || fail "empty week claim must say blank plaster is the first flyer"
+  grep -q 'data-occupied="false"' "${home_body}" \
+    || fail "empty week must mark the wall unoccupied"
+  if grep -q 'wall-occupied' "${home_body}"; then
+    fail "empty week must not use flyer-first occupied layout"
+  fi
+  python3 - "${home_body}" <<'PY' || fail "empty week must keep the claim strip before blank plaster"
+import sys
+html = open(sys.argv[1], encoding="utf-8").read()
+claim = html.find('id="claim"')
+plaster = html.find('data-empty-week="true"')
+if claim < 0 or plaster < 0 or claim >= plaster:
+    raise SystemExit(1)
+PY
   grep -q 'Outbid' src/app/outbid-form.tsx || fail "form missing Outbid"
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${home_body}"; then
     fail "GET / must not invent follower or reach numbers"
@@ -567,6 +586,18 @@ if [[ -f package.json ]]; then
     || fail "occupied claim must show the current top bid"
   grep -q 'Need \$6 to take #1' "${listed_body}" \
     || fail "occupied claim must say \$6 takes #1"
+  grep -q 'data-occupied="true"' "${listed_body}" \
+    || fail "paid board must mark the wall occupied"
+  grep -q 'wall-occupied' "${listed_body}" \
+    || fail "paid board must use flyer-first occupied layout"
+  python3 - "${listed_body}" <<'PY' || fail "paid board must put flyers before the claim strip"
+import sys
+html = open(sys.argv[1], encoding="utf-8").read()
+flyers = html.find('aria-label="Paid briefs this week"')
+claim = html.find('id="claim"')
+if flyers < 0 or claim < 0 or flyers >= claim:
+    raise SystemExit(1)
+PY
   if grep -q 'data-empty-week="true"' "${listed_body}"; then
     fail "board must leave empty-week after a paid fixture"
   fi
