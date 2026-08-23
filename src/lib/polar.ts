@@ -18,7 +18,17 @@ export { utcWeekId } from "./week";
 
 export type PolarEnv = Record<string, string | undefined>;
 
+/** Production Polar API. Override with `POLAR_API_BASE` for sandbox smoke. */
 export const POLAR_API_BASE = "https://api.polar.sh";
+
+/** Live client host. Default stays production; sandbox is env-only. */
+export function polarApiBase(env: PolarEnv = process.env): string {
+  const fromEnv = env.POLAR_API_BASE?.trim();
+  if (fromEnv) {
+    return fromEnv.replace(/\/$/, "");
+  }
+  return POLAR_API_BASE;
+}
 
 export type ListingDraft = {
   weekId: string;
@@ -654,7 +664,7 @@ export class LivePolarPort implements PolarPort {
     const productId = requirePolarSecret("POLAR_PRODUCT_ID", this.env);
     const successUrl =
       this.env.POLAR_SUCCESS_URL?.trim() || input.successUrl;
-    const response = await this.fetchFn(`${POLAR_API_BASE}/v1/checkouts/`, {
+    const response = await this.fetchFn(`${polarApiBase(this.env)}/v1/checkouts/`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,

@@ -75,6 +75,10 @@ grep -q 'BLOCKED-SECRET: POLAR_ACCESS_TOKEN' scripts/live-smoke.sh \
   || fail "live-smoke.sh must name BLOCKED-SECRET: POLAR_ACCESS_TOKEN"
 grep -q 'POLAR_LIVE' scripts/live-smoke.sh \
   || fail "live-smoke.sh must gate live Polar on POLAR_LIVE"
+grep -q 'sandbox.polar.sh' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must require a Polar sandbox Checkout URL"
+grep -q 'POLAR_API_BASE' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must pass POLAR_API_BASE to the live process"
 grep -q 'live-smoke refuses CI=true' scripts/live-smoke.sh \
   || fail "live-smoke.sh must refuse CI=true"
 grep -q 'live-smoke must not run in GitHub Actions' scripts/live-smoke.sh \
@@ -101,6 +105,8 @@ if [[ -f package.json ]]; then
   unset POLAR_WEBHOOK_SECRET
   unset POLAR_SUCCESS_URL
   unset POLAR_PRODUCT_ID
+  unset POLAR_API_BASE
+  unset POLAR_FIXTURE_ONLY
 
   if [[ -f tsconfig.json ]]; then
     echo "== tsc --noEmit =="
@@ -214,6 +220,14 @@ if [[ -f package.json ]]; then
     || fail "polar.ts must export FakePolarPort"
   grep -q 'export class LivePolarPort' src/lib/polar.ts \
     || fail "polar.ts must export LivePolarPort"
+  grep -q 'export function polarApiBase' src/lib/polar.ts \
+    || fail "polar.ts must export polarApiBase"
+  grep -q 'POLAR_API_BASE' src/lib/polar.ts \
+    || fail "polar.ts must honor POLAR_API_BASE"
+  grep -q 'https://api.polar.sh' src/lib/polar.ts \
+    || fail "polar.ts must default Polar API to production"
+  grep -q 'POLAR_API_BASE' .env.example \
+    || fail ".env.example missing POLAR_API_BASE"
   grep -q 'POLAR_ACCESS_TOKEN' .env.example \
     || fail ".env.example missing POLAR_ACCESS_TOKEN"
   grep -q 'POLAR_WEBHOOK_SECRET' .env.example \
