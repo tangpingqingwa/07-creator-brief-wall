@@ -169,9 +169,9 @@ Env (live only): `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_SUCCESS_UR
 
 ### Board (`/`)
 
-Outbid-like: one brief URL field, brand, terms, amount, **Outbid** button. Ranked cards show rank, brand, **terms** as the labeled prize, then **$bid**, **clicks**, and the brief URL (or a “Open brief” control that goes to the confirm sheet at `/r/:id`). On the taped flyer, terms sit before $bid. **Open brief** is the hop after Terms — not a second prize next to `$bid`. On an occupied wall, **Open brief** wins the first click. **Post a brief** follows that hop — it does not sit before the flyers. It lands on Claim #1.
+Outbid-like: one brief URL field, brand, terms, amount, **Outbid** button. Ranked cards show rank, brand, **terms** as the labeled prize, then **$bid**, **clicks**, and the brief URL (or a “Open brief” control that goes to the confirm sheet at `/r/:id`). On the taped flyer, terms sit before $bid. **Open brief** is the hop after Terms — not a second prize next to `$bid`. On an occupied wall, **Open brief** wins the first click. **Post a brief** follows that hop — it does not sit before the flyers. It lands on Claim #1. After Open wins the first click, concentrate that same **Post a brief** hop so a first-time buyer who came to post can still find it. Do not add a second named post control.
 
-Empty week: honest empty state. Do not seed fake briefs. Empty plaster already leads with Claim #1, so it has no Post a brief hop.
+Empty week: honest empty state. Do not seed fake briefs. Empty plaster already leads with Claim #1, so it has no Post a brief hop and no first-write Post after Open.
 
 ### About (`/about`)
 
@@ -191,7 +191,7 @@ A first-time creator who opens a flyer sees the terms and the full brief URL bef
 
 On the occupied wall, a first-time creator reads **Terms** as the labeled prize on the taped flyer. `$bid` and clicks stay later facts. They do not have to open the confirm sheet to know the payout summary. After Terms, **Open brief** is the certain next hop — the first click. Leave still confirms on GET `/r/:id`.
 
-On the occupied wall, a first-time buyer who came to post hops **Post a brief** after Open brief — after the flyers, not before them — landing on Claim #1. Empty plaster still leads with Claim #1 and has no Post a brief hop.
+On the occupied wall, a first-time buyer who came to post hops **Post a brief** after Open brief — after the flyers, not before them — landing on Claim #1. After Open wins the first click, that same Post a brief hop is the first write. Empty plaster still leads with Claim #1 and has no Post a brief hop.
 
 ---
 

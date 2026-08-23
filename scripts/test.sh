@@ -107,6 +107,7 @@ if [[ -f package.json ]]; then
   unset POLAR_PRODUCT_ID
   unset POLAR_API_BASE
   unset POLAR_FIXTURE_ONLY
+  export POLAR_FIXTURE_ONLY=1
 
   if [[ -f tsconfig.json ]]; then
     echo "== tsc --noEmit =="
@@ -234,6 +235,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover Post a brief after Open brief"
   grep -q 'occupied wall lets Open brief win the first click after Post follows Open' tests/board.test.ts \
     || fail "board tests must cover Open brief winning the first click"
+  grep -q 'occupied wall concentrates Post a brief after Open wins the first click' tests/board.test.ts \
+    || fail "board tests must cover concentrated Post a brief after Open first click"
   grep -q 'data-first-click' src/lib/board-markup.tsx \
     || fail "occupied #1 Open brief must mark the first click"
   grep -q 'data-first-click="open"' src/app/board.css \
@@ -242,13 +245,17 @@ if [[ -f package.json ]]; then
     || fail "occupied wall must mark Post a brief"
   grep -q 'data-post-after-open' src/lib/board-markup.tsx \
     || fail "Post a brief must mark the hop after Open brief"
+  grep -q 'data-post-after-open-first' src/lib/board-markup.tsx \
+    || fail "Post a brief must concentrate after Open wins the first click"
+  grep -q 'data-first-write="post"' src/lib/board-markup.tsx \
+    || fail "Post a brief must stamp the first write after Open"
   grep -q 'after Open brief' src/lib/board-markup.tsx \
     || fail "Post a brief must say after Open brief"
   grep -q 'post-after-open' src/lib/board-markup.tsx \
     || fail "Post a brief after Open brief must stay the buyer hop"
   grep -q 'post-after-note' src/app/board.css \
     || fail "CSS must style the after-Open-brief hop note"
-  grep -q 'className="post-brief post-after-open"' src/lib/board-markup.tsx \
+  grep -q 'className="post-brief post-after-open post-after-open-first"' src/lib/board-markup.tsx \
     || fail "Post a brief must stay the buyer hop"
   grep -q 'href="#claim"' src/lib/board-markup.tsx \
     || fail "Post a brief must hop to the claim strip"
@@ -262,6 +269,8 @@ if [[ -f package.json ]]; then
     || fail "occupied claim must say Post a brief this week"
   grep -q 'post-brief' src/app/board.css \
     || fail "CSS must style the Post a brief hop"
+  grep -q 'post-after-open-first' src/app/board.css \
+    || fail "CSS must concentrate Post a brief after Open first click"
   grep -q 'open-label' src/lib/board-markup.tsx \
     || fail "Open brief must be the labeled hop on a flyer"
   grep -q 'data-open-brief' src/lib/board-markup.tsx \
@@ -598,6 +607,12 @@ if [[ -f package.json ]]; then
   if grep -q 'data-post-after-open' "${home_body}"; then
     fail "empty plaster has no flyer; do not show Post a brief after Open brief"
   fi
+  if grep -q 'data-post-after-open-first' "${home_body}"; then
+    fail "empty plaster has no flyer; do not concentrate Post a brief after Open"
+  fi
+  if grep -q 'data-first-write="post"' "${home_body}"; then
+    fail "empty plaster has no flyer; do not stamp first-write Post a brief"
+  fi
   if grep -qi 'after Open brief' "${home_body}"; then
     fail "empty plaster must not say after Open brief"
   fi
@@ -754,9 +769,13 @@ PY
     || fail "paid board must expose one Post a brief hop"
   grep -q 'data-post-after-open=""' "${listed_body}" \
     || fail "paid board must mark Post a brief after Open brief"
+  grep -q 'data-post-after-open-first=""' "${listed_body}" \
+    || fail "paid board must concentrate Post a brief after Open first click"
+  grep -q 'data-first-write="post"' "${listed_body}" \
+    || fail "paid board must stamp Post a brief as the first write"
   grep -q 'href="#claim"' "${listed_body}" \
     || fail "Post a brief must hop to #claim"
-  grep -q 'class="post-brief post-after-open"' "${listed_body}" \
+  grep -q 'class="post-brief post-after-open post-after-open-first"' "${listed_body}" \
     || fail "Post a brief hop must be labeled after Open brief"
   grep -q 'class="post-after-note">after Open brief' "${listed_body}" \
     || fail "paid board must say Post a brief is after Open brief"
@@ -772,6 +791,8 @@ html = open(sys.argv[1], encoding="utf-8").read()
 nav = html.find('aria-label="Site"')
 nav_end = html.find("</nav>", nav)
 hop = html.find('data-post-after-open=""')
+stamp = html.find('data-post-after-open-first=""')
+write = html.find('data-first-write="post"')
 note = html.find('class="post-after-note">after Open brief')
 label = html.find('class="post-label">Post a brief')
 dest = html.find('class="post-dest">Claim #1')
@@ -779,13 +800,19 @@ flyers = html.find('aria-label="Paid briefs this week"')
 first = html.find('data-first-click="open"')
 open_hop = html.find('class="open-label">Open brief')
 claim = html.find('id="claim"')
-if nav < 0 or nav_end < 0 or hop < 0 or flyers < 0 or first < 0 or claim < 0:
+if nav < 0 or nav_end < 0 or hop < 0 or stamp < 0 or write < 0 or flyers < 0 or first < 0 or claim < 0:
     raise SystemExit(1)
-if not (nav < nav_end < flyers < first < open_hop < hop < note < label < dest < claim):
+if not (nav < nav_end < flyers < first < open_hop < hop <= stamp < write < note < label < dest < claim):
+    raise SystemExit(1)
+if stamp - hop > 80:
     raise SystemExit(1)
 if html.count('data-post-brief=""') != 1 or html.count('href="#claim"') != 1:
     raise SystemExit(1)
 if html.count('data-post-after-open=""') != 1:
+    raise SystemExit(1)
+if html.count('data-post-after-open-first=""') != 1:
+    raise SystemExit(1)
+if html.count('data-first-write="post"') != 1:
     raise SystemExit(1)
 if html.count('data-first-click="open"') != 1:
     raise SystemExit(1)
