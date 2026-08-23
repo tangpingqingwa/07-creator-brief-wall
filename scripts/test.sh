@@ -224,6 +224,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover the labeled Open brief hop"
   grep -q 'one flyer names Terms as the prize before $bid' tests/board.test.ts \
     || fail "board tests must cover labeled Terms before \$bid"
+  grep -q 'one flyer opens the brief after Terms, not next to $bid' tests/board.test.ts \
+    || fail "board tests must cover Open brief after Terms"
   grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
     || fail "board tests must cover the confirm sheet"
   grep -q 'occupied wall names one Post a brief hop' tests/board.test.ts \
@@ -242,7 +244,15 @@ if [[ -f package.json ]]; then
     || fail "Open brief must be the labeled hop on a flyer"
   grep -q 'data-open-brief' src/lib/board-markup.tsx \
     || fail "Open brief hop must be marked data-open-brief"
-  grep -q 'className="brief-url"' src/lib/board-markup.tsx \
+  grep -q 'data-open-after-terms' src/lib/board-markup.tsx \
+    || fail "Open brief must mark the hop after Terms"
+  grep -q 'after Terms' src/lib/board-markup.tsx \
+    || fail "Open brief must say after Terms"
+  grep -q 'open-after-terms' src/lib/board-markup.tsx \
+    || fail "Open brief after Terms must stay the flyer hop"
+  grep -q 'open-after-note' src/app/board.css \
+    || fail "CSS must style the after-Terms hop note"
+  grep -q 'className="brief-url open-after-terms"' src/lib/board-markup.tsx \
     || fail "Open brief must stay the flyer hop"
   grep -q 'data-terms' src/lib/board-markup.tsx \
     || fail "flyer must mark the Terms prize"
@@ -569,6 +579,12 @@ if [[ -f package.json ]]; then
   if grep -q 'class="terms-label"' "${home_body}"; then
     fail "empty plaster must not label Terms on a flyer"
   fi
+  if grep -q 'data-open-after-terms' "${home_body}"; then
+    fail "empty plaster has no flyer; do not show Open brief after Terms"
+  fi
+  if grep -qi 'after Terms' "${home_body}"; then
+    fail "empty plaster must not say after Terms"
+  fi
   if grep -qi 'Post a brief' "${home_body}"; then
     fail "empty week Claim #1 is already first; do not add Post a brief"
   fi
@@ -663,8 +679,12 @@ PY
     || fail "paid board must use flyer-first occupied layout"
   grep -q 'data-open-brief=""' "${listed_body}" \
     || fail "paid flyer must expose a labeled Open brief hop"
+  grep -q 'data-open-after-terms=""' "${listed_body}" \
+    || fail "paid flyer must mark Open brief after Terms"
   grep -q 'class="open-label">Open brief' "${listed_body}" \
     || fail "paid flyer must say Open brief on the hop"
+  grep -q 'class="open-after-note">after Terms' "${listed_body}" \
+    || fail "paid flyer must say Open brief is after Terms"
   grep -q 'data-terms=""' "${listed_body}" \
     || fail "paid flyer must mark Terms as the prize"
   grep -q 'class="terms-label">Terms' "${listed_body}" \
@@ -683,10 +703,13 @@ terms = card.find('data-terms=""')
 label = card.find('class="terms-label">Terms')
 copy = card.find('class="terms-copy">$800 flat, 1 TikTok')
 hop = card.find('data-open-brief=""')
+after = card.find('data-open-after-terms=""')
+note = card.find('class="open-after-note">after Terms')
 bid = card.find('class="bid">$')
-if terms < 0 or label < 0 or copy < 0 or hop < 0 or bid < 0:
+if terms < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or bid < 0:
     raise SystemExit(1)
-if not (terms < label < copy < hop < bid):
+open_label = card.find('class="open-label">Open brief')
+if not (terms < label < copy < hop <= after < note < open_label < bid):
     raise SystemExit(1)
 if not re.search(r'class="bid">\$(?:<!-- -->)?5', card):
     raise SystemExit(1)

@@ -41,12 +41,14 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
             <span className="terms-copy">{listing.terms}</span>
           </p>
           <a
-            className="brief-url"
+            className="brief-url open-after-terms"
             href={`/r/${listing.id}`}
             data-brief-url={listing.briefUrl}
             data-open-brief=""
+            data-open-after-terms=""
             aria-label={`Open brief at ${hostLabel(listing.briefUrl)}`}
           >
+            <span className="open-after-note">after Terms</span>
             <span className="open-label">Open brief</span>
             <span className="host">{hostLabel(listing.briefUrl)}</span>
           </a>
