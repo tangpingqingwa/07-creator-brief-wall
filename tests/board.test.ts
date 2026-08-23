@@ -134,13 +134,60 @@ test("occupied wall names one Post a brief hop to the claim strip", () => {
   assert.ok(hop < flyers && flyers < claim);
   assert.equal((occupied.match(/data-post-brief=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/href="#claim"/g) ?? []).length, 1);
-  assert.match(occupied, /class="post-brief"[^>]*href="#claim"/);
-  assert.match(occupied, />Post a brief</);
+  assert.match(occupied, /class="post-brief post-after-open"[^>]*href="#claim"/);
+  assert.match(occupied, /data-post-after-open=""/);
+  assert.match(occupied, /class="post-after-note">after Open brief/);
+  assert.match(occupied, /class="post-label">Post a brief/);
+  assert.match(occupied, /class="post-dest">Claim #1/);
   assert.match(occupied, /Post a brief this week/);
   assert.match(occupied, /Need \$8 to take #1/);
   assert.match(occupied, /Open brief/);
   assert.match(occupied, /Claim #1 for/);
   assert.doesNotMatch(occupied, /This week’s wall/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+});
+
+test("occupied wall posts a brief after Open brief", () => {
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.doesNotMatch(empty, /data-post-after-open/);
+  assert.doesNotMatch(empty, /after Open brief/);
+  assert.doesNotMatch(empty, /data-post-brief/);
+  assert.doesNotMatch(empty, /Post a brief/);
+  assert.match(empty, /Claim #1 for/);
+  assert.match(empty, /Blank plaster/);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const hop = occupied.indexOf('data-post-after-open=""');
+  const note = occupied.indexOf('class="post-after-note">after Open brief');
+  const label = occupied.indexOf('class="post-label">Post a brief');
+  const dest = occupied.indexOf('class="post-dest">Claim #1');
+  const nav = occupied.indexOf('aria-label="Site"');
+  const navEnd = occupied.indexOf("</nav>", nav);
+  const flyers = occupied.indexOf('aria-label="Paid briefs this week"');
+  const open = occupied.indexOf('class="open-label">Open brief');
+  const claim = occupied.indexOf('id="claim"');
+  assert.ok(nav >= 0 && navEnd > nav && hop > navEnd);
+  assert.ok(note > hop && label > note && dest > label);
+  assert.ok(flyers > dest && open > flyers && claim > open);
+  assert.equal((occupied.match(/data-post-after-open=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-post-brief=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/href="#claim"/g) ?? []).length, 1);
+  assert.match(occupied, /aria-label="Post a brief after Open brief"/);
   assert.doesNotMatch(occupied, FORBIDDEN);
 });
 

@@ -104,12 +104,49 @@ body {
   border-bottom: 1px dashed currentColor;
 }
 
-.mast-nav a.post-brief {
-  margin-top: 0.35rem;
+/* Post a brief is the hop after Open brief, not a quieter mast-nav link. */
+a.post-brief.post-after-open {
+  grid-column: 1 / -1;
+  justify-self: start;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  margin-top: 0.45rem;
+  padding: 0.35rem 0.55rem 0.4rem;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  color: var(--ink);
+  font-size: 1.02rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  text-decoration: none;
+}
+
+a.post-brief .post-after-note {
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+a.post-brief .post-label {
+  border-bottom: 1px solid currentColor;
+  text-underline-offset: 0.18em;
+}
+
+a.post-brief:hover .post-label {
   border-bottom-width: 2px;
+}
+
+a.post-brief .post-dest {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .wall-stage {

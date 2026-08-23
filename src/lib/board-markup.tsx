@@ -84,16 +84,20 @@ export function BoardChrome({
           <a href="/">Wall</a>
           <a href="/about">About</a>
           <a href="/rules">Rules</a>
-          {occupied ? (
-            <a
-              className="post-brief"
-              href="#claim"
-              data-post-brief=""
-            >
-              Post a brief
-            </a>
-          ) : null}
         </nav>
+        {occupied ? (
+          <a
+            className="post-brief post-after-open"
+            href="#claim"
+            data-post-brief=""
+            data-post-after-open=""
+            aria-label="Post a brief after Open brief"
+          >
+            <span className="post-after-note">after Open brief</span>
+            <span className="post-label">Post a brief</span>
+            <span className="post-dest">Claim #1</span>
+          </a>
+        ) : null}
       </header>
       <div
         className={occupied ? "wall-stage wall-occupied" : "wall-stage"}
