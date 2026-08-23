@@ -101,6 +101,46 @@ test("claim strip defaults to this week’s real #1 price", () => {
   assert.doesNotMatch(occupied, FORBIDDEN);
 });
 
+test("occupied wall puts flyers ahead of the claim strip", () => {
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  const emptyClaim = empty.indexOf('id="claim"');
+  const plaster = empty.indexOf('data-empty-week="true"');
+  assert.ok(emptyClaim >= 0 && plaster >= 0);
+  assert.ok(emptyClaim < plaster);
+  assert.match(empty, /data-occupied="false"/);
+  assert.doesNotMatch(empty, /wall-occupied/);
+  assert.match(empty, /plaster is blank/i);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const flyers = occupied.indexOf('aria-label="Paid briefs this week"');
+  const claim = occupied.indexOf('id="claim"');
+  assert.ok(flyers >= 0 && claim >= 0);
+  assert.ok(flyers < claim);
+  assert.match(occupied, /data-occupied="true"/);
+  assert.match(occupied, /wall-occupied/);
+  assert.match(occupied, /Lead Co/);
+  assert.match(occupied, /Open brief/);
+  assert.match(occupied, /Claim #1 for/);
+  assert.match(occupied, /Outbid/);
+  assert.match(occupied, /Need \$8 to take #1/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+});
+
 test("card has brand, terms, $, clicks; no follower fields", () => {
   const html = renderBoard([
     listing({

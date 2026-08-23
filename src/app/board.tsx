@@ -11,13 +11,27 @@ export function Board({
   weekId?: string;
 }) {
   const topBidUsd = listings[0]?.bidUsd;
+  const occupied = listings.length > 0;
+  const claim = (
+    <OutbidForm
+      defaultAmount={claimNumberOneUsd(topBidUsd)}
+      topBidUsd={topBidUsd}
+    />
+  );
+  const flyers = <BoardCards listings={listings} />;
   return (
-    <BoardChrome weekId={weekId}>
-      <OutbidForm
-        defaultAmount={claimNumberOneUsd(topBidUsd)}
-        topBidUsd={topBidUsd}
-      />
-      <BoardCards listings={listings} />
+    <BoardChrome weekId={weekId} occupied={occupied}>
+      {occupied ? (
+        <>
+          {flyers}
+          {claim}
+        </>
+      ) : (
+        <>
+          {claim}
+          {flyers}
+        </>
+      )}
     </BoardChrome>
   );
 }
