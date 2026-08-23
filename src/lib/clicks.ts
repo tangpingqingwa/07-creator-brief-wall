@@ -31,23 +31,32 @@ function loadListing(db: AppDb, listingId: string): Listing | undefined {
   return row ? listingFromRow(row) : undefined;
 }
 
-/**
- * One increment per successful redirect decision. 302 target is the stored
- * canonical brief URL; we never add trackers.
- */
-export function incrementPublicClick(db: AppDb, listingId: string): ClickHop {
+function outboundHop(listing: Listing): string {
+  try {
+    return outboundBriefUrl(listing.briefUrl);
+  } catch {
+    throw new ClickError("invalid_url", 400, "brief URL is not a valid https URL");
+  }
+}
+
+/** Load a listing for the confirm sheet. Does not count a click. */
+export function getPublicListing(db: AppDb, listingId: string): Listing {
   const id = listingId.trim();
   const listing = id ? loadListing(db, id) : undefined;
   if (!listing) {
     throw new ClickError("listing_not_found", 404);
   }
+  outboundHop(listing);
+  return listing;
+}
 
-  let url: string;
-  try {
-    url = outboundBriefUrl(listing.briefUrl);
-  } catch {
-    throw new ClickError("invalid_url", 400, "brief URL is not a valid https URL");
-  }
+/**
+ * One increment per successful redirect decision. 302 target is the stored
+ * canonical brief URL; we never add trackers. GET confirm does not call this.
+ */
+export function incrementPublicClick(db: AppDb, listingId: string): ClickHop {
+  const listing = getPublicListing(db, listingId);
+  const url = outboundHop(listing);
 
   db.prepare(`UPDATE listings SET clicks = clicks + 1 WHERE id = ?`).run(listing.id);
   const updated = loadListing(db, listing.id);

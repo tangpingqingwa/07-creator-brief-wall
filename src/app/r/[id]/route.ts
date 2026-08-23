@@ -1,5 +1,12 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { NextResponse } from "next/server";
-import { ClickError, incrementPublicClick } from "../../../lib/clicks";
+import {
+  ClickError,
+  getPublicListing,
+  incrementPublicClick,
+} from "../../../lib/clicks";
+import { confirmBriefHtml } from "../../../lib/confirm-brief";
 import { getDb } from "../../../lib/db";
 
 export const runtime = "nodejs";
@@ -9,8 +16,57 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-/** Public brief-URL hop. Increments `clicks` once, then 302s with no added trackers. */
-async function redirectBrief(
+const BOARD_CSS_PATH = join(process.cwd(), "src", "app", "board.css");
+
+function clickErrorResponse(error: unknown): Response {
+  if (error instanceof ClickError) {
+    return NextResponse.json(
+      { error: error.message, code: error.code },
+      { status: error.httpStatus },
+    );
+  }
+  throw error;
+}
+
+function confirmDocument(body: string): string {
+  const css = readFileSync(BOARD_CSS_PATH, "utf8");
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Confirm this brief · Creator Brief Wall</title>
+<style>${css}</style>
+</head>
+<body>
+<div class="site-frame">${body}</div>
+</body>
+</html>
+`;
+}
+
+/** Confirm sheet. Terms + brief URL first. Does not increment clicks. */
+export async function GET(
+  _request: Request,
+  context: RouteContext,
+): Promise<Response> {
+  const params = await Promise.resolve(context.params);
+  try {
+    const listing = getPublicListing(getDb(), params.id ?? "");
+    return new NextResponse(confirmDocument(confirmBriefHtml(listing)), {
+      status: 200,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "private, no-store",
+      },
+    });
+  } catch (error) {
+    return clickErrorResponse(error);
+  }
+}
+
+/** Confirmed leave. Increments `clicks` once, then 302s with no added trackers. */
+export async function POST(
   _request: Request,
   context: RouteContext,
 ): Promise<Response> {
@@ -21,20 +77,6 @@ async function redirectBrief(
     response.headers.set("cache-control", "private, no-store");
     return response;
   } catch (error) {
-    if (error instanceof ClickError) {
-      return NextResponse.json(
-        { error: error.message, code: error.code },
-        { status: error.httpStatus },
-      );
-    }
-    throw error;
+    return clickErrorResponse(error);
   }
-}
-
-export function GET(request: Request, context: RouteContext): Promise<Response> {
-  return redirectBrief(request, context);
-}
-
-export function POST(request: Request, context: RouteContext): Promise<Response> {
-  return redirectBrief(request, context);
 }

@@ -4,9 +4,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ClickError, incrementPublicClick } from "../src/lib/clicks";
+import { ClickError, getPublicListing, incrementPublicClick } from "../src/lib/clicks";
 import { Board } from "../src/app/board";
 import { BoardCards, BoardChrome } from "../src/lib/board-markup";
+import { confirmBriefHtml } from "../src/lib/confirm-brief";
 import { openDatabase } from "../src/lib/db";
 import { claimNumberOneUsd, rankListings, type Listing } from "../src/lib/rank";
 import { insertFixtureListing } from "../src/lib/test-listings";
@@ -277,6 +278,35 @@ test("cards sort by bid; older wins ties", () => {
   assert.doesNotMatch(html, FORBIDDEN);
 });
 
+test("GET confirm sheet puts terms and the brief URL before the leave hop", () => {
+  const html = confirmBriefHtml(
+    listing({
+      id: "lst_acme",
+      brand: "Acme",
+      terms: "$800 flat, 1 TikTok",
+      briefUrl: "https://briefs.example.com/acme?id=9",
+      bidUsd: 5,
+      clicks: 3,
+      createdAt: "2026-08-17T00:00:00.000Z",
+    }),
+  );
+  const terms = html.indexOf("$800 flat, 1 TikTok");
+  const url = html.indexOf("https://briefs.example.com/acme?id=9");
+  const leave = html.indexOf('data-leave-brief=""');
+  const bid = html.indexOf('class="confirm-bid">$5');
+  const hops = html.indexOf("3 public hops — not reach");
+  assert.ok(terms >= 0 && url > terms && leave > url);
+  assert.ok(bid > leave && hops > bid);
+  assert.match(html, /data-confirm-brief=""/);
+  assert.match(html, /data-page="confirm-brief"/);
+  assert.match(html, /Confirm this brief/);
+  assert.match(html, /Leave to the brief/);
+  assert.match(html, /method="post"/);
+  assert.match(html, /action="\/r\/lst_acme"/);
+  assert.doesNotMatch(html, /href="https:\/\/briefs\.example\.com/);
+  assert.doesNotMatch(html, FORBIDDEN);
+});
+
 test("public brief-URL clicks increment once per hop and 302 without trackers", async () => {
   const db = openDatabase(":memory:");
   try {
@@ -290,6 +320,13 @@ test("public brief-URL clicks increment once per hop and 302 without trackers", 
       clicks: 0,
       createdAt: "2026-08-17T00:00:00.000Z",
     });
+
+    const preview = getPublicListing(db, "lst_click");
+    assert.equal(preview.clicks, 0);
+    assert.equal(preview.briefUrl, "https://example.com/brief?id=99");
+
+    const stillZero = listLiveBoard(db, WEEK);
+    assert.equal(stillZero[0]?.clicks, 0);
 
     const first = incrementPublicClick(db, "lst_click");
     assert.equal(first.listing.clicks, 1);
@@ -305,6 +342,11 @@ test("public brief-URL clicks increment once per hop and 302 without trackers", 
 
     assert.throws(
       () => incrementPublicClick(db, "missing"),
+      (error: unknown) =>
+        error instanceof ClickError && error.code === "listing_not_found",
+    );
+    assert.throws(
+      () => getPublicListing(db, "missing"),
       (error: unknown) =>
         error instanceof ClickError && error.code === "listing_not_found",
     );

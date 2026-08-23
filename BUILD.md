@@ -142,8 +142,8 @@ Each heading below is a fleet unit. Do not start PR N+1 in the same change as PR
 
 ### PR 6: Weekly reset + public brief-URL clicks
 
-- **Description:** ISO week in UTC. Live board is current `weekId` only. `GET|POST /r/:id` increments public clicks and 302s to the canonical brief URL with no added trackers.
-- **Files:** `src/lib/week.ts`, `src/lib/clicks.ts`, `src/app/r/[id]/route.ts`, `tests/week.test.ts`, `tests/board.test.ts`
+- **Description:** ISO week in UTC. Live board is current `weekId` only. `GET /r/:id` confirms terms + URL. `POST /r/:id` increments public clicks and 302s to the canonical brief URL with no added trackers.
+- **Files:** `src/lib/week.ts`, `src/lib/clicks.ts`, `src/lib/confirm-brief.ts`, `src/app/r/[id]/route.ts`, `tests/week.test.ts`, `tests/board.test.ts`
 - **Dependencies:** PR 2
 - **Acceptance:** SPEC §6.7 and public clicks on the brief URL.
 
