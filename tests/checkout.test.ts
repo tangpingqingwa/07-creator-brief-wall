@@ -10,12 +10,14 @@ import {
   CheckoutError,
   FakePolarPort,
   LivePolarPort,
+  POLAR_API_BASE,
   applyPaidListing,
   getPolarPort,
   handleCheckoutReturn,
   isPolarLive,
   parseBidUsd,
   planCheckout,
+  polarApiBase,
 } from "../src/lib/polar";
 import { listingFromRow, rankListings } from "../src/lib/rank";
 
@@ -307,6 +309,15 @@ test("live Polar is unused unless POLAR_LIVE=1", () => {
   });
 });
 
+test("polarApiBase defaults to production and honors POLAR_API_BASE", () => {
+  assert.equal(POLAR_API_BASE, "https://api.polar.sh");
+  assert.equal(polarApiBase({}), POLAR_API_BASE);
+  assert.equal(
+    polarApiBase({ POLAR_API_BASE: "https://sandbox-api.polar.sh/" }),
+    "https://sandbox-api.polar.sh",
+  );
+});
+
 test("live Polar constructor is secret-gated", () => {
   withEnv(
     {
@@ -319,6 +330,63 @@ test("live Polar constructor is secret-gated", () => {
       assert.throws(() => new LivePolarPort(), /BLOCKED-SECRET: POLAR_ACCESS_TOKEN/);
     },
   );
+});
+
+test("live Polar createCheckout defaults to production Polar API", async () => {
+  const seen: string[] = [];
+  const polar = new LivePolarPort({
+    env: {
+      POLAR_LIVE: "1",
+      POLAR_ACCESS_TOKEN: "test-token",
+      POLAR_PRODUCT_ID: "prod_test",
+    },
+    fetch: async (input) => {
+      seen.push(String(input));
+      return new Response(
+        JSON.stringify({
+          id: "chk_prod",
+          url: "https://polar.sh/checkout/chk_prod",
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    },
+  });
+  await polar.createCheckout({
+    amountUsd: 5,
+    listingDraft: draft(),
+    successUrl: SUCCESS_URL,
+  });
+  assert.deepEqual(seen, [`${POLAR_API_BASE}/v1/checkouts/`]);
+});
+
+test("live Polar createCheckout uses POLAR_API_BASE override", async () => {
+  const seen: string[] = [];
+  const polar = new LivePolarPort({
+    env: {
+      POLAR_LIVE: "1",
+      POLAR_ACCESS_TOKEN: "test-token",
+      POLAR_PRODUCT_ID: "prod_test",
+      POLAR_API_BASE: "https://sandbox-api.polar.sh",
+    },
+    fetch: async (input) => {
+      seen.push(String(input));
+      return new Response(
+        JSON.stringify({
+          id: "chk_sandbox",
+          url: "https://sandbox.polar.sh/checkout/chk_sandbox",
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    },
+  });
+  const started = await polar.createCheckout({
+    amountUsd: 5,
+    listingDraft: draft(),
+    successUrl: SUCCESS_URL,
+  });
+  assert.deepEqual(seen, ["https://sandbox-api.polar.sh/v1/checkouts/"]);
+  assert.equal(started.checkoutId, "chk_sandbox");
+  assert.equal(started.url, "https://sandbox.polar.sh/checkout/chk_sandbox");
 });
 
 test("live Polar webhook verifies the signature", async () => {

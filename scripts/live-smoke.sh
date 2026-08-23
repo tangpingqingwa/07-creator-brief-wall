@@ -4,6 +4,8 @@
 # click hop, chat/NSFW reject, WEEK_NOW reset, live Polar missing token.
 # Default process: Polar unset + POLAR_FIXTURE_ONLY=1. Missing Polar secret →
 # BLOCKED-SECRET: POLAR_ACCESS_TOKEN. Do not invent follower counts or unpaid listings.
+# Live Polar (POLAR_LIVE=1 + secrets): a second live-flagged process must return a
+# real sandbox.polar.sh Checkout URL. Never treat a fixture listing as live Polar.
 # Serves the real Next.js process (`next start`) after `next build`.
 set -euo pipefail
 
@@ -49,6 +51,10 @@ OWNED_PROCESS=0
 OP_POLAR_LIVE="${POLAR_LIVE:-}"
 OP_POLAR_ACCESS_TOKEN="${POLAR_ACCESS_TOKEN:-}"
 OP_POLAR_WEBHOOK_SECRET="${POLAR_WEBHOOK_SECRET:-}"
+OP_POLAR_PRODUCT_ID="${POLAR_PRODUCT_ID:-}"
+OP_POLAR_SUCCESS_URL="${POLAR_SUCCESS_URL:-}"
+OP_POLAR_API_BASE="${POLAR_API_BASE:-}"
+OP_POLAR_FIXTURE_ONLY="${POLAR_FIXTURE_ONLY:-}"
 
 kill_tree() {
   local pid="${1:-}"
@@ -163,7 +169,7 @@ start_next() {
   (
     cd "$root"
     unset POLAR_LIVE POLAR_ACCESS_TOKEN POLAR_WEBHOOK_SECRET POLAR_SUCCESS_URL \
-      POLAR_PRODUCT_ID POLAR_FIXTURE_ONLY WEEK_NOW || true
+      POLAR_PRODUCT_ID POLAR_FIXTURE_ONLY POLAR_API_BASE WEEK_NOW || true
     export POLAR_FIXTURE_ONLY=1
     export PORT="${port}"
     export DATABASE_PATH="${DB_PATH}"
@@ -427,6 +433,13 @@ if [[ -n "${OP_POLAR_ACCESS_TOKEN}" ]]; then
 else
   echo "operator POLAR_ACCESS_TOKEN=<unset>"
 fi
+if [[ -n "${OP_POLAR_PRODUCT_ID}" ]]; then
+  echo "operator POLAR_PRODUCT_ID=<set>"
+else
+  echo "operator POLAR_PRODUCT_ID=<unset>"
+fi
+echo "operator POLAR_API_BASE=${OP_POLAR_API_BASE:-<unset>}"
+echo "operator POLAR_FIXTURE_ONLY=${OP_POLAR_FIXTURE_ONLY:-<unset>}"
 
 # --- health ---
 health_body="${WORKDIR}/healthz.json"
@@ -707,6 +720,66 @@ if [[ -n "${LIVE_PID}" ]]; then
   stop_http "${LIVE_PID}" "${LIVE_PORT}"
 fi
 LIVE_PID=""
+
+# --- live Polar sandbox checkout (operator secrets; never a fixture listing) ---
+echo "== polar live sandbox checkout =="
+if [[ "${OP_POLAR_LIVE}" != "1" || "${OP_POLAR_FIXTURE_ONLY}" == "1" ]]; then
+  record "live-polar-checkout" "PASS-ERROR" "POLAR_LIVE not live-flagged; did not invent a paid row"
+elif [[ -z "${OP_POLAR_ACCESS_TOKEN}" ]]; then
+  echo "BLOCKED-SECRET: POLAR_ACCESS_TOKEN"
+  record "live-polar-checkout" "BLOCKED-SECRET" "POLAR_ACCESS_TOKEN"
+elif [[ -z "${OP_POLAR_PRODUCT_ID}" ]]; then
+  echo "BLOCKED-SECRET: POLAR_PRODUCT_ID"
+  record "live-polar-checkout" "BLOCKED-SECRET" "POLAR_PRODUCT_ID"
+else
+  LIVE_PORT="$(pick_port)"
+  LIVE_DB="${WORKDIR}/polar-sandbox.sqlite"
+  LIVE_LOG="${WORKDIR}/polar-sandbox.log"
+  LIVE_BASE="http://127.0.0.1:${LIVE_PORT}"
+  LIVE_SUCCESS="${OP_POLAR_SUCCESS_URL:-${LIVE_BASE}/checkout/return}"
+  LIVE_API_BASE="${OP_POLAR_API_BASE:-https://sandbox-api.polar.sh}"
+  LIVE_PID="$(
+    DB_PATH="${LIVE_DB}" start_next "$LIVE_PORT" "$LIVE_LOG" \
+      "POLAR_LIVE=1" \
+      "POLAR_FIXTURE_ONLY=" \
+      "POLAR_ACCESS_TOKEN=${OP_POLAR_ACCESS_TOKEN}" \
+      "POLAR_WEBHOOK_SECRET=${OP_POLAR_WEBHOOK_SECRET:-}" \
+      "POLAR_PRODUCT_ID=${OP_POLAR_PRODUCT_ID}" \
+      "POLAR_SUCCESS_URL=${LIVE_SUCCESS}" \
+      "POLAR_API_BASE=${LIVE_API_BASE}"
+  )"
+  if ! wait_health "$LIVE_BASE"; then
+    echo "live Polar sandbox process log:" >&2
+    cat "${LIVE_LOG}" >&2 || true
+    record "live-polar-checkout" "FAIL" "live Polar sandbox process did not become healthy"
+  else
+    live_pay_body="${WORKDIR}/live-pay.json"
+    live_pay_hdrs="${WORKDIR}/live-pay.hdrs"
+    live_pay_code="$(http_post_json "$LIVE_BASE" "/checkout" \
+      "{\"brand\":\"Live Polar Sandbox ${STAMP}\",\"terms\":\"sandbox checkout must not list unpaid\",\"briefUrl\":\"https://live-sandbox.example/smoke-${STAMP}\",\"bidUsd\":5}" \
+      "$live_pay_body" "$live_pay_hdrs" || true)"
+    live_pay_loc="$(header_value "$live_pay_hdrs" "location" || true)"
+    live_pay_err="$(json_field "$live_pay_body" "error" || true)"
+    live_pay_board="${WORKDIR}/live-pay-board.html"
+    http_get "$LIVE_BASE" "/" "$live_pay_board" >/dev/null || true
+    if html_has "$live_pay_board" "Live Polar Sandbox ${STAMP}"; then
+      record "live-polar-checkout" "FAIL" "unpaid live Polar session appeared on the board"
+    elif [[ "$live_pay_code" =~ ^30[12378]$ ]] \
+      && [[ "$live_pay_loc" == https://sandbox.polar.sh/* ]]; then
+      record "live-polar-checkout" "PASS" "live Polar sandbox Checkout URL; unpaid session not listed"
+    elif [[ "$live_pay_code" == "503" ]] \
+      && [[ "$live_pay_err" == BLOCKED-SECRET:* ]]; then
+      echo "${live_pay_err}"
+      record "live-polar-checkout" "BLOCKED-SECRET" "${live_pay_err#BLOCKED-SECRET: }"
+    else
+      record "live-polar-checkout" "FAIL" "POLAR_LIVE=1 HTTP ${live_pay_code} loc_host=$(printf '%s' "$live_pay_loc" | sed -E 's#https?://([^/]+).*#\1#') error=${live_pay_err}"
+    fi
+  fi
+  if [[ -n "${LIVE_PID}" ]]; then
+    stop_http "${LIVE_PID}" "${LIVE_PORT}"
+  fi
+  LIVE_PID=""
+fi
 
 echo
 echo "== summary =="
