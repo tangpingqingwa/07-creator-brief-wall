@@ -197,6 +197,7 @@ test("card has brand, terms, $, clicks; no follower fields", () => {
     }),
   ]);
   assert.match(html, /Acme/);
+  assert.match(html, /class="terms-label">Terms/);
   assert.match(html, /\$800 flat, 1 TikTok/);
   assert.match(html, /\$5/);
   assert.match(html, /3 clicks/);
@@ -206,6 +207,43 @@ test("card has brand, terms, $, clicks; no follower fields", () => {
   assert.match(html, /https:\/\/example.com\/acme/);
   assert.doesNotMatch(html, FORBIDDEN);
   assert.doesNotMatch(html, /data-followers/);
+});
+
+test("one flyer names Terms as the prize before $bid", () => {
+  const html = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_acme",
+          brand: "Acme",
+          terms: "$800 flat, 1 TikTok",
+          briefUrl: "https://briefs.example.com/acme?id=9",
+          bidUsd: 5,
+          clicks: 3,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const cardStart = html.indexOf('data-id="lst_acme"');
+  const card = html.slice(cardStart, html.indexOf("</li>", cardStart));
+  const brand = card.indexOf('class="brand">Acme');
+  const termsMark = card.indexOf('data-terms=""');
+  const termsLabel = card.indexOf('class="terms-label">Terms');
+  const termsCopy = card.indexOf('class="terms-copy">$800 flat, 1 TikTok');
+  const hop = card.indexOf('data-open-brief=""');
+  const bid = card.indexOf('class="bid">$5');
+  const clicks = card.indexOf("3 clicks");
+  assert.ok(brand >= 0 && termsMark > brand);
+  assert.ok(termsLabel > termsMark && termsCopy > termsLabel);
+  assert.ok(hop > termsCopy && bid > hop && clicks > bid);
+  assert.match(card, /data-terms=""/);
+  assert.match(card, /class="terms-label">Terms/);
+  assert.match(card, /\$800 flat, 1 TikTok/);
+  assert.match(card, /Open brief/);
+  assert.match(card, /\$5/);
+  assert.doesNotMatch(html, FORBIDDEN);
 });
 
 test("one flyer has a single labeled Open brief hop", () => {
@@ -234,6 +272,7 @@ test("one flyer has a single labeled Open brief hop", () => {
   const host = card.indexOf('class="host">briefs.example.com');
   const hops = card.match(/href="\/r\/lst_acme"/g) ?? [];
   assert.ok(brand >= 0 && terms > brand && hop > terms);
+  assert.match(card, /class="terms-label">Terms/);
   assert.ok(open > hop && host > open);
   assert.equal(hops.length, 1);
   assert.equal((card.match(/class="host"/g) ?? []).length, 1);

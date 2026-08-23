@@ -222,6 +222,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover flyer-first occupied reading order"
   grep -q 'one flyer has a single labeled Open brief hop' tests/board.test.ts \
     || fail "board tests must cover the labeled Open brief hop"
+  grep -q 'one flyer names Terms as the prize before $bid' tests/board.test.ts \
+    || fail "board tests must cover labeled Terms before \$bid"
   grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
     || fail "board tests must cover the confirm sheet"
   grep -q 'occupied wall names one Post a brief hop' tests/board.test.ts \
@@ -242,6 +244,16 @@ if [[ -f package.json ]]; then
     || fail "Open brief hop must be marked data-open-brief"
   grep -q 'className="brief-url"' src/lib/board-markup.tsx \
     || fail "Open brief must stay the flyer hop"
+  grep -q 'data-terms' src/lib/board-markup.tsx \
+    || fail "flyer must mark the Terms prize"
+  grep -q 'terms-label' src/lib/board-markup.tsx \
+    || fail "flyer must label Terms"
+  grep -q 'terms-copy' src/lib/board-markup.tsx \
+    || fail "flyer must show the terms copy as the prize"
+  grep -q 'terms-label' src/app/board.css \
+    || fail "CSS must style the Terms label"
+  grep -q '"rank brand brand"' src/app/board.css \
+    || fail "flyer CSS must not put \$bid on the first row"
   if grep -nE 'href=\{listing\.briefUrl\}|href=\{`\$\{listing\.briefUrl' src/lib/board-markup.tsx >/dev/null
   then
     fail "flyer must not hop the raw brief URL"
@@ -551,6 +563,12 @@ if [[ -f package.json ]]; then
   if grep -q 'data-post-brief' "${home_body}"; then
     fail "empty week must not show a Post a brief hop"
   fi
+  if grep -q 'data-terms=""' "${home_body}"; then
+    fail "empty plaster has no flyer; do not show Terms"
+  fi
+  if grep -q 'class="terms-label"' "${home_body}"; then
+    fail "empty plaster must not label Terms on a flyer"
+  fi
   if grep -qi 'Post a brief' "${home_body}"; then
     fail "empty week Claim #1 is already first; do not add Post a brief"
   fi
@@ -647,6 +665,32 @@ PY
     || fail "paid flyer must expose a labeled Open brief hop"
   grep -q 'class="open-label">Open brief' "${listed_body}" \
     || fail "paid flyer must say Open brief on the hop"
+  grep -q 'data-terms=""' "${listed_body}" \
+    || fail "paid flyer must mark Terms as the prize"
+  grep -q 'class="terms-label">Terms' "${listed_body}" \
+    || fail "paid flyer must say Terms on the prize"
+  grep -q 'class="terms-copy">\$800 flat, 1 TikTok' "${listed_body}" \
+    || fail "paid flyer must show the terms copy as the prize"
+  python3 - "${listed_body}" <<'PY' || fail "paid flyer must put labeled Terms before Open brief and \$bid"
+import re
+import sys
+html = open(sys.argv[1], encoding="utf-8").read()
+match = re.search(r'<li[^>]*class="card[^"]*"[^>]*data-brand="Acme"[^>]*>.*?</li>', html, re.S)
+if not match:
+    raise SystemExit(1)
+card = match.group(0)
+terms = card.find('data-terms=""')
+label = card.find('class="terms-label">Terms')
+copy = card.find('class="terms-copy">$800 flat, 1 TikTok')
+hop = card.find('data-open-brief=""')
+bid = card.find('class="bid">$')
+if terms < 0 or label < 0 or copy < 0 or hop < 0 or bid < 0:
+    raise SystemExit(1)
+if not (terms < label < copy < hop < bid):
+    raise SystemExit(1)
+if not re.search(r'class="bid">\$(?:<!-- -->)?5', card):
+    raise SystemExit(1)
+PY
   grep -q 'data-post-brief=""' "${listed_body}" \
     || fail "paid board must expose one Post a brief hop"
   grep -q 'href="#claim"' "${listed_body}" \

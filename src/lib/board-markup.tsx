@@ -36,7 +36,10 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
           <span className="tape" aria-hidden="true" />
           <span className="rank">#{listing.rank}</span>
           <span className="brand">{listing.brand}</span>
-          <p className="terms">{listing.terms}</p>
+          <p className="terms" data-terms="">
+            <span className="terms-label">Terms</span>
+            <span className="terms-copy">{listing.terms}</span>
+          </p>
           <a
             className="brief-url"
             href={`/r/${listing.id}`}
