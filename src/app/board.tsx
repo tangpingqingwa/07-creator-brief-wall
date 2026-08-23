@@ -1,4 +1,5 @@
-import type { RankedListing } from "../lib/rank";
+import React from "react";
+import { claimNumberOneUsd, type RankedListing } from "../lib/rank";
 import { BoardCards, BoardChrome } from "../lib/board-markup";
 import { OutbidForm } from "./outbid-form";
 
@@ -9,9 +10,13 @@ export function Board({
   listings: RankedListing[];
   weekId?: string;
 }) {
+  const topBidUsd = listings[0]?.bidUsd;
   return (
     <BoardChrome weekId={weekId}>
-      <OutbidForm />
+      <OutbidForm
+        defaultAmount={claimNumberOneUsd(topBidUsd)}
+        topBidUsd={topBidUsd}
+      />
       <BoardCards listings={listings} />
     </BoardChrome>
   );

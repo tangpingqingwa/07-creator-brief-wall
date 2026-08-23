@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  claimNumberOneUsd,
   place,
   quoteCheckout,
   raise,
@@ -156,6 +157,8 @@ test("new bid must be at least current + $1, and top + $1 to become #1", () => {
   assert.equal(takesNumberOne(10, top.bidUsd), false);
   assert.equal(takesNumberOne(11, top.bidUsd), true);
   assert.equal(takesNumberOne(5, undefined), true);
+  assert.equal(claimNumberOneUsd(undefined), 5);
+  assert.equal(claimNumberOneUsd(10), 11);
 
   const tied = rankListings([
     top,

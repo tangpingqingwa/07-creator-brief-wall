@@ -206,6 +206,18 @@ if [[ -f package.json ]]; then
   grep -q 'Claim #1 for' src/app/outbid-form.tsx || fail "form missing Claim #1"
   grep -q 'amount-stepper' src/app/outbid-form.tsx || fail "form missing ± amount stepper"
   grep -q 'amount-field' src/app/board.css || fail "CSS missing dashed amount field"
+  grep -q 'export function claimNumberOneUsd' src/lib/rank.ts \
+    || fail "rank.ts must export claimNumberOneUsd"
+  grep -q 'claimNumberOneUsd' src/app/board.tsx \
+    || fail "board must seed the claim amount from this week’s top bid"
+  grep -q 'data-claim-amount' src/app/outbid-form.tsx \
+    || fail "claim strip must expose this week’s #1 price"
+  grep -q 'Need \$' src/app/outbid-form.tsx \
+    || fail "occupied claim must say what it costs to take #1"
+  grep -q 'Blank plaster' src/app/outbid-form.tsx \
+    || fail "empty claim must say blank plaster is #1 for the minimum"
+  grep -q 'claim strip defaults to this week' tests/board.test.ts \
+    || fail "board tests must cover the live #1 claim amount"
   grep -q 'older' tests/rank.test.ts || fail "rank tests missing older-wins-ties"
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach|\bcpm\b' \
     src/lib/board-markup.tsx src/app/outbid-form.tsx src/lib/rank.ts src/app/board.css
@@ -474,6 +486,10 @@ if [[ -f package.json ]]; then
     || fail "GET / must say this week’s board is empty"
   grep -qi 'plaster is blank' "${home_body}" \
     || fail "GET / empty week must read as blank plaster"
+  grep -q 'data-claim-amount="5"' "${home_body}" \
+    || fail "empty week claim must default to \$5 for #1"
+  grep -qi 'blank plaster' "${home_body}" \
+    || fail "empty week claim must say blank plaster is the first flyer"
   grep -q 'Outbid' src/app/outbid-form.tsx || fail "form missing Outbid"
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${home_body}"; then
     fail "GET / must not invent follower or reach numbers"
@@ -545,6 +561,12 @@ if [[ -f package.json ]]; then
   grep -q 'Acme' "${listed_body}" || fail "fixture \$5 must appear on the board"
   grep -q '\$5' "${listed_body}" || fail "board must show \$5 after fixture pay"
   grep -q 'data-bid="5"' "${listed_body}" || fail "board card missing data-bid=5"
+  grep -q 'data-claim-amount="6"' "${listed_body}" \
+    || fail "after a \$5 flyer, claim #1 must default to \$6"
+  grep -q 'data-top-bid="5"' "${listed_body}" \
+    || fail "occupied claim must show the current top bid"
+  grep -q 'Need \$6 to take #1' "${listed_body}" \
+    || fail "occupied claim must say \$6 takes #1"
   if grep -q 'data-empty-week="true"' "${listed_body}"; then
     fail "board must leave empty-week after a paid fixture"
   fi
