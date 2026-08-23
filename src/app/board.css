@@ -148,6 +148,13 @@ a.post-brief .post-dest {
   text-transform: none;
 }
 
+/* Same Post a brief hop, concentrated after Open wins the first click. */
+a.post-brief.post-after-open-first {
+  padding: 0.5rem 0.7rem 0.55rem;
+  border-width: 2px;
+  font-size: 1.12rem;
+}
+
 .wall-stage {
   display: grid;
   grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
