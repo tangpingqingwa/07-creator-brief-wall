@@ -2410,30 +2410,34 @@ test("occupied later-rank Open stays quieter so #1 Open is the first click", () 
     "utf8",
   );
   const laterSize = css.match(
-    /\.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*font-size:\s*([\d.]+)rem/,
+    /\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*font-size:\s*([\d.]+)rem/,
   );
-  const baseSize = css.match(/\.card \.brief-url \{\n[^}]*font-size:\s*([\d.]+)rem/);
+  const baseSize = css.match(
+    /\.wall-occupied \.card \.brief-url \{\n[^}]*font-size:\s*([\d.]+)rem/,
+  );
   const leadSize = css.match(
-    /\.card \.brief-url\.open-after-post-five\s*\{[^}]*font-size:\s*([\d.]+)rem/,
+    /\.wall-occupied \.card \.brief-url\.open-after-post-five\s*\{[^}]*font-size:\s*([\d.]+)rem/,
   );
   assert.ok(laterSize);
   assert.ok(baseSize);
   assert.ok(leadSize);
   assert.ok(Number(laterSize[1]) < Number(baseSize[1]));
   assert.ok(Number(laterSize[1]) < Number(leadSize[1]));
-  assert.match(css, /\.cards-later \.brief-url\.later-open\[data-later-open\]/);
+  assert.match(css, /\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]/);
   assert.match(
     css,
-    /\.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*color:\s*var\(--muted\)/,
+    /\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*color:\s*var\(--muted\)/,
   );
   assert.match(
     css,
-    /\.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*border:\s*0/,
+    /\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*border:\s*0/,
   );
   assert.doesNotMatch(
     css,
-    /\.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*color:\s*var\(--ink\)/,
+    /\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*color:\s*var\(--ink\)/,
   );
+  assert.match(css, /\.wall-occupied \.cards-later \.card \{/);
+  assert.doesNotMatch(css, /\.wall-occupied \.cards-later \.wall-occupied \.card/);
   assert.match(
     css,
     /\.wall-stage\.wall-empty\[data-occupied="false"\] \[data-later-open\]/,
@@ -2497,11 +2501,14 @@ test("occupied later-rank Open stays quieter so #1 Open is the first click", () 
   const laterOpenMark = two.indexOf('data-later-open=""');
   const laterOpen = two.indexOf('class="open-label">Open brief');
   const laterClass = two.indexOf("later-open");
+  const laterTerms = two.indexOf('class="terms-label">Terms');
+  const laterBid = two.indexOf('class="bid">$5');
   const post = occupied.indexOf('data-post-brief=""');
   const claim = occupied.indexOf('id="claim"');
   assert.ok(leadList >= 0 && laterList > leadList);
   assert.ok(firstClick >= 0 && leadOpen > firstClick);
   assert.ok(laterOpenMark >= 0 && laterClass >= 0 && laterOpen > laterOpenMark);
+  assert.ok(laterTerms >= 0 && laterBid > laterTerms && laterOpenMark > laterBid);
   assert.ok(twoStart > laterList && laterList > leadStart);
   assert.ok(post > twoStart && claim > post);
   assert.match(lead, /data-first-click="open"/);
@@ -2561,6 +2568,102 @@ test("occupied later-rank Open stays quieter so #1 Open is the first click", () 
   assert.doesNotMatch(solo, /Later briefs this week/);
   assert.doesNotMatch(solo, /data-later-open/);
   assert.doesNotMatch(solo, /later-open/);
+});
+
+test("occupied Terms stay the prize and later Open stays after #1 Open", () => {
+  const css = readFileSync(join(process.cwd(), "src", "app", "board.css"), "utf8");
+  const markup = readFileSync(
+    join(process.cwd(), "src", "lib", "board-markup.tsx"),
+    "utf8",
+  );
+  assert.match(css, /\.wall-occupied \.cards-later \.card \{/);
+  assert.match(
+    css,
+    /\.wall-occupied \.cards-later \.card\s*\{[^}]*grid-template-areas:[\s\S]*"bid bid clicks"[\s\S]*"url url url"/,
+  );
+  assert.match(
+    css,
+    /\.wall-occupied \.card \{\n[^}]*grid-template-areas:[\s\S]*"url url url"[\s\S]*"bid bid clicks"/,
+  );
+  assert.doesNotMatch(css, /\.wall-occupied \.cards-later \.wall-occupied \.card/);
+  assert.match(markup, /\{lead \? hop : null\}/);
+  assert.match(markup, /\{lead \? null : hop\}/);
+  assert.match(markup, /function OpenBriefHop/);
+  assert.doesNotMatch(markup, /open-later-rank|data-later-rank/);
+  assert.doesNotMatch(css, /open-later-rank|data-later-rank|data-post-after-open-seven|data-open-after-post-six/);
+
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.match(empty, /Claim #1 for/);
+  assert.match(empty, /Blank plaster/);
+  assert.match(empty, /data-empty-claim-first=""/);
+  assert.doesNotMatch(empty, /data-later-open/);
+  assert.doesNotMatch(empty, /later-open/);
+  assert.doesNotMatch(empty, /cards-later/);
+  assert.doesNotMatch(empty, /data-open-brief/);
+  assert.doesNotMatch(empty, /Open brief/);
+  assert.doesNotMatch(empty, /data-terms=/);
+  assert.doesNotMatch(empty, /class="terms-label"/);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+        listing({
+          id: "lst_two",
+          brand: "Two Co",
+          terms: "later rank",
+          bidUsd: 5,
+          createdAt: "2026-08-18T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const leadList = occupied.indexOf('aria-label="Paid briefs this week"');
+  const laterList = occupied.indexOf('aria-label="Later briefs this week"');
+  const leadStart = occupied.indexOf('data-id="lst_lead"');
+  const lead = occupied.slice(leadStart, occupied.indexOf("</li>", leadStart));
+  const twoStart = occupied.indexOf('data-id="lst_two"');
+  const two = occupied.slice(twoStart, occupied.indexOf("</li>", twoStart));
+  const leadTerms = lead.indexOf('class="terms-label">Terms');
+  const leadOpen = lead.indexOf('class="open-label">Open brief');
+  const leadBid = lead.indexOf('class="bid later-fact"');
+  const laterTerms = two.indexOf('class="terms-label">Terms');
+  const laterBid = two.indexOf('class="bid">$5');
+  const laterOpenMark = two.indexOf('data-later-open=""');
+  const laterOpen = two.indexOf('class="open-label">Open brief');
+  const firstClick = lead.indexOf('data-first-click="open"');
+  assert.ok(leadList >= 0 && laterList > leadList);
+  assert.ok(leadTerms >= 0 && leadOpen > leadTerms && leadBid > leadOpen);
+  assert.ok(laterTerms >= 0 && laterBid > laterTerms);
+  assert.ok(laterOpenMark > laterBid && laterOpen > laterOpenMark);
+  assert.ok(firstClick >= 0 && twoStart > laterList && laterList > leadStart);
+  assert.match(lead, /data-prize=""/);
+  assert.match(lead, /data-first-click="open"/);
+  assert.match(lead, /class="open-after-note">after Terms/);
+  assert.doesNotMatch(lead, /data-later-open/);
+  assert.match(two, /data-later-open=""/);
+  assert.match(two, /class="brief-url later-open"/);
+  assert.match(two, /data-open-brief=""/);
+  assert.match(two, /href="\/r\/lst_two"/);
+  assert.doesNotMatch(two, /data-first-click="open"/);
+  assert.doesNotMatch(two, /data-open-after-terms/);
+  assert.doesNotMatch(two, /after Terms/);
+  assert.doesNotMatch(two, /data-prize=/);
+  assert.equal((occupied.match(/data-first-click="open"/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-later-open=""/g) ?? []).length, 1);
+  assert.doesNotMatch(occupied, /open-later-rank|data-later-rank/);
+  assert.doesNotMatch(occupied, /data-post-after-open-seven|data-open-after-post-six/);
+  assert.doesNotMatch(empty, FORBIDDEN);
+  assert.doesNotMatch(occupied, FORBIDDEN);
 });
 
 test("one flyer opens the brief after Terms, not next to $bid", () => {
@@ -2633,6 +2736,10 @@ test("one flyer opens the brief after Terms, not next to $bid", () => {
   assert.equal((html.match(/data-open-after-post-five-stamp=""/g) ?? []).length, 1);
   const laterStart = html.indexOf('data-id="lst_two"');
   const later = html.slice(laterStart, html.indexOf("</li>", laterStart));
+  const laterTerms = later.indexOf('data-terms=""');
+  const laterBid = later.indexOf('class="bid">$5');
+  const laterOpen = later.indexOf('data-later-open=""');
+  assert.ok(laterTerms >= 0 && laterBid > laterTerms && laterOpen > laterBid);
   assert.match(later, /data-later-open=""/);
   assert.match(later, /class="brief-url later-open"/);
   assert.doesNotMatch(later, /data-first-click="open"/);

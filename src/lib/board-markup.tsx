@@ -74,6 +74,7 @@ function OpenBriefHop({ listing }: { listing: RankedListing }) {
 
 function OccupiedFlyer({ listing }: { listing: RankedListing }) {
   const lead = listing.rank === 1;
+  const hop = <OpenBriefHop listing={listing} />;
   return (
     <li
       className={lead ? "card card-lead" : "card"}
@@ -94,7 +95,7 @@ function OccupiedFlyer({ listing }: { listing: RankedListing }) {
         <span className="terms-label">Terms</span>
         <span className="terms-copy">{listing.terms}</span>
       </p>
-      <OpenBriefHop listing={listing} />
+      {lead ? hop : null}
       <span
         className={lead ? "bid later-fact" : "bid"}
         data-later-fact={lead ? "" : undefined}
@@ -104,6 +105,7 @@ function OccupiedFlyer({ listing }: { listing: RankedListing }) {
       <span className="clicks" data-clicks={listing.clicks}>
         {listing.clicks} clicks
       </span>
+      {lead ? null : hop}
       <span className="brief-url-text">{listing.briefUrl}</span>
     </li>
   );
