@@ -202,23 +202,30 @@ a.post-brief.post-after-open-six {
   grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
 }
 
-/* Empty plaster still leads with Claim #1. Occupied chrome stays off this week. */
-.wall-stage[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] {
-  order: -1;
+/* Empty plaster is Claim #1 paper. Occupied Terms / Open / later-fact $bid have no slot. */
+.wall-stage.wall-empty[data-occupied="false"] {
+  grid-template-columns: minmax(16rem, 32rem);
 }
 
-.wall-stage[data-occupied="false"] [data-post-brief],
-.wall-stage[data-occupied="false"] [data-open-brief],
-.wall-stage[data-occupied="false"] [data-prize],
-.wall-stage[data-occupied="false"] .prize-before-price,
-.wall-stage[data-occupied="false"] [data-later-fact],
-.wall-stage[data-occupied="false"] .later-fact,
-.paste-rail[data-empty-claim-first] + .plaster [data-post-brief],
-.paste-rail[data-empty-claim-first] + .plaster [data-open-brief],
-.paste-rail[data-empty-claim-first] + .plaster [data-prize],
-.paste-rail[data-empty-claim-first] + .plaster .prize-before-price,
-.paste-rail[data-empty-claim-first] + .plaster [data-later-fact],
-.paste-rail[data-empty-claim-first] + .plaster .later-fact {
+.wall-stage.wall-empty[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] {
+  order: -1;
+  position: static;
+  max-width: 32rem;
+  transform: none;
+}
+
+.wall-stage.wall-empty[data-occupied="false"] .flyers,
+.wall-stage.wall-empty[data-occupied="false"] .plaster,
+.wall-stage.wall-empty[data-occupied="false"] .card,
+.wall-stage.wall-empty[data-occupied="false"] [data-post-brief],
+.wall-stage.wall-empty[data-occupied="false"] [data-open-brief],
+.wall-stage.wall-empty[data-occupied="false"] [data-open-after-terms],
+.wall-stage.wall-empty[data-occupied="false"] [data-terms],
+.wall-stage.wall-empty[data-occupied="false"] .terms-label,
+.wall-stage.wall-empty[data-occupied="false"] [data-prize],
+.wall-stage.wall-empty[data-occupied="false"] .prize-before-price,
+.wall-stage.wall-empty[data-occupied="false"] [data-later-fact],
+.wall-stage.wall-empty[data-occupied="false"] .later-fact {
   display: none;
 }
 
@@ -786,7 +793,8 @@ a.post-brief.post-after-open-six {
 @media (max-width: 820px) {
   .mast,
   .wall-stage,
-  .wall-stage.wall-occupied {
+  .wall-stage.wall-occupied,
+  .wall-stage.wall-empty {
     grid-template-columns: 1fr;
   }
 

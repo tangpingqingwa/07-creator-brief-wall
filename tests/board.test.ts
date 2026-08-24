@@ -1829,7 +1829,7 @@ test("empty plaster still leads with Claim #1", () => {
   const css = readFileSync(join(process.cwd(), "src", "app", "board.css"), "utf8");
   assert.match(
     css,
-    /\.wall-stage\[data-occupied="false"\] \.paste-rail\.empty-claim-first\[data-empty-claim-first\]/,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.paste-rail\.empty-claim-first\[data-empty-claim-first\]/,
   );
   assert.match(css, /\[data-post-brief\]/);
   assert.match(css, /\[data-open-brief\]/);
@@ -1848,11 +1848,15 @@ test("empty plaster still leads with Claim #1", () => {
   assert.ok(claim >= 0 && stamp >= 0 && plaster >= 0);
   assert.ok(claim <= stamp && stamp < plaster);
   assert.match(empty, /class="paste-rail empty-claim-first"/);
+  assert.match(empty, /class="wall-stage wall-empty"/);
   assert.match(empty, /data-occupied="false"/);
   assert.match(empty, /Claim #1 for/);
   assert.match(empty, /This week’s wall/);
   assert.match(empty, /Blank plaster/);
   assert.match(empty, /\$5 pastes the first flyer at #1/);
+  assert.match(empty, /data-empty-week="true"/);
+  assert.doesNotMatch(empty, /class="plaster"/);
+  assert.doesNotMatch(empty, /class="flyers"/);
   assert.doesNotMatch(empty, /wall-occupied/);
   assert.doesNotMatch(empty, /data-post-brief/);
   assert.doesNotMatch(empty, /data-post-after-open/);
@@ -1889,6 +1893,7 @@ test("empty plaster still leads with Claim #1", () => {
   );
   assert.doesNotMatch(occupied, /data-empty-claim-first/);
   assert.doesNotMatch(occupied, /empty-claim-first/);
+  assert.doesNotMatch(occupied, /wall-empty/);
   assert.match(occupied, /data-occupied="true"/);
   assert.match(occupied, /data-post-brief=""/);
   assert.match(occupied, /data-open-brief=""/);
@@ -1900,6 +1905,115 @@ test("empty plaster still leads with Claim #1", () => {
   assert.match(occupied, /Open brief/);
   assert.match(occupied, /href="\/r\/lst_lead"/);
   assert.match(occupied, /Claim #1 for/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+});
+
+test("empty plaster stays Claim #1 with no Terms / Open leak", () => {
+  const css = readFileSync(join(process.cwd(), "src", "app", "board.css"), "utf8");
+  const markup = readFileSync(
+    join(process.cwd(), "src", "lib", "board-markup.tsx"),
+    "utf8",
+  );
+  const board = readFileSync(join(process.cwd(), "src", "app", "board.tsx"), "utf8");
+  const form = readFileSync(join(process.cwd(), "src", "app", "outbid-form.tsx"), "utf8");
+  assert.match(markup, /export function OccupiedFlyers/);
+  assert.match(board, /<OccupiedFlyers listings=\{listings\} \/>/);
+  assert.doesNotMatch(board, /EmptyPlaster/);
+  assert.doesNotMatch(board, /<BoardCards/);
+  assert.match(form, /data-empty-week="true"/);
+  assert.match(form, /The plaster is blank/);
+  assert.match(
+    css,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.paste-rail\.empty-claim-first\[data-empty-claim-first\]/,
+  );
+  assert.match(
+    css,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\]\s*\{[^}]*grid-template-columns:\s*minmax\(16rem, 32rem\)/,
+  );
+  assert.match(
+    css,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \[data-terms\]/,
+  );
+  assert.match(
+    css,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \[data-open-brief\]/,
+  );
+  assert.match(
+    css,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \[data-later-fact\]/,
+  );
+  assert.match(
+    css,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.flyers/,
+  );
+  assert.match(
+    css,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.plaster/,
+  );
+  assert.doesNotMatch(css, /data-post-after-open-seven|data-open-after-post-six/);
+  assert.doesNotMatch(css, /empty-claim-plaster/);
+  assert.doesNotMatch(markup, /empty-claim-plaster/);
+
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  const claim = empty.indexOf('id="claim"');
+  const stamp = empty.indexOf('data-empty-claim-first=""');
+  const plaster = empty.indexOf('data-empty-week="true"');
+  assert.ok(claim >= 0 && stamp >= 0 && plaster >= 0);
+  assert.ok(claim <= stamp && stamp < plaster);
+  assert.match(empty, /class="wall-stage wall-empty"/);
+  assert.match(empty, /data-occupied="false"/);
+  assert.match(empty, /Claim #1 for/);
+  assert.match(empty, /Blank plaster/);
+  assert.match(empty, /data-empty-week="true"/);
+  assert.doesNotMatch(empty, /class="plaster"/);
+  assert.doesNotMatch(empty, /class="flyers"/);
+  assert.doesNotMatch(empty, /class="card/);
+  assert.doesNotMatch(empty, /data-terms=/);
+  assert.doesNotMatch(empty, /class="terms-label"/);
+  assert.doesNotMatch(empty, /data-open-brief/);
+  assert.doesNotMatch(empty, /Open brief/);
+  assert.doesNotMatch(empty, /data-open-after-terms/);
+  assert.doesNotMatch(empty, /after Terms/);
+  assert.doesNotMatch(empty, /data-later-fact/);
+  assert.doesNotMatch(empty, /later-fact/);
+  assert.doesNotMatch(empty, /data-prize=/);
+  assert.doesNotMatch(empty, /prize-before-price/);
+  assert.doesNotMatch(empty, /Post a brief/);
+  assert.doesNotMatch(empty, /data-empty-claim-plaster/);
+  assert.doesNotMatch(empty, /empty-claim-plaster/);
+  assert.doesNotMatch(empty, FORBIDDEN);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const leadStart = occupied.indexOf('data-id="lst_lead"');
+  const lead = occupied.slice(leadStart, occupied.indexOf("</li>", leadStart));
+  const terms = lead.indexOf('data-terms=""');
+  const open = lead.indexOf('data-open-brief=""');
+  const bid = lead.indexOf('class="bid later-fact"');
+  const later = lead.indexOf('data-later-fact=""');
+  assert.ok(terms >= 0 && open > terms);
+  assert.ok(bid > open && later >= bid);
+  assert.match(occupied, /class="wall-stage wall-occupied"/);
+  assert.doesNotMatch(occupied, /wall-empty/);
+  assert.doesNotMatch(occupied, /data-empty-claim-first/);
+  assert.match(occupied, /class="terms-label">Terms/);
+  assert.match(occupied, /class="open-label">Open brief/);
+  assert.match(occupied, /class="bid later-fact"/);
+  assert.match(occupied, /href="\/r\/lst_lead"/);
   assert.doesNotMatch(occupied, FORBIDDEN);
 });
 
