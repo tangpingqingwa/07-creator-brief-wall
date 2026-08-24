@@ -75,7 +75,7 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
               className={
                 listing.rank === 1
                   ? "brief-url open-after-terms open-after-post-first open-after-post-two open-after-post-three open-after-post-four open-after-post-five"
-                  : "brief-url open-after-terms"
+                  : "brief-url open-after-terms open-later-rank"
               }
               href={`/r/${listing.id}`}
               data-brief-url={listing.briefUrl}
@@ -88,6 +88,7 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
               data-open-after-post-three-stamp={listing.rank === 1 ? "" : undefined}
               data-open-after-post-four-stamp={listing.rank === 1 ? "" : undefined}
               data-open-after-post-five-stamp={listing.rank === 1 ? "" : undefined}
+              data-later-rank={listing.rank === 1 ? undefined : ""}
               aria-label={`Open brief at ${hostLabel(listing.briefUrl)}`}
             >
               <span className="open-after-note">after Terms</span>

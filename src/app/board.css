@@ -213,12 +213,16 @@ a.post-brief.post-after-open-six {
 .wall-stage[data-occupied="false"] .prize-before-price,
 .wall-stage[data-occupied="false"] [data-later-fact],
 .wall-stage[data-occupied="false"] .later-fact,
+.wall-stage[data-occupied="false"] [data-later-rank],
+.wall-stage[data-occupied="false"] .open-later-rank,
 .paste-rail[data-empty-claim-first] + .plaster [data-post-brief],
 .paste-rail[data-empty-claim-first] + .plaster [data-open-brief],
 .paste-rail[data-empty-claim-first] + .plaster [data-prize],
 .paste-rail[data-empty-claim-first] + .plaster .prize-before-price,
 .paste-rail[data-empty-claim-first] + .plaster [data-later-fact],
-.paste-rail[data-empty-claim-first] + .plaster .later-fact {
+.paste-rail[data-empty-claim-first] + .plaster .later-fact,
+.paste-rail[data-empty-claim-first] + .plaster [data-later-rank],
+.paste-rail[data-empty-claim-first] + .plaster .open-later-rank {
   display: none;
 }
 
@@ -579,6 +583,16 @@ a.post-brief.post-after-open-six {
   padding: 1.1rem 1.56rem 1.16rem;
   border-width: 7px;
   font-size: 1.62rem;
+}
+
+/* Later-rank Open stays quieter. Occupied #1 Open is the first click. */
+.card .brief-url.open-later-rank[data-later-rank] {
+  padding: 0.2rem 0.35rem 0.22rem;
+  border-width: 1px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
 }
 
 .card .open-label {
