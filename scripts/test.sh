@@ -253,6 +253,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover #1 \$bid staying a later fact"
   grep -q 'occupied later-rank Open stays quieter so #1 Open is the first click' tests/board.test.ts \
     || fail "board tests must cover quieter later-rank Open brief"
+  grep -q 'occupied Terms stay the prize and later Open stays after #1 Open' tests/board.test.ts \
+    || fail "board tests must cover later Open after #1 Open"
   grep -q 'one flyer opens the brief after Terms, not next to $bid' tests/board.test.ts \
     || fail "board tests must cover Open brief after Terms"
   grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
@@ -417,6 +419,10 @@ if [[ -f package.json ]]; then
     || fail "CSS must mute #1 \$bid so it cannot shout beside Terms"
   grep -q 'function OpenBriefHop' src/lib/board-markup.tsx \
     || fail "occupied Open must compose OpenBriefHop, not stamp a mute class"
+  grep -q '{lead ? hop : null}' src/lib/board-markup.tsx \
+    || fail "occupied #1 Open must sit after Terms, before \$bid"
+  grep -q '{lead ? null : hop}' src/lib/board-markup.tsx \
+    || fail "later Open must recede after \$bid, not sit in the Terms prize slot"
   grep -q 'cards-lead' src/lib/board-markup.tsx \
     || fail "occupied #1 flyer must sit in the lead cards list"
   grep -q 'cards-later' src/lib/board-markup.tsx \
@@ -425,8 +431,14 @@ if [[ -f package.json ]]; then
     || fail "later-rank Open brief must mark data-later-open"
   grep -q 'brief-url later-open' src/lib/board-markup.tsx \
     || fail "later-rank Open brief must use the later-open hop"
+  grep -qF '.wall-occupied .cards-later .card' src/app/board.css \
+    || fail "later flyers must recede as later cards after #1"
   grep -qF '.wall-occupied .cards-later .brief-url.later-open[data-later-open]' src/app/board.css \
     || fail "CSS must keep later-rank Open quieter than #1 Open on occupied plaster"
+  if grep -qF '.wall-occupied .cards-later .wall-occupied .card' src/app/board.css
+  then
+    fail "later-card recede CSS must match later flyers, not a dead nested selector"
+  fi
   grep -qF '.wall-stage.wall-empty[data-occupied="false"] [data-later-open]' src/app/board.css \
     || fail "CSS must keep later-rank Open off empty plaster"
   grep -qF '.wall-stage.wall-empty[data-occupied="false"] .cards-later' src/app/board.css \
@@ -484,6 +496,20 @@ if "border: 0" not in later_block.group(0):
 if "background: transparent" not in later_block.group(0):
     raise SystemExit(1)
 if re.search(r"(?m)^(?:a\.post-brief|\.cards-later |\.card \.brief-url)", css):
+    raise SystemExit(1)
+lead_areas = re.search(
+    r"\.wall-occupied \.card \{\n[^}]*grid-template-areas:\s*([^;]+);", css, re.S
+)
+later_areas = re.search(
+    r"\.wall-occupied \.cards-later \.card \{\n[^}]*grid-template-areas:\s*([^;]+);", css, re.S
+)
+if lead_areas is None or later_areas is None:
+    raise SystemExit(1)
+if lead_areas.group(1).find('"url url url"') >= lead_areas.group(1).find('"bid bid clicks"'):
+    raise SystemExit(1)
+if later_areas.group(1).find('"bid bid clicks"') >= later_areas.group(1).find('"url url url"'):
+    raise SystemExit(1)
+if ".wall-occupied .cards-later .wall-occupied .card" in css:
     raise SystemExit(1)
 PY
   grep -q '"rank brand brand"' src/app/board.css \
@@ -1452,6 +1478,18 @@ if 'data-first-click="open"' in acme.group(0):
 if 'aria-label="Paid briefs this week"' not in html or 'aria-label="Later briefs this week"' not in html:
     raise SystemExit(1)
 if html.find('aria-label="Paid briefs this week"') >= html.find('aria-label="Later briefs this week"'):
+    raise SystemExit(1)
+rival_terms = rival.group(0).find('data-terms=""')
+rival_open = rival.group(0).find('class="open-label">Open brief')
+rival_bid = rival.group(0).find('class="bid later-fact"')
+acme_terms = acme.group(0).find('data-terms=""')
+acme_bid = acme.group(0).find('class="bid">')
+acme_open = acme.group(0).find('data-later-open=""')
+if rival_terms < 0 or rival_open < 0 or rival_bid < 0 or acme_terms < 0 or acme_bid < 0 or acme_open < 0:
+    raise SystemExit(1)
+if not (rival_terms < rival_open < rival_bid):
+    raise SystemExit(1)
+if not (acme_terms < acme_bid < acme_open):
     raise SystemExit(1)
 PY
 
