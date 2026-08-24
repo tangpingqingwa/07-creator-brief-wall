@@ -2208,21 +2208,102 @@ test("GET confirm sheet puts terms and the brief URL before the leave hop", () =
       createdAt: "2026-08-17T00:00:00.000Z",
     }),
   );
+  const uncounted = html.indexOf('data-confirm-uncounted=""');
+  const uncountedCopy = html.indexOf("Opening this flyer has not counted a hop.");
   const terms = html.indexOf("$800 flat, 1 TikTok");
   const url = html.indexOf("https://briefs.example.com/acme?id=9");
   const leave = html.indexOf('data-leave-brief=""');
   const bid = html.indexOf('class="confirm-bid">$5');
   const hops = html.indexOf("3 public hops — not reach");
-  assert.ok(terms >= 0 && url > terms && leave > url);
+  assert.ok(uncounted >= 0 && uncountedCopy >= 0 && uncounted <= uncountedCopy);
+  assert.ok(terms > uncountedCopy && url > terms && leave > url);
   assert.ok(bid > leave && hops > bid);
   assert.match(html, /data-confirm-brief=""/);
+  assert.match(html, /data-confirm-before-leave=""/);
+  assert.match(html, /class="confirm-sheet confirm-before-leave"/);
   assert.match(html, /data-page="confirm-brief"/);
+  assert.match(html, /data-clicks="3"/);
   assert.match(html, /Confirm this brief/);
   assert.match(html, /Leave to the brief/);
   assert.match(html, /method="post"/);
   assert.match(html, /action="\/r\/lst_acme"/);
   assert.doesNotMatch(html, /href="https:\/\/briefs\.example\.com/);
+  assert.doesNotMatch(html, /data-post-after-open-seven|data-open-after-post-six/);
   assert.doesNotMatch(html, FORBIDDEN);
+});
+
+test("GET confirm-before-leave does not increment clicks", () => {
+  const css = readFileSync(join(process.cwd(), "src", "app", "board.css"), "utf8");
+  assert.match(
+    css,
+    /\.confirm-sheet\.confirm-before-leave\[data-confirm-before-leave\] \.confirm-uncounted\[data-confirm-uncounted\]/,
+  );
+  assert.match(css, /confirm-before-leave/);
+  assert.match(css, /data-confirm-uncounted/);
+  assert.doesNotMatch(css, /data-post-after-open-seven|data-open-after-post-six/);
+
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.match(empty, /data-empty-claim-first=""/);
+  assert.match(empty, /Claim #1 for/);
+  assert.doesNotMatch(empty, /data-confirm-before-leave/);
+  assert.doesNotMatch(empty, /Opening this flyer has not counted a hop/);
+  assert.doesNotMatch(empty, /data-post-brief/);
+  assert.doesNotMatch(empty, /data-open-brief/);
+  assert.doesNotMatch(empty, FORBIDDEN);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  assert.match(occupied, /href="\/r\/lst_lead"/);
+  assert.match(occupied, /data-open-brief=""/);
+  assert.match(occupied, /Claim #1 for/);
+  assert.doesNotMatch(occupied, /data-confirm-before-leave/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+
+  const db = openDatabase(":memory:");
+  try {
+    insertFixtureListing(db, {
+      id: "lst_preview",
+      weekId: WEEK,
+      brand: "Preview Co",
+      terms: "opening is not a hop",
+      briefUrl: "https://example.com/preview",
+      bidUsd: 5,
+      clicks: 0,
+      createdAt: "2026-08-17T00:00:00.000Z",
+    });
+    const preview = getPublicListing(db, "lst_preview");
+    assert.equal(preview.clicks, 0);
+    const stillZero = listLiveBoard(db, WEEK);
+    assert.equal(stillZero[0]?.clicks, 0);
+    const html = confirmBriefHtml(preview);
+    assert.match(html, /data-confirm-before-leave=""/);
+    assert.match(html, /data-confirm-uncounted=""/);
+    assert.match(html, /Opening this flyer has not counted a hop/);
+    assert.match(html, /data-clicks="0"/);
+    assert.match(html, /Leave to the brief/);
+    assert.match(html, /method="post"/);
+    assert.match(html, /action="\/r\/lst_preview"/);
+    assert.equal(getPublicListing(db, "lst_preview").clicks, 0);
+    const counted = incrementPublicClick(db, "lst_preview");
+    assert.equal(counted.listing.clicks, 1);
+    assert.equal(counted.url, "https://example.com/preview");
+  } finally {
+    db.close();
+  }
 });
 
 test("public brief-URL clicks increment once per hop and 302 without trackers", async () => {

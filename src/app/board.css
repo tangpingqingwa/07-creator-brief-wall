@@ -647,6 +647,26 @@ a.post-brief.post-after-open-six {
   color: var(--muted);
 }
 
+/* GET /r/:id is still a preview. Leave (POST) is the counted hop. */
+.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-uncounted[data-confirm-uncounted] {
+  margin: 0 0 0.55rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-leave {
+  font-size: 1.05rem;
+}
+
+.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-facts,
+.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-bid,
+.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-clicks {
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
 .confirm-brand {
   margin: 0;
   font-size: clamp(1.8rem, 4vw, 2.4rem);
