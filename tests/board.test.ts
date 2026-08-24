@@ -18,6 +18,10 @@ const formSource = readFileSync(
   join(process.cwd(), "src", "app", "outbid-form.tsx"),
   "utf8",
 );
+const cssSource = readFileSync(
+  join(process.cwd(), "src", "app", "board.css"),
+  "utf8",
+);
 
 function listing(
   partial: Partial<Listing> & Pick<Listing, "id" | "bidUsd" | "createdAt">,
@@ -2058,6 +2062,185 @@ test("empty plaster stays Claim #1 with no Terms / Open leak", () => {
   assert.match(occupied, /class="bid later-fact"/);
   assert.match(occupied, /href="\/r\/lst_lead"/);
   assert.doesNotMatch(occupied, FORBIDDEN);
+});
+
+test("empty plaster Claim #1 is the first click — brief URL is a later write", () => {
+  assert.match(
+    cssSource,
+    /Empty plaster: Brief URL is a later write after Claim #1 \/ Outbid/,
+  );
+  assert.match(
+    cssSource,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.paste-rail\.empty-claim-first\[data-empty-claim-first\] \.brief-identity\[data-later-write\]/,
+  );
+  assert.match(
+    cssSource,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.paste-rail\.empty-claim-first\[data-empty-claim-first\] \.later-write-label/,
+  );
+  assert.match(
+    cssSource,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.paste-rail\.empty-claim-first\[data-empty-claim-first\] \.outbid\[data-first-click="claim"\]/,
+  );
+  const later =
+    (cssSource.split(
+      "Empty plaster: Brief URL is a later write after Claim #1 / Outbid",
+      2,
+    )[1] ?? "").split("End empty-plaster later-write")[0] ?? "";
+  assert.match(later, /border-top:\s*1px dashed var\(--line\)/);
+  assert.match(later, /color:\s*var\(--muted\)/);
+  assert.doesNotMatch(later, /background:/);
+  assert.doesNotMatch(later, /var\(--bid-ink\)/);
+  assert.doesNotMatch(later, /data-post-after-open-seven|data-open-after-post-six-stamp/);
+  assert.match(cssSource, /\.wall-occupied \.paste-rail \.brief-identity\[data-later-write\]/);
+  assert.match(cssSource, /\.wall-occupied \.paste-rail \[data-first-click="claim"\]/);
+
+  const emptyFn =
+    formSource.split("function EmptyClaimFirstWrite")[1]?.split(
+      "export function OutbidForm",
+    )[0] ?? "";
+  const occupiedFn =
+    formSource.split("function OccupiedBriefWrite")[1]?.split(
+      "function EmptyClaimFirstWrite",
+    )[0] ?? "";
+  const emptyOutbid = emptyFn.indexOf("Outbid");
+  const emptyLater = emptyFn.indexOf("data-later-write");
+  const emptyUrl = emptyFn.indexOf("BriefIdentityFields");
+  const occupiedFields = occupiedFn.indexOf("BriefIdentityFields");
+  const occupiedOutbid = occupiedFn.indexOf("Outbid");
+  assert.ok(emptyOutbid >= 0 && emptyLater > emptyOutbid);
+  assert.ok(emptyUrl > emptyLater);
+  assert.ok(occupiedFields >= 0 && occupiedOutbid > occupiedFields);
+  assert.match(emptyFn, /data-first-click="claim"/);
+  assert.match(emptyFn, /Then the brief URL/);
+  assert.doesNotMatch(occupiedFn, /data-first-click="claim"/);
+  assert.doesNotMatch(occupiedFn, /Then the brief URL/);
+  assert.doesNotMatch(occupiedFn, /data-later-write/);
+  assert.doesNotMatch(formSource, /data-post-after-open-seven|data-open-after-post-six-stamp/);
+
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  const claimAt = empty.indexOf('id="claim"');
+  const emptyClaimAt = empty.indexOf('data-empty-claim-first=""');
+  const claimCopyAt = empty.indexOf("Claim #1 for");
+  const firstClickAt = empty.indexOf('data-first-click="claim"');
+  const outbidAt = empty.indexOf(">Outbid<");
+  const laterWriteAt = empty.indexOf('data-later-write=""');
+  const laterLabelAt = empty.indexOf("Then the brief URL");
+  const identityAt = empty.indexOf('data-brief-identity=""');
+  const brandAt = empty.indexOf('name="brand"');
+  const termsAt = empty.indexOf('name="terms"');
+  const briefAt = empty.indexOf('name="briefUrl"');
+  const plasterAt = empty.indexOf('data-empty-week="true"');
+  assert.ok(claimAt >= 0 && emptyClaimAt > claimAt);
+  assert.ok(claimCopyAt > emptyClaimAt && firstClickAt > claimCopyAt);
+  assert.ok(outbidAt > firstClickAt);
+  assert.ok(laterWriteAt > outbidAt && laterLabelAt > laterWriteAt);
+  assert.ok(identityAt > outbidAt && identityAt <= laterWriteAt);
+  assert.ok(brandAt > laterLabelAt && termsAt > brandAt);
+  assert.ok(briefAt > termsAt);
+  assert.ok(plasterAt >= 0 && plasterAt < firstClickAt);
+  assert.match(empty, /class="paste-rail empty-claim-first"/);
+  assert.match(empty, /data-empty-claim-first=""/);
+  assert.match(empty, /aria-label="Claim #1"/);
+  assert.match(empty, /data-first-click="claim"/);
+  assert.match(empty, /data-brief-identity=""/);
+  assert.match(empty, /data-later-write=""/);
+  assert.match(empty, /Then the brief URL/);
+  assert.match(empty, /name="brand"/);
+  assert.match(empty, /name="terms"/);
+  assert.match(empty, /name="briefUrl"/);
+  assert.match(empty, /name="bidUsd"/);
+  assert.match(empty, />Outbid</);
+  assert.match(empty, /Blank plaster/);
+  assert.match(empty, /class="amount-field"/);
+  assert.match(empty, /class="step"/);
+  assert.match(empty, /class="wall-stage wall-empty"/);
+  assert.match(empty, /data-occupied="false"/);
+  assert.doesNotMatch(empty, /Post a brief/);
+  assert.doesNotMatch(empty, /Open brief/);
+  assert.doesNotMatch(empty, /data-first-click="open"/);
+  assert.doesNotMatch(empty, /data-post-brief/);
+  assert.doesNotMatch(empty, /data-open-brief/);
+  assert.doesNotMatch(empty, /data-later-open/);
+  assert.doesNotMatch(empty, /later-open/);
+  assert.doesNotMatch(empty, /cards-later/);
+  assert.doesNotMatch(empty, /data-prize=/);
+  assert.doesNotMatch(empty, /prize-before-price/);
+  assert.doesNotMatch(empty, /data-later-fact/);
+  assert.doesNotMatch(empty, /data-post-after-open-seven/);
+  assert.doesNotMatch(empty, /data-open-after-post-six-stamp/);
+  assert.equal((empty.match(/data-first-click="claim"/g) ?? []).length, 1);
+  assert.equal((empty.match(/data-later-write=""/g) ?? []).length, 1);
+  assert.equal((empty.match(/data-brief-identity=""/g) ?? []).length, 1);
+  assert.doesNotMatch(empty, FORBIDDEN);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+        listing({
+          id: "lst_two",
+          brand: "Two Co",
+          terms: "later rank",
+          bidUsd: 5,
+          createdAt: "2026-08-18T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const leadStart = occupied.indexOf('data-id="lst_lead"');
+  const twoStart = occupied.indexOf('data-id="lst_two"');
+  const occupiedClaim = occupied.indexOf('id="claim"');
+  const occupiedBrand = occupied.indexOf('name="brand"');
+  const occupiedBrief = occupied.indexOf('name="briefUrl"');
+  const occupiedSubmit = occupied.indexOf(">Outbid<");
+  const occupiedOpen = occupied.indexOf('class="open-label">Open brief');
+  const occupiedPost = occupied.indexOf('class="post-label">Post a brief');
+  const lead = occupied.slice(leadStart, twoStart);
+  const two = occupied.slice(twoStart, occupied.indexOf("</li>", twoStart));
+  assert.ok(leadStart >= 0 && twoStart > leadStart);
+  assert.ok(occupiedOpen > leadStart && occupiedOpen < occupiedClaim);
+  assert.ok(occupiedBrand > occupiedClaim && occupiedBrief > occupiedBrand);
+  assert.ok(occupiedSubmit > occupiedBrief);
+  assert.ok(occupiedPost > occupiedOpen && occupiedPost < occupiedClaim);
+  assert.match(occupied, /class="paste-rail"/);
+  assert.match(occupied, /data-first-click="open"/);
+  assert.match(occupied, /Open brief/);
+  assert.match(occupied, /Post a brief/);
+  assert.match(occupied, /data-prize=/);
+  assert.match(occupied, /Claim #1 for/);
+  assert.match(occupied, />Outbid</);
+  assert.match(occupied, /name="brand"/);
+  assert.match(occupied, /name="terms"/);
+  assert.match(occupied, /name="briefUrl"/);
+  assert.match(lead, /Open brief/);
+  assert.match(lead, /data-first-click="open"/);
+  assert.match(two, /data-later-open=""/);
+  assert.match(two, /class="brief-url later-open"/);
+  assert.doesNotMatch(occupied, /empty-claim-first/);
+  assert.doesNotMatch(occupied, /data-empty-claim-first/);
+  assert.doesNotMatch(occupied, /data-first-click="claim"/);
+  assert.doesNotMatch(occupied, /data-later-write=/);
+  assert.doesNotMatch(occupied, /data-brief-identity=/);
+  assert.doesNotMatch(occupied, /Then the brief URL/);
+  assert.doesNotMatch(two, /data-first-click="open"/);
+  assert.doesNotMatch(occupied, /data-post-after-open-seven/);
+  assert.doesNotMatch(occupied, /data-open-after-post-six-stamp/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+  assert.match(formSource, /empty-claim-first/);
+  assert.match(formSource, /data-empty-claim-first=\{occupied \? undefined : ""\}/);
+  assert.match(formSource, /data-first-click="claim"/);
+  assert.match(formSource, /Then the brief URL/);
+  assert.match(formSource, /OccupiedBriefWrite/);
+  assert.match(formSource, /EmptyClaimFirstWrite/);
 });
 
 test("empty plaster stays Claim #1 with no later-open / cards-later leak", () => {
