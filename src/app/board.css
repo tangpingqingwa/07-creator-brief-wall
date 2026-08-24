@@ -225,7 +225,9 @@ a.post-brief.post-after-open-six {
 .wall-stage.wall-empty[data-occupied="false"] [data-prize],
 .wall-stage.wall-empty[data-occupied="false"] .prize-before-price,
 .wall-stage.wall-empty[data-occupied="false"] [data-later-fact],
-.wall-stage.wall-empty[data-occupied="false"] .later-fact {
+.wall-stage.wall-empty[data-occupied="false"] .later-fact,
+.wall-stage.wall-empty[data-occupied="false"] [data-later-rank],
+.wall-stage.wall-empty[data-occupied="false"] .open-later-rank {
   display: none;
 }
 
@@ -586,6 +588,16 @@ a.post-brief.post-after-open-six {
   padding: 1.1rem 1.56rem 1.16rem;
   border-width: 7px;
   font-size: 1.62rem;
+}
+
+/* Later-rank Open stays quieter. Occupied #1 Open is the first click. */
+.card .brief-url.open-later-rank[data-later-rank] {
+  padding: 0.2rem 0.35rem 0.22rem;
+  border-width: 1px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
 }
 
 .card .open-label {
