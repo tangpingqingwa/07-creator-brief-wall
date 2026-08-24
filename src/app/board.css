@@ -217,9 +217,12 @@ a.post-brief.post-after-open-six {
 .wall-stage.wall-empty[data-occupied="false"] .flyers,
 .wall-stage.wall-empty[data-occupied="false"] .plaster,
 .wall-stage.wall-empty[data-occupied="false"] .card,
+.wall-stage.wall-empty[data-occupied="false"] .cards-later,
 .wall-stage.wall-empty[data-occupied="false"] [data-post-brief],
 .wall-stage.wall-empty[data-occupied="false"] [data-open-brief],
 .wall-stage.wall-empty[data-occupied="false"] [data-open-after-terms],
+.wall-stage.wall-empty[data-occupied="false"] [data-later-open],
+.wall-stage.wall-empty[data-occupied="false"] .later-open,
 .wall-stage.wall-empty[data-occupied="false"] [data-terms],
 .wall-stage.wall-empty[data-occupied="false"] .terms-label,
 .wall-stage.wall-empty[data-occupied="false"] [data-prize],
@@ -398,6 +401,17 @@ a.post-brief.post-after-open-six {
   align-items: start;
 }
 
+/* Occupied #1 is the first read. Later ranks sit after that hop. */
+.cards-lead {
+  grid-template-columns: minmax(18rem, 1fr);
+}
+
+.cards-later {
+  margin-top: -0.55rem;
+  padding-top: 0;
+  opacity: 0.78;
+}
+
 .card {
   position: relative;
   display: grid;
@@ -437,6 +451,15 @@ a.post-brief.post-after-open-six {
   transform: rotate(-0.2deg) scale(1.02);
   outline: 2px solid var(--bid);
   outline-offset: -6px;
+}
+
+.cards-later .card {
+  min-height: 11.5rem;
+  padding: 1.15rem 0.85rem 0.7rem;
+  transform: rotate(0.4deg);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    3px 5px 0 rgba(58, 45, 32, 0.1);
 }
 
 .tape {
@@ -586,6 +609,32 @@ a.post-brief.post-after-open-six {
   padding: 1.1rem 1.56rem 1.16rem;
   border-width: 7px;
   font-size: 1.62rem;
+}
+
+/* Later-rank Open is the same hop, quieter, after occupied #1. */
+.cards-later .brief-url.later-open[data-later-open] {
+  display: inline;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.cards-later .brief-url.later-open[data-later-open] .open-label {
+  border-bottom: 1px dashed currentColor;
+  text-underline-offset: 0.12em;
+}
+
+.cards-later .brief-url.later-open[data-later-open] .host {
+  font-size: 0.72rem;
 }
 
 .card .open-label {
