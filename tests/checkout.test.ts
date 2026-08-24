@@ -592,6 +592,9 @@ test("unpaid raise does not change rank", async () => {
 test("POST /checkout raise of the same brief URL charges the difference", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cbw-raise-"));
   const dbPath = join(dir, "app.sqlite");
+  const previousWeekNow = process.env.WEEK_NOW;
+  process.env.WEEK_NOW = "2026-08-17T00:00:00.000Z";
+  try {
   await withDatabasePath(dbPath, async () => {
     const polar = new FakePolarPort();
     const placed = await polar.createCheckout({
@@ -658,6 +661,13 @@ test("POST /checkout raise of the same brief URL charges the difference", async 
       { amount_usd: 3, kind: "raise" },
     ]);
   });
+  } finally {
+    if (previousWeekNow === undefined) {
+      delete process.env.WEEK_NOW;
+    } else {
+      process.env.WEEK_NOW = previousWeekNow;
+    }
+  }
 });
 
 test("parseBidUsd enforces whole dollars and SPEC min/max", () => {

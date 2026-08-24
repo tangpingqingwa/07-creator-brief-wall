@@ -111,6 +111,7 @@ test("occupied wall names one Post a brief hop to the claim strip", () => {
   assert.doesNotMatch(empty, /data-post-brief/);
   assert.doesNotMatch(empty, /data-first-write="post"/);
   assert.doesNotMatch(empty, /data-post-after-open-two/);
+  assert.doesNotMatch(empty, /data-post-after-open-three/);
   assert.doesNotMatch(empty, /data-open-after-post-two-stamp/);
   assert.doesNotMatch(empty, /Post a brief/);
   assert.match(empty, /Claim #1 for/);
@@ -137,11 +138,12 @@ test("occupied wall names one Post a brief hop to the claim strip", () => {
   assert.ok(flyers < hop && hop < claim);
   assert.equal((occupied.match(/data-post-brief=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/href="#claim"/g) ?? []).length, 1);
-  assert.match(occupied, /class="post-brief post-after-open post-after-open-first post-after-open-two"[^>]*href="#claim"/);
+  assert.match(occupied, /class="post-brief post-after-open post-after-open-first post-after-open-two post-after-open-three"[^>]*href="#claim"/);
   assert.match(occupied, /data-post-after-open=""/);
   assert.match(occupied, /data-post-after-open-first=""/);
   assert.match(occupied, /data-first-write="post"/);
   assert.match(occupied, /data-post-after-open-two=""/);
+  assert.match(occupied, /data-post-after-open-three=""/);
   assert.match(occupied, /data-open-after-post-two-stamp=""/);
   assert.match(occupied, /class="post-after-note">after Open brief/);
   assert.match(occupied, /class="post-label">Post a brief/);
@@ -162,6 +164,7 @@ test("occupied wall posts a brief after Open brief", () => {
   assert.doesNotMatch(empty, /data-post-after-open-first/);
   assert.doesNotMatch(empty, /data-first-write="post"/);
   assert.doesNotMatch(empty, /data-post-after-open-two/);
+  assert.doesNotMatch(empty, /data-post-after-open-three/);
   assert.doesNotMatch(empty, /data-open-after-post-two-stamp/);
   assert.doesNotMatch(empty, /after Open brief/);
   assert.doesNotMatch(empty, /data-post-brief/);
@@ -187,6 +190,7 @@ test("occupied wall posts a brief after Open brief", () => {
   const stamp = occupied.indexOf('data-post-after-open-first=""');
   const write = occupied.indexOf('data-first-write="post"');
   const two = occupied.indexOf('data-post-after-open-two=""');
+  const three = occupied.indexOf('data-post-after-open-three=""');
   const note = occupied.indexOf('class="post-after-note">after Open brief');
   const label = occupied.indexOf('class="post-label">Post a brief');
   const dest = occupied.indexOf('class="post-dest">Claim #1');
@@ -199,11 +203,13 @@ test("occupied wall posts a brief after Open brief", () => {
   assert.ok(open > flyers && hop > open);
   assert.ok(stamp >= hop && write > stamp && Math.abs(stamp - hop) < 80);
   assert.ok(two > write && Math.abs(two - write) < 80);
+  assert.ok(three > two && Math.abs(three - two) < 80);
   assert.ok(note > hop && label > note && dest > label && claim > dest);
   assert.equal((occupied.match(/data-post-after-open=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-after-open-first=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-first-write="post"/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-after-open-two=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-post-after-open-three=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-brief=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/href="#claim"/g) ?? []).length, 1);
   assert.match(occupied, /aria-label="Post a brief after Open brief"/);
@@ -223,6 +229,7 @@ test("occupied wall lets Open brief win the first click after Post follows Open"
   assert.doesNotMatch(empty, /data-post-after-open-first/);
   assert.doesNotMatch(empty, /data-first-write="post"/);
   assert.doesNotMatch(empty, /data-post-after-open-two/);
+  assert.doesNotMatch(empty, /data-post-after-open-three/);
   assert.doesNotMatch(empty, /Post a brief/);
   assert.match(empty, /Claim #1 for/);
   assert.match(empty, /Blank plaster/);
@@ -267,11 +274,13 @@ test("occupied wall lets Open brief win the first click after Post follows Open"
   assert.match(occupied, /data-post-after-open-first=""/);
   assert.match(occupied, /data-first-write="post"/);
   assert.match(occupied, /data-post-after-open-two=""/);
+  assert.match(occupied, /data-post-after-open-three=""/);
   assert.doesNotMatch(two, /data-first-click="open"/);
   assert.doesNotMatch(two, /data-open-after-post-first/);
   assert.doesNotMatch(two, /data-first-read="open"/);
   assert.doesNotMatch(two, /data-open-after-post-two-stamp/);
   assert.doesNotMatch(two, /data-post-after-open-two/);
+  assert.doesNotMatch(two, /data-post-after-open-three/);
   assert.equal((occupied.match(/data-first-click="open"/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-open-after-post-first=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-first-read="open"/g) ?? []).length, 1);
@@ -280,6 +289,7 @@ test("occupied wall lets Open brief win the first click after Post follows Open"
   assert.equal((occupied.match(/data-post-after-open-first=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-first-write="post"/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-after-open-two=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-post-after-open-three=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/href="#claim"/g) ?? []).length, 1);
   assert.doesNotMatch(empty, FORBIDDEN);
   assert.doesNotMatch(occupied, FORBIDDEN);
@@ -292,6 +302,7 @@ test("occupied wall concentrates Post a brief after Open wins the first click", 
   assert.doesNotMatch(empty, /data-post-after-open-first/);
   assert.doesNotMatch(empty, /data-first-write="post"/);
   assert.doesNotMatch(empty, /data-post-after-open-two/);
+  assert.doesNotMatch(empty, /data-post-after-open-three/);
   assert.doesNotMatch(empty, /data-post-after-open/);
   assert.doesNotMatch(empty, /data-post-brief/);
   assert.doesNotMatch(empty, /Post a brief/);
@@ -328,6 +339,7 @@ test("occupied wall concentrates Post a brief after Open wins the first click", 
   const stamp = occupied.indexOf('data-post-after-open-first=""');
   const write = occupied.indexOf('data-first-write="post"');
   const twoStamp = occupied.indexOf('data-post-after-open-two=""');
+  const threeStamp = occupied.indexOf('data-post-after-open-three=""');
   const label = occupied.indexOf('class="post-label">Post a brief');
   const dest = occupied.indexOf('class="post-dest">Claim #1');
   const flyers = occupied.indexOf('aria-label="Paid briefs this week"');
@@ -335,19 +347,22 @@ test("occupied wall concentrates Post a brief after Open wins the first click", 
   assert.ok(flyers >= 0 && firstClick > flyers);
   assert.ok(post > firstClick && stamp >= post && write > stamp && Math.abs(stamp - post) < 80);
   assert.ok(twoStamp > write && Math.abs(twoStamp - write) < 80);
+  assert.ok(threeStamp > twoStamp && Math.abs(threeStamp - twoStamp) < 80);
   assert.ok(label > write && dest > label && claim > dest);
-  assert.match(occupied, /class="post-brief post-after-open post-after-open-first post-after-open-two"[^>]*href="#claim"/);
+  assert.match(occupied, /class="post-brief post-after-open post-after-open-first post-after-open-two post-after-open-three"[^>]*href="#claim"/);
   assert.match(occupied, /data-post-brief=""/);
   assert.match(occupied, /data-post-after-open=""/);
   assert.match(occupied, /data-post-after-open-first=""/);
   assert.match(occupied, /data-first-write="post"/);
   assert.match(occupied, /data-post-after-open-two=""/);
+  assert.match(occupied, /data-post-after-open-three=""/);
   assert.match(occupied, /class="post-label">Post a brief/);
   assert.match(occupied, /class="post-dest">Claim #1/);
   assert.match(occupied, /href="#claim"/);
   assert.equal((occupied.match(/data-post-after-open-first=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-first-write="post"/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-after-open-two=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-post-after-open-three=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-brief=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-after-open=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/href="#claim"/g) ?? []).length, 1);
@@ -369,6 +384,7 @@ test("occupied wall concentrates Open brief after Post is concentrated", () => {
   assert.doesNotMatch(empty, /data-post-after-open-first/);
   assert.doesNotMatch(empty, /data-first-write="post"/);
   assert.doesNotMatch(empty, /data-post-after-open-two/);
+  assert.doesNotMatch(empty, /data-post-after-open-three/);
   assert.doesNotMatch(empty, /Post a brief/);
   assert.match(empty, /Claim #1 for/);
   assert.match(empty, /Blank plaster/);
@@ -406,13 +422,14 @@ test("occupied wall concentrates Open brief after Post is concentrated", () => {
   const post = occupied.indexOf('data-post-after-open=""');
   const write = occupied.indexOf('data-first-write="post"');
   const postTwo = occupied.indexOf('data-post-after-open-two=""');
+  const postThree = occupied.indexOf('data-post-after-open-three=""');
   const flyers = occupied.indexOf('aria-label="Paid briefs this week"');
   const claim = occupied.indexOf('id="claim"');
   assert.ok(flyers >= 0 && firstClick > flyers);
   assert.ok(openStamp >= firstClick && firstRead > openStamp && openTwo > firstRead);
   assert.ok(Math.abs(openStamp - firstClick) < 80);
   assert.ok(Math.abs(openTwo - firstRead) < 80);
-  assert.ok(open > openTwo && post > open && write > post && postTwo > write && claim > postTwo);
+  assert.ok(open > openTwo && post > open && write > post && postTwo > write && postThree > postTwo && claim > postThree);
   assert.match(lead, /class="brief-url open-after-terms open-after-post-first open-after-post-two"/);
   assert.match(lead, /data-open-brief=""/);
   assert.match(lead, /data-open-after-terms=""/);
@@ -425,6 +442,7 @@ test("occupied wall concentrates Open brief after Post is concentrated", () => {
   assert.match(occupied, /data-post-after-open-first=""/);
   assert.match(occupied, /data-first-write="post"/);
   assert.match(occupied, /data-post-after-open-two=""/);
+  assert.match(occupied, /data-post-after-open-three=""/);
   assert.match(two, /data-open-brief=""/);
   assert.match(two, /Open brief/);
   assert.doesNotMatch(two, /data-first-click="open"/);
@@ -434,6 +452,7 @@ test("occupied wall concentrates Open brief after Post is concentrated", () => {
   assert.doesNotMatch(two, /open-after-post-first/);
   assert.doesNotMatch(two, /open-after-post-two/);
   assert.doesNotMatch(two, /data-post-after-open-two/);
+  assert.doesNotMatch(two, /data-post-after-open-three/);
   assert.equal((occupied.match(/data-open-after-post-first=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-first-read="open"/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-open-after-post-two-stamp=""/g) ?? []).length, 1);
@@ -442,6 +461,7 @@ test("occupied wall concentrates Open brief after Post is concentrated", () => {
   assert.equal((occupied.match(/href="\/r\/lst_lead"/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-brief=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-after-open-two=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-post-after-open-three=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/href="#claim"/g) ?? []).length, 1);
   assert.doesNotMatch(occupied, FORBIDDEN);
 });
@@ -451,6 +471,7 @@ test("occupied wall concentrates Post a brief after Open is re-concentrated", ()
     createElement(Board, { listings: [], weekId: WEEK }),
   );
   assert.doesNotMatch(empty, /data-post-after-open-two/);
+  assert.doesNotMatch(empty, /data-post-after-open-three/);
   assert.doesNotMatch(empty, /data-post-after-open-first/);
   assert.doesNotMatch(empty, /data-first-write="post"/);
   assert.doesNotMatch(empty, /data-post-after-open/);
@@ -494,22 +515,25 @@ test("occupied wall concentrates Post a brief after Open is re-concentrated", ()
   const stamp = occupied.indexOf('data-post-after-open-first=""');
   const write = occupied.indexOf('data-first-write="post"');
   const twoStamp = occupied.indexOf('data-post-after-open-two=""');
+  const threeStamp = occupied.indexOf('data-post-after-open-three=""');
   const label = occupied.indexOf('class="post-label">Post a brief');
   const dest = occupied.indexOf('class="post-dest">Claim #1');
   const flyers = occupied.indexOf('aria-label="Paid briefs this week"');
   const claim = occupied.indexOf('id="claim"');
   assert.ok(flyers >= 0 && firstRead > flyers);
   assert.ok(open > firstRead && post > open);
-  assert.ok(stamp >= post && write > stamp && twoStamp > write);
+  assert.ok(stamp >= post && write > stamp && twoStamp > write && threeStamp > twoStamp);
   assert.ok(Math.abs(stamp - post) < 80);
   assert.ok(Math.abs(twoStamp - write) < 80);
-  assert.ok(label > twoStamp && dest > label && claim > dest);
-  assert.match(occupied, /class="post-brief post-after-open post-after-open-first post-after-open-two"[^>]*href="#claim"/);
+  assert.ok(Math.abs(threeStamp - twoStamp) < 80);
+  assert.ok(label > threeStamp && dest > label && claim > dest);
+  assert.match(occupied, /class="post-brief post-after-open post-after-open-first post-after-open-two post-after-open-three"[^>]*href="#claim"/);
   assert.match(occupied, /data-post-brief=""/);
   assert.match(occupied, /data-post-after-open=""/);
   assert.match(occupied, /data-post-after-open-first=""/);
   assert.match(occupied, /data-first-write="post"/);
   assert.match(occupied, /data-post-after-open-two=""/);
+  assert.match(occupied, /data-post-after-open-three=""/);
   assert.match(occupied, /class="post-label">Post a brief/);
   assert.match(occupied, /class="post-dest">Claim #1/);
   assert.match(occupied, /href="#claim"/);
@@ -519,8 +543,10 @@ test("occupied wall concentrates Post a brief after Open is re-concentrated", ()
   assert.match(two, /data-open-brief=""/);
   assert.doesNotMatch(two, /data-open-after-post-two-stamp/);
   assert.doesNotMatch(two, /data-post-after-open-two/);
+  assert.doesNotMatch(two, /data-post-after-open-three/);
   assert.doesNotMatch(two, /data-first-write="post"/);
   assert.equal((occupied.match(/data-post-after-open-two=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-post-after-open-three=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-after-open-first=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-first-write="post"/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-brief=""/g) ?? []).length, 1);
@@ -544,6 +570,7 @@ test("occupied wall concentrates Open brief after Post is re-concentrated", () =
   assert.doesNotMatch(empty, /data-open-brief/);
   assert.doesNotMatch(empty, /Open brief/);
   assert.doesNotMatch(empty, /data-post-after-open-two/);
+  assert.doesNotMatch(empty, /data-post-after-open-three/);
   assert.doesNotMatch(empty, /data-post-after-open-first/);
   assert.doesNotMatch(empty, /data-first-write="post"/);
   assert.doesNotMatch(empty, /Post a brief/);
@@ -583,13 +610,14 @@ test("occupied wall concentrates Open brief after Post is re-concentrated", () =
   const post = occupied.indexOf('data-post-after-open=""');
   const write = occupied.indexOf('data-first-write="post"');
   const postTwo = occupied.indexOf('data-post-after-open-two=""');
+  const postThree = occupied.indexOf('data-post-after-open-three=""');
   const flyers = occupied.indexOf('aria-label="Paid briefs this week"');
   const claim = occupied.indexOf('id="claim"');
   assert.ok(flyers >= 0 && firstClick > flyers);
   assert.ok(openStamp >= firstClick && firstRead > openStamp && openTwo > firstRead);
   assert.ok(Math.abs(openStamp - firstClick) < 80);
   assert.ok(Math.abs(openTwo - firstRead) < 80);
-  assert.ok(open > openTwo && post > open && write > post && postTwo > write && claim > postTwo);
+  assert.ok(open > openTwo && post > open && write > post && postTwo > write && postThree > postTwo && claim > postThree);
   assert.match(lead, /class="brief-url open-after-terms open-after-post-first open-after-post-two"/);
   assert.match(lead, /data-open-brief=""/);
   assert.match(lead, /data-open-after-terms=""/);
@@ -600,6 +628,7 @@ test("occupied wall concentrates Open brief after Post is re-concentrated", () =
   assert.match(lead, /href="\/r\/lst_lead"/);
   assert.match(lead, /class="open-label">Open brief/);
   assert.match(occupied, /data-post-after-open-two=""/);
+  assert.match(occupied, /data-post-after-open-three=""/);
   assert.match(occupied, /data-first-write="post"/);
   assert.match(two, /data-open-brief=""/);
   assert.match(two, /Open brief/);
@@ -609,6 +638,7 @@ test("occupied wall concentrates Open brief after Post is re-concentrated", () =
   assert.doesNotMatch(two, /data-open-after-post-two-stamp/);
   assert.doesNotMatch(two, /open-after-post-two/);
   assert.doesNotMatch(two, /data-post-after-open-two/);
+  assert.doesNotMatch(two, /data-post-after-open-three/);
   assert.equal((occupied.match(/data-open-after-post-two-stamp=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-open-after-post-first=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-first-read="open"/g) ?? []).length, 1);
@@ -617,7 +647,102 @@ test("occupied wall concentrates Open brief after Post is re-concentrated", () =
   assert.equal((occupied.match(/href="\/r\/lst_lead"/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-brief=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-post-after-open-two=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-post-after-open-three=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/href="#claim"/g) ?? []).length, 1);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+});
+
+test("occupied wall concentrates Post a brief after Open is re-concentrated again", () => {
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.doesNotMatch(empty, /data-post-after-open-three/);
+  assert.doesNotMatch(empty, /data-post-after-open-two/);
+  assert.doesNotMatch(empty, /data-post-after-open-first/);
+  assert.doesNotMatch(empty, /data-first-write="post"/);
+  assert.doesNotMatch(empty, /data-post-after-open/);
+  assert.doesNotMatch(empty, /data-post-brief/);
+  assert.doesNotMatch(empty, /Post a brief/);
+  assert.doesNotMatch(empty, /data-first-click="open"/);
+  assert.doesNotMatch(empty, /data-open-after-post-first/);
+  assert.doesNotMatch(empty, /data-first-read="open"/);
+  assert.doesNotMatch(empty, /data-open-after-post-two-stamp/);
+  assert.match(empty, /Claim #1 for/);
+  assert.match(empty, /Blank plaster/);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+        listing({
+          id: "lst_two",
+          brand: "Two Co",
+          terms: "later rank",
+          bidUsd: 5,
+          createdAt: "2026-08-18T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const leadStart = occupied.indexOf('data-id="lst_lead"');
+  const lead = occupied.slice(leadStart, occupied.indexOf("</li>", leadStart));
+  const twoStart = occupied.indexOf('data-id="lst_two"');
+  const two = occupied.slice(twoStart, occupied.indexOf("</li>", twoStart));
+  const firstRead = occupied.indexOf('data-first-read="open"');
+  const openTwo = occupied.indexOf('data-open-after-post-two-stamp=""');
+  const open = occupied.indexOf('class="open-label">Open brief');
+  const post = occupied.indexOf('data-post-after-open=""');
+  const stamp = occupied.indexOf('data-post-after-open-first=""');
+  const write = occupied.indexOf('data-first-write="post"');
+  const twoStamp = occupied.indexOf('data-post-after-open-two=""');
+  const threeStamp = occupied.indexOf('data-post-after-open-three=""');
+  const label = occupied.indexOf('class="post-label">Post a brief');
+  const dest = occupied.indexOf('class="post-dest">Claim #1');
+  const flyers = occupied.indexOf('aria-label="Paid briefs this week"');
+  const claim = occupied.indexOf('id="claim"');
+  assert.ok(flyers >= 0 && firstRead > flyers);
+  assert.ok(openTwo > firstRead && open > openTwo && post > open);
+  assert.ok(stamp >= post && write > stamp && twoStamp > write && threeStamp > twoStamp);
+  assert.ok(Math.abs(stamp - post) < 80);
+  assert.ok(Math.abs(twoStamp - write) < 80);
+  assert.ok(Math.abs(threeStamp - twoStamp) < 80);
+  assert.ok(label > threeStamp && dest > label && claim > dest);
+  assert.match(occupied, /class="post-brief post-after-open post-after-open-first post-after-open-two post-after-open-three"[^>]*href="#claim"/);
+  assert.match(occupied, /data-post-brief=""/);
+  assert.match(occupied, /data-post-after-open=""/);
+  assert.match(occupied, /data-post-after-open-first=""/);
+  assert.match(occupied, /data-first-write="post"/);
+  assert.match(occupied, /data-post-after-open-two=""/);
+  assert.match(occupied, /data-post-after-open-three=""/);
+  assert.match(occupied, /class="post-label">Post a brief/);
+  assert.match(occupied, /class="post-dest">Claim #1/);
+  assert.match(occupied, /href="#claim"/);
+  assert.match(lead, /data-first-read="open"/);
+  assert.match(lead, /data-open-after-post-first=""/);
+  assert.match(lead, /data-open-after-post-two-stamp=""/);
+  assert.match(two, /data-open-brief=""/);
+  assert.doesNotMatch(two, /data-open-after-post-two-stamp/);
+  assert.doesNotMatch(two, /data-post-after-open-two/);
+  assert.doesNotMatch(two, /data-post-after-open-three/);
+  assert.doesNotMatch(two, /data-first-write="post"/);
+  assert.equal((occupied.match(/data-post-after-open-three=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-post-after-open-two=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-post-after-open-first=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-first-write="post"/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-post-brief=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-post-after-open=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/href="#claim"/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-first-read="open"/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-first-click="open"/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-open-after-post-two-stamp=""/g) ?? []).length, 1);
+  assert.doesNotMatch(occupied, /Post a brief this week[\s\S]*Post a brief this week/);
   assert.doesNotMatch(occupied, FORBIDDEN);
 });
 
