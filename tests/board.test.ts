@@ -1891,6 +1891,80 @@ test("one flyer names Terms as the prize before $bid", () => {
   assert.doesNotMatch(html, FORBIDDEN);
 });
 
+test("occupied #1 Terms reads first and larger than $bid and clicks", () => {
+  const css = readFileSync(join(process.cwd(), "src", "app", "board.css"), "utf8");
+  const prizeSize = css.match(
+    /\.card-lead \.terms\.prize-before-price \.terms-copy\s*\{[^}]*font-size:\s*([\d.]+)rem/,
+  );
+  const bidSize = css.match(/\.card-lead \.bid\s*\{[^}]*font-size:\s*([\d.]+)rem/);
+  const clickSize = css.match(
+    /\.card-lead \.clicks\s*\{[^}]*font-size:\s*([\d.]+)rem/,
+  );
+  assert.ok(prizeSize);
+  assert.ok(bidSize);
+  assert.ok(clickSize);
+  assert.ok(Number(prizeSize[1]) > Number(bidSize[1]));
+  assert.ok(Number(prizeSize[1]) > Number(clickSize[1]));
+
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.doesNotMatch(empty, /data-prize=/);
+  assert.doesNotMatch(empty, /prize-before-price/);
+  assert.doesNotMatch(empty, /data-terms=/);
+  assert.match(empty, /Claim #1 for/);
+  assert.match(empty, /Blank plaster/);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+        listing({
+          id: "lst_two",
+          brand: "Two Co",
+          terms: "later rank",
+          bidUsd: 5,
+          createdAt: "2026-08-18T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const leadStart = occupied.indexOf('data-id="lst_lead"');
+  const lead = occupied.slice(leadStart, occupied.indexOf("</li>", leadStart));
+  const twoStart = occupied.indexOf('data-id="lst_two"');
+  const two = occupied.slice(twoStart, occupied.indexOf("</li>", twoStart));
+  const prize = lead.indexOf('data-prize=""');
+  const prizeStamp = lead.indexOf('data-prize-before-price=""');
+  const termsCopy = lead.indexOf('class="terms-copy">already #1');
+  const hop = lead.indexOf('data-open-brief=""');
+  const bid = lead.indexOf('class="bid">$7');
+  const clicks = lead.indexOf("0 clicks");
+  assert.ok(prize >= 0 && prizeStamp >= 0 && termsCopy > prizeStamp);
+  assert.ok(hop > termsCopy && bid > hop && clicks > bid);
+  assert.match(lead, /class="terms prize-before-price"/);
+  assert.match(lead, /data-prize=""/);
+  assert.match(lead, /data-prize-before-price=""/);
+  assert.match(lead, /href="\/r\/lst_lead"/);
+  assert.match(occupied, /data-confirm-brief|Leave to the brief|\/r\/lst_lead/);
+  assert.match(two, /data-terms=""/);
+  assert.doesNotMatch(two, /data-prize=/);
+  assert.doesNotMatch(two, /prize-before-price/);
+  assert.equal((occupied.match(/data-prize=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-prize-before-price=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/prize-before-price/g) ?? []).length, 2);
+  assert.doesNotMatch(occupied, /data-post-after-open-seven/);
+  assert.doesNotMatch(occupied, /data-open-after-post-six/);
+  assert.doesNotMatch(empty, FORBIDDEN);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+});
+
 test("one flyer opens the brief after Terms, not next to $bid", () => {
   const empty = renderToStaticMarkup(
     createElement(Board, { listings: [], weekId: WEEK }),

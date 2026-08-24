@@ -460,6 +460,13 @@ a.post-brief.post-after-open-six {
   line-height: 1.35;
 }
 
+/* Occupied #1 only: Terms reads first and larger than $bid + clicks. */
+.card-lead .terms.prize-before-price .terms-copy {
+  font-size: 1.58rem;
+  line-height: 1.22;
+  font-weight: 700;
+}
+
 .card .bid {
   grid-area: bid;
   font-weight: 700;
@@ -469,12 +476,21 @@ a.post-brief.post-after-open-six {
   color: var(--bid);
 }
 
+/* #1 money stays a later fact. Do not shout beside Terms. */
+.card-lead .bid {
+  font-size: 0.95rem;
+}
+
 .card .clicks {
   grid-area: clicks;
   color: var(--muted);
   font-size: 0.82rem;
   justify-self: end;
   align-self: end;
+}
+
+.card-lead .clicks {
+  font-size: 0.78rem;
 }
 
 /* Open brief is the hop after Terms, not a second $ prize. */

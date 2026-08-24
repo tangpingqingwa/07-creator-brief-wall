@@ -60,7 +60,14 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
             <span className="tape" aria-hidden="true" />
             <span className="rank">#{listing.rank}</span>
             <span className="brand">{listing.brand}</span>
-            <p className="terms" data-terms="">
+            <p
+              className={
+                listing.rank === 1 ? "terms prize-before-price" : "terms"
+              }
+              data-terms=""
+              data-prize={listing.rank === 1 ? "" : undefined}
+              data-prize-before-price={listing.rank === 1 ? "" : undefined}
+            >
               <span className="terms-label">Terms</span>
               <span className="terms-copy">{listing.terms}</span>
             </p>
