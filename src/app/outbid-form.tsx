@@ -8,6 +8,72 @@ function clampAmount(value: number): number {
   return Math.max(MIN_BID_USD, Math.min(MAX_BID_USD, Math.trunc(value)));
 }
 
+function BriefIdentityFields() {
+  return (
+    <>
+      <label className="brand">
+        Brand
+        <input
+          name="brand"
+          type="text"
+          required
+          maxLength={80}
+          autoComplete="organization"
+        />
+      </label>
+      <label className="terms">
+        Terms
+        <input
+          name="terms"
+          type="text"
+          required
+          maxLength={280}
+          placeholder="$800 flat, 1 TikTok"
+        />
+      </label>
+      <label className="url">
+        Brief URL
+        <input
+          name="briefUrl"
+          type="url"
+          required
+          placeholder="https://"
+          autoComplete="url"
+        />
+      </label>
+    </>
+  );
+}
+
+function OccupiedBriefWrite() {
+  return (
+    <>
+      <BriefIdentityFields />
+      <button className="outbid" type="submit">
+        Outbid
+      </button>
+    </>
+  );
+}
+
+function EmptyClaimFirstWrite() {
+  return (
+    <>
+      <button className="outbid" type="submit" data-first-click="claim">
+        Outbid
+      </button>
+      <div
+        className="brief-identity"
+        data-brief-identity=""
+        data-later-write=""
+      >
+        <p className="later-write-label">Then the brief URL</p>
+        <BriefIdentityFields />
+      </div>
+    </>
+  );
+}
+
 export function OutbidForm({
   defaultAmount = MIN_BID_USD,
   topBidUsd,
@@ -27,6 +93,7 @@ export function OutbidForm({
       data-claim-amount={floor}
       data-top-bid={topBidUsd ?? ""}
       data-empty-claim-first={occupied ? undefined : ""}
+      aria-label={occupied ? "Post a brief" : "Claim #1"}
     >
       <p className="paste-kicker">
         {occupied ? "Post a brief this week" : "This week’s wall"}
@@ -91,39 +158,7 @@ export function OutbidForm({
         method="post"
         action="/checkout"
       >
-        <label className="brand">
-          Brand
-          <input
-            name="brand"
-            type="text"
-            required
-            maxLength={80}
-            autoComplete="organization"
-          />
-        </label>
-        <label className="terms">
-          Terms
-          <input
-            name="terms"
-            type="text"
-            required
-            maxLength={280}
-            placeholder="$800 flat, 1 TikTok"
-          />
-        </label>
-        <label className="url">
-          Brief URL
-          <input
-            name="briefUrl"
-            type="url"
-            required
-            placeholder="https://"
-            autoComplete="url"
-          />
-        </label>
-        <button className="outbid" type="submit">
-          Outbid
-        </button>
+        {occupied ? <OccupiedBriefWrite /> : <EmptyClaimFirstWrite />}
       </form>
     </aside>
   );

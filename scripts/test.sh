@@ -239,6 +239,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover empty plaster with no Terms / Open leak"
   grep -q 'empty plaster stays Claim #1 with no later-open / cards-later leak' tests/board.test.ts \
     || fail "board tests must cover empty plaster with no later-open leak"
+  grep -q 'empty plaster Claim #1 is the first click — brief URL is a later write' tests/board.test.ts \
+    || fail "board tests must cover empty plaster Claim #1 then later brief URL"
   grep -q 'claim strip defaults to this week' tests/board.test.ts \
     || fail "board tests must cover the live #1 claim amount"
   grep -q 'occupied wall puts flyers' tests/board.test.ts \
@@ -554,6 +556,144 @@ PY
     src/lib/board-markup.tsx src/app/outbid-form.tsx src/app/board.css src/lib/confirm-brief.ts >/dev/null
   then
     fail "do not stamp *-after-*-N on empty plaster or confirm-before-leave"
+  fi
+  echo "== UX: empty plaster Claim #1 is the first click — brief URL is a later write =="
+  grep -q 'empty-claim-first' src/app/outbid-form.tsx \
+    || fail "empty Claim #1 must use the empty-claim-first class"
+  grep -q 'data-empty-claim-first' src/app/outbid-form.tsx \
+    || fail "empty Claim #1 must stamp data-empty-claim-first"
+  grep -q 'data-first-click="claim"' src/app/outbid-form.tsx \
+    || fail "empty Claim #1 Outbid must win the first click"
+  grep -q 'data-later-write' src/app/outbid-form.tsx \
+    || fail "empty plaster must stamp the brief URL as a later write"
+  grep -q 'data-brief-identity' src/app/outbid-form.tsx \
+    || fail "empty plaster must wrap brand / terms / brief URL as listing identity"
+  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
+    || fail "empty plaster must name the brief URL as a later write"
+  grep -q 'EmptyClaimFirstWrite' src/app/outbid-form.tsx \
+    || fail "empty plaster must compose Claim #1 before the brief URL"
+  grep -q 'OccupiedBriefWrite' src/app/outbid-form.tsx \
+    || fail "occupied claim must keep brief fields on the rail with Outbid"
+  grep -q 'Empty plaster: Brief URL is a later write after Claim #1 / Outbid' src/app/board.css \
+    || fail "empty CSS must name the brief URL as a later write after Claim #1"
+  grep -Fq '.wall-stage.wall-empty[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] .brief-identity[data-later-write]' src/app/board.css \
+    || fail "empty CSS must compose later-write identity off the claim rail"
+  grep -Fq '.wall-stage.wall-empty[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] .later-write-label' src/app/board.css \
+    || fail "empty CSS must label the later brief URL write"
+  grep -Fq '.wall-stage.wall-empty[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] .outbid[data-first-click="claim"]' src/app/board.css \
+    || fail "empty CSS must make Claim #1 Outbid the first click"
+  grep -Fq '.wall-occupied .paste-rail .brief-identity[data-later-write]' src/app/board.css \
+    || fail "occupied week must hide empty later-write identity"
+  grep -Fq '.wall-occupied .paste-rail [data-first-click="claim"]' src/app/board.css \
+    || fail "occupied week must hide empty Claim #1 first-click"
+  grep -q 'Then the brief URL' tests/board.test.ts \
+    || fail "board tests must name the later brief URL write"
+  grep -q 'data-first-click="claim"' tests/board.test.ts \
+    || fail "board tests must stamp empty Claim #1 as the first click"
+  grep -q 'Claim #1' src/app/outbid-form.tsx \
+    || fail "empty later-write cut must keep Claim #1"
+  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+    || fail "empty later-write cut must keep blank plaster"
+  grep -q 'Open brief' src/lib/board-markup.tsx \
+    || fail "empty later-write cut must keep occupied Open brief"
+  grep -q 'Post a brief' src/lib/board-markup.tsx \
+    || fail "empty later-write cut must keep occupied Post a brief"
+  grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
+    || fail "empty later-write cut must keep occupied Open brief the first click"
+  grep -q 'data-prize=' src/lib/board-markup.tsx \
+    || fail "empty later-write cut must keep occupied Terms as the prize"
+  grep -q 'amount-field' src/app/outbid-form.tsx \
+    || fail "empty later-write cut must keep the dashed amount"
+  grep -q 'className="step"' src/app/outbid-form.tsx \
+    || fail "empty later-write cut must keep ± steppers"
+  grep -q 'Outbid' src/app/outbid-form.tsx \
+    || fail "empty later-write cut must keep Outbid"
+  grep -q 'name="brand"' src/app/outbid-form.tsx \
+    || fail "empty later-write cut must keep Brand"
+  grep -q 'name="terms"' src/app/outbid-form.tsx \
+    || fail "empty later-write cut must keep Terms"
+  grep -q 'name="briefUrl"' src/app/outbid-form.tsx \
+    || fail "empty later-write cut must keep Brief URL"
+  grep -q 'className="plaster"' src/lib/board-markup.tsx \
+    || fail "empty later-write cut must not rebuild the plaster wall"
+  if grep -qE 'data-post-after-open-seven|data-open-after-post-six-stamp' src/app/board.tsx src/app/board.css src/app/outbid-form.tsx src/lib/board-markup.tsx; then
+    fail "empty later-write must not add another numbered hop stamp"
+  fi
+  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx; then
+    fail "empty later-write must not rebuild the plaster wall into a long form"
+  fi
+  if awk '/function OccupiedBriefWrite/,/function EmptyClaimFirstWrite/' src/app/outbid-form.tsx | grep -q 'data-first-click="claim"'; then
+    fail "occupied claim must not stamp empty Claim #1 as the first click"
+  fi
+  if awk '/function OccupiedBriefWrite/,/function EmptyClaimFirstWrite/' src/app/outbid-form.tsx | grep -q 'Then the brief URL'; then
+    fail "occupied claim must not name a later brief URL write"
+  fi
+  if awk '/function OccupiedBriefWrite/,/function EmptyClaimFirstWrite/' src/app/outbid-form.tsx | grep -q 'data-later-write'; then
+    fail "occupied brief fields must stay on the claim rail with Outbid"
+  fi
+  if ! awk '
+    /function EmptyClaimFirstWrite/ { empty=NR }
+    empty && /data-first-click="claim"/ { click=NR }
+    empty && /Then the brief URL/ { label=NR }
+    empty && /BriefIdentityFields/ { ident=NR }
+    END { exit !(empty && click && label && ident && empty < click && click < label && label < ident) }
+  ' src/app/outbid-form.tsx; then
+    fail "empty Claim #1 / Outbid must precede the later brief URL write"
+  fi
+  if ! awk '
+    /function OccupiedBriefWrite/ { occ=NR }
+    occ && /BriefIdentityFields/ && !fields { fields=NR }
+    occ && /Outbid/ && !row { row=NR }
+    /function EmptyClaimFirstWrite/ { empty=NR }
+    END { exit !(occ && fields && row && empty && occ < fields && fields < row && row < empty) }
+  ' src/app/outbid-form.tsx; then
+    fail "occupied claim must keep brief fields before Outbid"
+  fi
+  python3 - src/app/board.css src/app/outbid-form.tsx <<'PY' || fail "empty later-write must recede after Claim #1 / Outbid without recolor or a new hop"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+form = open(sys.argv[2], encoding="utf-8").read()
+marker = "Empty plaster: Brief URL is a later write after Claim #1 / Outbid"
+if marker not in css:
+    raise SystemExit(1)
+later = css.split(marker, 1)[1].split("End empty-plaster later-write", 1)[0]
+if ".brief-identity[data-later-write]" not in later:
+    raise SystemExit(1)
+if "border-top: 1px dashed var(--line)" not in later:
+    raise SystemExit(1)
+if "background:" in later or "var(--bid-ink)" in later:
+    raise SystemExit(1)
+if "data-post-after-open-seven" in later or "data-open-after-post-six-stamp" in later:
+    raise SystemExit(1)
+click = re.search(
+    r"\.wall-stage\.wall-empty\[data-occupied=\"false\"\] \.paste-rail\.empty-claim-first\[data-empty-claim-first\] \.outbid\[data-first-click=\"claim\"\]\s*\{[^}]*\}",
+    css,
+    re.S,
+)
+if not click or "min-height: 2.75rem" not in click.group(0):
+    raise SystemExit(1)
+if "background:" in click.group(0):
+    raise SystemExit(1)
+empty = form.split("function EmptyClaimFirstWrite", 1)[-1].split("export function OutbidForm", 1)[0]
+occupied = form.split("function OccupiedBriefWrite", 1)[-1].split("function EmptyClaimFirstWrite", 1)[0]
+if empty.find("Outbid") < 0 or empty.find("data-later-write") < empty.find("Outbid"):
+    raise SystemExit(1)
+if empty.find("BriefIdentityFields") < empty.find("Then the brief URL"):
+    raise SystemExit(1)
+if occupied.find("BriefIdentityFields") < 0 or occupied.find("Outbid") < occupied.find("BriefIdentityFields"):
+    raise SystemExit(1)
+if 'data-first-click="claim"' in occupied or "Then the brief URL" in occupied:
+    raise SystemExit(1)
+PY
+  if ! awk '
+    /wall-occupied \.card-lead \.terms\.prize-before-price \.terms-copy/ { prize=NR }
+    /wall-occupied \.card \.brief-url\[data-first-click="open"\]/ { open=NR }
+    /wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]/ { later_open=NR }
+    /Empty plaster: Brief URL is a later write after Claim #1 \/ Outbid/ { later=NR }
+    END { exit !(prize && open && later_open && later && prize < open && open < later_open && later_open < later) }
+  ' src/app/board.css; then
+    fail "empty later-write CSS must sit after occupied prize / Open / later Open"
   fi
   grep -q 'older' tests/rank.test.ts || fail "rank tests missing older-wins-ties"
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach|\bcpm\b' \
@@ -911,9 +1051,17 @@ PY
   if grep -qi 'after Open brief' "${home_body}"; then
     fail "empty plaster must not say after Open brief"
   fi
-  if grep -q 'data-first-click' "${home_body}"; then
+  if grep -q 'data-first-click="open"' "${home_body}"; then
     fail "empty plaster has no flyer; do not mark a first-click Open brief"
   fi
+  grep -q 'data-first-click="claim"' "${home_body}" \
+    || fail "empty plaster must mark Claim #1 / Outbid as the first click"
+  grep -q 'data-later-write=""' "${home_body}" \
+    || fail "empty plaster must stamp the brief URL as a later write"
+  grep -q 'Then the brief URL' "${home_body}" \
+    || fail "empty plaster must name the later brief URL write"
+  grep -q 'data-brief-identity=""' "${home_body}" \
+    || fail "empty plaster must wrap brand / terms / brief URL as later-write identity"
   if grep -q 'data-open-after-post-first' "${home_body}"; then
     fail "empty plaster has no flyer; do not concentrate Open brief after Post"
   fi
@@ -974,17 +1122,35 @@ PY
   if grep -qi 'Post a brief' "${home_body}"; then
     fail "empty week Claim #1 is already first; do not add Post a brief"
   fi
-  python3 - "${home_body}" <<'PY' || fail "empty week must keep Claim #1 before blank plaster"
+  python3 - "${home_body}" <<'PY' || fail "empty week must keep Claim #1 before blank plaster, then later-write brief URL"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()
 claim = html.find('id="claim"')
 stamp = html.find('data-empty-claim-first=""')
 plaster = html.find('data-empty-week="true"')
+first = html.find('data-first-click="claim"')
+outbid = html.find(">Outbid<")
+later = html.find('data-later-write=""')
+label = html.find("Then the brief URL")
+identity = html.find('data-brief-identity=""')
+brand = html.find('name="brand"')
+terms = html.find('name="terms"')
+url = html.find('name="briefUrl"')
 if claim < 0 or stamp < 0 or plaster < 0 or not (claim <= stamp < plaster):
+    raise SystemExit(1)
+if first < 0 or outbid < 0 or later < 0 or label < 0 or identity < 0:
+    raise SystemExit(1)
+if not (claim <= stamp < plaster < first < outbid < identity <= later < label < brand < terms < url):
     raise SystemExit(1)
 if html.count('data-empty-claim-first=""') != 1:
     raise SystemExit(1)
 if html.count('data-empty-week="true"') != 1:
+    raise SystemExit(1)
+if html.count('data-first-click="claim"') != 1:
+    raise SystemExit(1)
+if html.count('data-later-write=""') != 1:
+    raise SystemExit(1)
+if html.count('data-brief-identity=""') != 1:
     raise SystemExit(1)
 if 'class="wall-stage wall-empty"' not in html:
     raise SystemExit(1)
@@ -1003,6 +1169,8 @@ if 'data-terms=""' in html or "terms-label" in html or "data-open-after-terms" i
 if "Post a brief" in html or "Open brief" in html:
     raise SystemExit(1)
 if "empty-claim-plaster" in html or 'class="flyers"' in html:
+    raise SystemExit(1)
+if 'data-first-click="open"' in html:
     raise SystemExit(1)
 PY
   grep -q 'Outbid' src/app/outbid-form.tsx || fail "form missing Outbid"
@@ -1091,6 +1259,18 @@ PY
   fi
   if grep -q 'empty-claim-first' "${listed_body}"; then
     fail "occupied week must not use the empty-claim-first class"
+  fi
+  if grep -q 'data-first-click="claim"' "${listed_body}"; then
+    fail "occupied week must not stamp empty Claim #1 as the first click"
+  fi
+  if grep -q 'data-later-write' "${listed_body}"; then
+    fail "occupied week must not leak empty later-write identity"
+  fi
+  if grep -q 'Then the brief URL' "${listed_body}"; then
+    fail "occupied week must not name a later brief URL write"
+  fi
+  if grep -q 'data-brief-identity' "${listed_body}"; then
+    fail "occupied week must keep brand / terms / brief URL on the claim rail"
   fi
   if grep -q 'wall-empty' "${listed_body}"; then
     fail "occupied week must not use the empty wall stage"
