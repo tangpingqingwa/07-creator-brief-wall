@@ -526,6 +526,13 @@ a.post-brief.post-after-open-five {
   font-size: 1.52rem;
 }
 
+/* Same Open brief hop, concentrated after Post is re-concentrated again under louder Post a brief. */
+.card .brief-url.open-after-post-five {
+  padding: 1.1rem 1.56rem 1.16rem;
+  border-width: 7px;
+  font-size: 1.62rem;
+}
+
 .card .open-label {
   border-bottom: 1px solid currentColor;
   text-underline-offset: 0.18em;
