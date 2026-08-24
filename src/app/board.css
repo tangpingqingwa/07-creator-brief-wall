@@ -211,10 +211,14 @@ a.post-brief.post-after-open-six {
 .wall-stage[data-occupied="false"] [data-open-brief],
 .wall-stage[data-occupied="false"] [data-prize],
 .wall-stage[data-occupied="false"] .prize-before-price,
+.wall-stage[data-occupied="false"] [data-later-fact],
+.wall-stage[data-occupied="false"] .later-fact,
 .paste-rail[data-empty-claim-first] + .plaster [data-post-brief],
 .paste-rail[data-empty-claim-first] + .plaster [data-open-brief],
 .paste-rail[data-empty-claim-first] + .plaster [data-prize],
-.paste-rail[data-empty-claim-first] + .plaster .prize-before-price {
+.paste-rail[data-empty-claim-first] + .plaster .prize-before-price,
+.paste-rail[data-empty-claim-first] + .plaster [data-later-fact],
+.paste-rail[data-empty-claim-first] + .plaster .later-fact {
   display: none;
 }
 
@@ -494,7 +498,12 @@ a.post-brief.post-after-open-six {
 
 /* #1 money stays a later fact. Do not shout beside Terms. */
 .card-lead .bid {
-  font-size: 0.95rem;
+  font-size: 0.82rem;
+}
+
+.card-lead .bid.later-fact[data-later-fact] {
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .card .clicks {
