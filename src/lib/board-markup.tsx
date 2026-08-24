@@ -72,12 +72,12 @@ function OpenBriefHop({ listing }: { listing: RankedListing }) {
   );
 }
 
-function OccupiedFlyer({ listing }: { listing: RankedListing }) {
-  const lead = listing.rank === 1;
+function OccupiedLeadFlyer({ listing }: { listing: RankedListing }) {
+  const lead = true;
   const hop = <OpenBriefHop listing={listing} />;
   return (
     <li
-      className={lead ? "card card-lead" : "card"}
+      className="card card-lead"
       data-rank={listing.rank}
       data-id={listing.id}
       data-brand={listing.brand}
@@ -87,25 +87,55 @@ function OccupiedFlyer({ listing }: { listing: RankedListing }) {
       <span className="rank">#{listing.rank}</span>
       <span className="brand">{listing.brand}</span>
       <p
-        className={lead ? "terms prize-before-price" : "terms"}
+        className="terms prize-before-price"
         data-terms=""
-        data-prize={lead ? "" : undefined}
-        data-prize-before-price={lead ? "" : undefined}
+        data-prize=""
+        data-prize-before-price=""
       >
         <span className="terms-label">Terms</span>
         <span className="terms-copy">{listing.terms}</span>
       </p>
       {lead ? hop : null}
-      <span
-        className={lead ? "bid later-fact" : "bid"}
-        data-later-fact={lead ? "" : undefined}
-      >
+      <span className="bid later-fact" data-later-fact="">
         ${listing.bidUsd}
       </span>
       <span className="clicks" data-clicks={listing.clicks}>
         {listing.clicks} clicks
       </span>
-      {lead ? null : hop}
+      <span className="brief-url-text">{listing.briefUrl}</span>
+    </li>
+  );
+}
+
+function OccupiedLaterFlyer({ listing }: { listing: RankedListing }) {
+  const lead = false;
+  const hop = <OpenBriefHop listing={listing} />;
+  return (
+    <li
+      className="card later-flyer"
+      data-rank={listing.rank}
+      data-id={listing.id}
+      data-brand={listing.brand}
+      data-bid={listing.bidUsd}
+      data-later-flyer=""
+    >
+      <p className="later-rankline">
+        <span className="rank">#{listing.rank}</span>
+        <span className="brand later-brand">{listing.brand}</span>
+      </p>
+      <div className="later-slip">
+        <p className="later-terms" data-terms="">
+          <span className="later-terms-kicker">Terms</span>
+          <span className="later-terms-copy">{listing.terms}</span>
+        </p>
+        <p className="later-foot">
+          <span className="bid">${listing.bidUsd}</span>
+          <span className="clicks" data-clicks={listing.clicks}>
+            {listing.clicks} clicks
+          </span>
+        </p>
+        {lead ? null : hop}
+      </div>
       <span className="brief-url-text">{listing.briefUrl}</span>
     </li>
   );
@@ -118,15 +148,18 @@ export function OccupiedFlyers({ listings }: { listings: RankedListing[] }) {
     <div className="flyers">
       {lead ? (
         <ol className="cards cards-lead" aria-label="Paid briefs this week">
-          <OccupiedFlyer key={lead.id} listing={lead} />
+          <OccupiedLeadFlyer key={lead.id} listing={lead} />
         </ol>
       ) : null}
       {later.length > 0 ? (
-        <ol className="cards cards-later" aria-label="Later briefs this week">
-          {later.map((listing) => (
-            <OccupiedFlyer key={listing.id} listing={listing} />
-          ))}
-        </ol>
+        <section className="later-pack" data-later-pack="">
+          <p className="later-note">These flyers are not this week’s #1 prize</p>
+          <ol className="cards cards-later" aria-label="Later briefs this week">
+            {later.map((listing) => (
+              <OccupiedLaterFlyer key={listing.id} listing={listing} />
+            ))}
+          </ol>
+        </section>
       ) : null}
       <PostBriefHop />
     </div>

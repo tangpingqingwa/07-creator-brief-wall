@@ -255,6 +255,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover #1 \$bid staying a later fact"
   grep -q 'occupied later-rank Open stays quieter so #1 Open is the first click' tests/board.test.ts \
     || fail "board tests must cover quieter later-rank Open brief"
+  grep -q 'occupied later flyers stay quieter than #1 Terms — prize stays first' tests/board.test.ts \
+    || fail "board tests must cover quieter later flyers than #1 Terms"
   grep -q 'occupied Terms stay the prize and later Open stays after #1 Open' tests/board.test.ts \
     || fail "board tests must cover later Open after #1 Open"
   grep -q 'one flyer opens the brief after Terms, not next to $bid' tests/board.test.ts \
@@ -449,7 +451,7 @@ if [[ -f package.json ]]; then
     || fail "CSS must keep later-open hop off empty plaster"
   grep -qF '.wall-occupied .cards-later' src/app/board.css \
     || fail "later-rank CSS must stay on occupied plaster"
-  if grep -nE 'open-later-rank|data-later-rank' src/lib/board-markup.tsx src/app/board.css >/dev/null
+  if grep -nE 'open-later-rank|data-later-rank[^-]' src/lib/board-markup.tsx src/app/board.css >/dev/null
   then
     fail "do not stamp open-later-rank; compose later-rank Open as a quieter hop"
   fi
@@ -695,6 +697,139 @@ PY
   ' src/app/board.css; then
     fail "empty later-write CSS must sit after occupied prize / Open / later Open"
   fi
+  echo "== UX: occupied later flyers stay quieter than #1 Terms — prize stays first =="
+  grep -q 'function OccupiedLaterFlyer' src/lib/board-markup.tsx \
+    || fail "later ranks must use OccupiedLaterFlyer, not the #1 prize flyer"
+  grep -q 'function OccupiedLeadFlyer' src/lib/board-markup.tsx \
+    || fail "occupied #1 must keep OccupiedLeadFlyer"
+  grep -q 'className="card later-flyer"' src/lib/board-markup.tsx \
+    || fail "later ranks must use later-flyer anatomy"
+  grep -q 'data-later-flyer' src/lib/board-markup.tsx \
+    || fail "later ranks must stamp data-later-flyer"
+  grep -q 'data-later-pack' src/lib/board-markup.tsx \
+    || fail "later ranks must group in a later pack"
+  grep -q 'These flyers are not this week’s #1 prize' src/lib/board-markup.tsx \
+    || fail "later pack must say later flyers are not the #1 prize"
+  grep -q 'later-terms-kicker' src/lib/board-markup.tsx \
+    || fail "later ranks must keep Terms without #1 prize chrome"
+  grep -q 'later-terms-copy' src/lib/board-markup.tsx \
+    || fail "later ranks must keep quieter terms copy"
+  grep -q '{lead ? hop : null}' src/lib/board-markup.tsx \
+    || fail "later-rank cut must keep #1 Open after Terms"
+  grep -q '{lead ? null : hop}' src/lib/board-markup.tsx \
+    || fail "later Open must stay after \$bid in cards-later"
+  grep -q 'data-prize=""' src/lib/board-markup.tsx \
+    || fail "later-rank cut must keep occupied Terms as the prize"
+  grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
+    || fail "later-rank cut must keep #1 Open the first occupied click"
+  grep -q 'Claim #1' src/app/outbid-form.tsx \
+    || fail "later-rank cut must keep Claim #1"
+  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+    || fail "later-rank cut must keep blank plaster"
+  grep -q 'Open brief' src/lib/board-markup.tsx \
+    || fail "later-rank cut must keep Open brief"
+  grep -q 'Post a brief' src/lib/board-markup.tsx \
+    || fail "later-rank cut must keep Post a brief"
+  grep -q 'amount-field' src/app/outbid-form.tsx \
+    || fail "later-rank cut must keep the dashed amount"
+  grep -q 'className="step"' src/app/outbid-form.tsx \
+    || fail "later-rank cut must keep ± steppers"
+  grep -q 'Outbid' src/app/outbid-form.tsx \
+    || fail "later-rank cut must keep Outbid"
+  grep -q 'className="plaster"' src/lib/board-markup.tsx \
+    || fail "later-rank cut must not rebuild the plaster wall"
+  grep -qF '.wall-occupied .later-pack[data-later-pack]' src/app/board.css \
+    || fail "CSS must group later ranks in a pack after #1"
+  grep -qF '.wall-occupied .cards-later .card.later-flyer[data-later-flyer]' src/app/board.css \
+    || fail "CSS must compose later ranks as hopper slips"
+  grep -qF '.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .later-terms-copy' src/app/board.css \
+    || fail "CSS must keep later terms quieter than #1 Terms"
+  grep -qF '.wall-occupied .cards-later .brief-url.later-open[data-later-open]' src/app/board.css \
+    || fail "CSS must keep later Open after \$bid in cards-later"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .later-pack' src/app/board.css \
+    || fail "empty plaster CSS must keep later-pack off Claim #1"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .later-flyer' src/app/board.css \
+    || fail "empty plaster CSS must keep later-flyer off Claim #1"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] [data-later-flyer]' src/app/board.css \
+    || fail "empty plaster CSS must keep later-flyer stamps off Claim #1"
+  if grep -qE 'data-post-after-open-seven|data-open-after-post-six-stamp' src/app/board.tsx src/app/board.css src/app/outbid-form.tsx src/lib/board-markup.tsx; then
+    fail "later-rank quiet must not add another numbered hop stamp"
+  fi
+  if grep -qE 'data-later-quiet|data-later-rank-quiet|open-later-rank' src/lib/board-markup.tsx src/app/board.css src/app/outbid-form.tsx; then
+    fail "do not stamp-only mute later flyers"
+  fi
+  if grep -nE 'open-later-rank|data-later-rank[^-]' src/lib/board-markup.tsx src/app/board.css >/dev/null
+  then
+    fail "do not stamp open-later-rank; compose later-rank Open as a quieter hop"
+  fi
+  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx; then
+    fail "later-rank quiet must not rebuild the plaster wall into a long form"
+  fi
+  if awk '/function OccupiedLaterFlyer/,/export function OccupiedFlyers/' src/lib/board-markup.tsx | grep -q 'data-prize'; then
+    fail "later ranks must not wear the #1 prize stamp"
+  fi
+  if awk '/function OccupiedLaterFlyer/,/export function OccupiedFlyers/' src/lib/board-markup.tsx | grep -q 'terms-label'; then
+    fail "later ranks must not reuse #1 Terms prize chrome"
+  fi
+  if awk '/function OccupiedLaterFlyer/,/export function OccupiedFlyers/' src/lib/board-markup.tsx | grep -q 'card-lead'; then
+    fail "later ranks must not reuse #1 lead flyer chrome"
+  fi
+  if awk '/function OccupiedLaterFlyer/,/export function OccupiedFlyers/' src/lib/board-markup.tsx | grep -q 'data-first-click="open"'; then
+    fail "later ranks must not steal the first occupied click"
+  fi
+  python3 - src/app/board.css src/lib/board-markup.tsx <<'PY' || fail "later flyers must stay quieter than #1 Terms without recolor or a new hop"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+markup = open(sys.argv[2], encoding="utf-8").read()
+
+def size(pattern):
+    match = re.search(pattern, css, re.S)
+    if not match:
+        raise SystemExit(1)
+    return float(match.group(1))
+
+prize = size(r"\.wall-occupied \.card-lead \.terms\.prize-before-price \.terms-copy\s*\{[^}]*font-size:\s*([\d.]+)rem")
+later_terms = size(r"\.wall-occupied \.cards-later \.card\.later-flyer\[data-later-flyer\] \.later-terms-copy\s*\{[^}]*font-size:\s*([\d.]+)rem")
+later_brand = size(r"\.wall-occupied \.cards-later \.card\.later-flyer\[data-later-flyer\] \.later-brand\s*\{[^}]*font-size:\s*([\d.]+)rem")
+later_open = size(r"\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*font-size:\s*([\d.]+)rem")
+lead_open = size(r"\.wall-occupied \.card \.brief-url\.open-after-post-five\s*\{[^}]*font-size:\s*([\d.]+)rem")
+if not (prize > later_terms and prize > later_brand and lead_open > later_open):
+    raise SystemExit(1)
+pack = re.search(r"\.wall-occupied \.later-pack\[data-later-pack\]\s*\{[^}]*\}", css, re.S)
+slip = re.search(r"\.wall-occupied \.cards-later \.card\.later-flyer\[data-later-flyer\]\s*\{[^}]*\}", css, re.S)
+if not pack or "border-top: 1px dashed var(--line)" not in pack.group(0):
+    raise SystemExit(1)
+if not slip or "box-shadow: none" not in slip.group(0) or "border: 1px dashed var(--line)" not in slip.group(0):
+    raise SystemExit(1)
+if "var(--bid-ink)" in slip.group(0) or "background:" in pack.group(0):
+    raise SystemExit(1)
+later_fn = markup.split("function OccupiedLaterFlyer", 1)[-1].split("export function OccupiedFlyers", 1)[0]
+if "data-prize" in later_fn or "terms-label" in later_fn or "card-lead" in later_fn:
+    raise SystemExit(1)
+if 'data-first-click="open"' in later_fn or "prize-before-price" in later_fn:
+    raise SystemExit(1)
+if "data-post-after-open-seven" in markup or "data-open-after-post-six-stamp" in markup:
+    raise SystemExit(1)
+if "data-later-quiet" in markup or "data-later-rank-quiet" in markup:
+    raise SystemExit(1)
+PY
+  if ! awk '
+    /wall-occupied \.card-lead \.terms\.prize-before-price \.terms-copy/ { prize=NR }
+    /wall-occupied \.card \.brief-url\[data-first-click="open"\]/ { open=NR }
+    /wall-occupied \.later-pack\[data-later-pack\] \{/ { pack=NR }
+    /cards-later \.card\.later-flyer\[data-later-flyer\] \{/ { later=NR }
+    /Empty plaster: Brief URL is a later write after Claim #1 \/ Outbid/ { empty=NR }
+    END { exit !(prize && open && pack && later && empty && prize < open && open < pack && pack < later && later < empty) }
+  ' src/app/board.css; then
+    fail "later-rank CSS must sit after occupied prize / Open and before empty later-write"
+  fi
+  grep -q 'occupied later flyers stay quieter than #1 Terms' tests/board.test.ts \
+    || fail "board tests must cover quieter later flyers than #1 Terms"
+  grep -q 'These flyers are not this week’s #1 prize' tests/board.test.ts \
+    || fail "board tests must name later flyers as not the #1 prize"
+  grep -q 'data-later-flyer' tests/board.test.ts \
+    || fail "board tests must stamp later flyers"
   grep -q 'older' tests/rank.test.ts || fail "rank tests missing older-wins-ties"
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach|\bcpm\b' \
     src/lib/board-markup.tsx src/app/outbid-form.tsx src/lib/rank.ts src/app/board.css \
@@ -1651,6 +1786,20 @@ if html.count('data-later-open=""') != 1:
     raise SystemExit(1)
 if html.count('class="brief-url later-open"') != 1:
     raise SystemExit(1)
+if 'class="card later-flyer"' not in acme.group(0) or 'data-later-flyer=""' not in acme.group(0):
+    raise SystemExit(1)
+if 'class="card later-flyer"' in rival.group(0) or 'data-later-flyer=""' in rival.group(0):
+    raise SystemExit(1)
+if 'class="later-terms-kicker">Terms' not in acme.group(0):
+    raise SystemExit(1)
+if 'class="terms-label">Terms' in acme.group(0) or 'class="terms-copy"' in acme.group(0):
+    raise SystemExit(1)
+if html.count('data-later-flyer=""') != 1:
+    raise SystemExit(1)
+if html.count('data-later-pack=""') != 1:
+    raise SystemExit(1)
+if "These flyers are not this week’s #1 prize" not in html:
+    raise SystemExit(1)
 if 'data-first-click="open"' not in rival.group(0):
     raise SystemExit(1)
 if 'data-first-click="open"' in acme.group(0):
@@ -1658,6 +1807,8 @@ if 'data-first-click="open"' in acme.group(0):
 if 'aria-label="Paid briefs this week"' not in html or 'aria-label="Later briefs this week"' not in html:
     raise SystemExit(1)
 if html.find('aria-label="Paid briefs this week"') >= html.find('aria-label="Later briefs this week"'):
+    raise SystemExit(1)
+if html.find('data-later-pack=""') >= html.find('aria-label="Later briefs this week"'):
     raise SystemExit(1)
 rival_terms = rival.group(0).find('data-terms=""')
 rival_open = rival.group(0).find('class="open-label">Open brief')

@@ -217,6 +217,9 @@ body {
 .wall-stage.wall-empty[data-occupied="false"] .flyers,
 .wall-stage.wall-empty[data-occupied="false"] .plaster,
 .wall-stage.wall-empty[data-occupied="false"] .card,
+.wall-stage.wall-empty[data-occupied="false"] .later-pack,
+.wall-stage.wall-empty[data-occupied="false"] .later-flyer,
+.wall-stage.wall-empty[data-occupied="false"] [data-later-flyer],
 .wall-stage.wall-empty[data-occupied="false"] .cards-later,
 .wall-stage.wall-empty[data-occupied="false"] .cards-lead,
 .wall-stage.wall-empty[data-occupied="false"] [data-post-brief],
@@ -410,7 +413,6 @@ body {
 .wall-occupied .cards-later {
   margin-top: 0.35rem;
   padding-top: 0.1rem;
-  opacity: 0.78;
 }
 
 .wall-occupied .card {
@@ -643,6 +645,114 @@ body {
 }
 
 .wall-occupied .cards-later .brief-url.later-open[data-later-open] .host {
+  font-size: 0.72rem;
+}
+
+.wall-occupied .later-pack[data-later-pack] {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed var(--line);
+}
+
+.wall-occupied .later-pack[data-later-pack] .later-note {
+  margin: 0 0 0.45rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.wall-occupied .later-pack[data-later-pack] .cards-later {
+  margin-top: 0;
+  padding-top: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.45rem;
+}
+
+/* Later flyers are hopper slips after #1. Open stays a foot after $bid. */
+.wall-occupied .cards-later .card.later-flyer[data-later-flyer] {
+  display: grid;
+  grid-template-columns: 4.6rem minmax(0, 1fr);
+  grid-template-areas:
+    "rank brand brand"
+    "terms terms terms"
+    "bid bid clicks"
+    "url url url";
+  align-items: start;
+  min-height: 0;
+  padding: 0;
+  transform: none;
+  outline: none;
+  background: var(--paper);
+  border: 1px dashed var(--line);
+  box-shadow: none;
+}
+
+.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .later-rankline {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.55rem 0.4rem;
+  border-right: 1px dashed var(--line);
+}
+
+.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .rank {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .later-brand {
+  font-size: 0.92rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .later-slip {
+  min-width: 0;
+  padding: 0.5rem 0.75rem 0.55rem;
+}
+
+.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .later-terms {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12rem;
+  margin: 0;
+}
+
+.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .later-terms-kicker {
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .later-terms-copy {
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .later-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.55rem;
+  margin: 0.35rem 0 0;
+}
+
+.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .bid {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .clicks {
   font-size: 0.72rem;
 }
 
