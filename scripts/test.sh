@@ -225,6 +225,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover the labeled Open brief hop"
   grep -q 'one flyer names Terms as the prize before $bid' tests/board.test.ts \
     || fail "board tests must cover labeled Terms before \$bid"
+  grep -q 'occupied #1 Terms reads first and larger than $bid and clicks' tests/board.test.ts \
+    || fail "board tests must cover #1 Terms larger than \$bid"
   grep -q 'one flyer opens the brief after Terms, not next to $bid' tests/board.test.ts \
     || fail "board tests must cover Open brief after Terms"
   grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
@@ -365,6 +367,37 @@ if [[ -f package.json ]]; then
     || fail "flyer must show the terms copy as the prize"
   grep -q 'terms-label' src/app/board.css \
     || fail "CSS must style the Terms label"
+  grep -q 'data-prize' src/lib/board-markup.tsx \
+    || fail "occupied #1 flyer must mark Terms as the prize"
+  grep -q 'data-prize-before-price' src/lib/board-markup.tsx \
+    || fail "occupied #1 flyer must stamp prize before price"
+  grep -q 'prize-before-price' src/lib/board-markup.tsx \
+    || fail "occupied #1 Terms must use the prize-before-price class"
+  grep -q 'prize-before-price' src/app/board.css \
+    || fail "CSS must enlarge #1 Terms over \$bid"
+  grep -q 'card-lead .terms.prize-before-price .terms-copy' src/app/board.css \
+    || fail "CSS must enlarge only the #1 Terms copy"
+  grep -q 'card-lead .bid' src/app/board.css \
+    || fail "CSS must keep #1 \$bid quieter than Terms"
+  grep -q 'card-lead .clicks' src/app/board.css \
+    || fail "CSS must keep #1 clicks quieter than Terms"
+  python3 - src/app/board.css <<'PY' || fail "#1 Terms copy must be larger than \$bid and clicks"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+
+def size(pattern):
+    match = re.search(pattern, css, re.S)
+    if not match:
+        raise SystemExit(1)
+    return float(match.group(1))
+
+prize = size(r"\.card-lead \.terms\.prize-before-price \.terms-copy\s*\{[^}]*font-size:\s*([\d.]+)rem")
+bid = size(r"\.card-lead \.bid\s*\{[^}]*font-size:\s*([\d.]+)rem")
+clicks = size(r"\.card-lead \.clicks\s*\{[^}]*font-size:\s*([\d.]+)rem")
+if not (prize > bid and prize > clicks):
+    raise SystemExit(1)
+PY
   grep -q '"rank brand brand"' src/app/board.css \
     || fail "flyer CSS must not put \$bid on the first row"
   if grep -nE 'href=\{listing\.briefUrl\}|href=\{`\$\{listing\.briefUrl' src/lib/board-markup.tsx >/dev/null
@@ -730,6 +763,12 @@ if [[ -f package.json ]]; then
   if grep -q 'class="terms-label"' "${home_body}"; then
     fail "empty plaster must not label Terms on a flyer"
   fi
+  if grep -q 'data-prize' "${home_body}"; then
+    fail "empty plaster has no flyer; do not mark a Terms prize"
+  fi
+  if grep -q 'prize-before-price' "${home_body}"; then
+    fail "empty plaster has no flyer; do not stamp prize before price"
+  fi
   if grep -q 'data-open-after-terms' "${home_body}"; then
     fail "empty plaster has no flyer; do not show Open brief after Terms"
   fi
@@ -858,6 +897,12 @@ PY
     || fail "paid flyer must say Terms on the prize"
   grep -q 'class="terms-copy">\$800 flat, 1 TikTok' "${listed_body}" \
     || fail "paid flyer must show the terms copy as the prize"
+  grep -q 'class="terms prize-before-price"' "${listed_body}" \
+    || fail "paid #1 flyer must enlarge Terms before \$bid"
+  grep -q 'data-prize=""' "${listed_body}" \
+    || fail "paid #1 flyer must mark Terms as the prize"
+  grep -q 'data-prize-before-price=""' "${listed_body}" \
+    || fail "paid #1 flyer must stamp prize before price"
   python3 - "${listed_body}" <<'PY' || fail "paid flyer must put labeled Terms before Open brief and \$bid"
 import re
 import sys
@@ -867,6 +912,9 @@ if not match:
     raise SystemExit(1)
 card = match.group(0)
 terms = card.find('data-terms=""')
+prize = card.find('data-prize=""')
+prize_stamp = card.find('data-prize-before-price=""')
+prize_class = card.find('class="terms prize-before-price"')
 label = card.find('class="terms-label">Terms')
 copy = card.find('class="terms-copy">$800 flat, 1 TikTok')
 hop = card.find('data-open-brief=""')
@@ -880,10 +928,10 @@ open_three = card.find('data-open-after-post-three-stamp=""')
 open_four = card.find('data-open-after-post-four-stamp=""')
 open_five = card.find('data-open-after-post-five-stamp=""')
 bid = card.find('class="bid">$')
-if terms < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or open_four < 0 or open_five < 0 or bid < 0:
+if terms < 0 or prize < 0 or prize_stamp < 0 or prize_class < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or open_four < 0 or open_five < 0 or bid < 0:
     raise SystemExit(1)
 open_label = card.find('class="open-label">Open brief')
-if not (terms < label < copy < hop <= after < note < open_label < bid):
+if not (prize_class <= terms <= prize <= prize_stamp < label < copy < hop <= after < note < open_label < bid):
     raise SystemExit(1)
 if not (hop <= first <= open_stamp < first_read <= open_two < open_three < open_four < open_five < open_label):
     raise SystemExit(1)
@@ -910,6 +958,12 @@ if html.count('data-open-after-post-three-stamp=""') != 1:
 if html.count('data-open-after-post-four-stamp=""') != 1:
     raise SystemExit(1)
 if html.count('data-open-after-post-five-stamp=""') != 1:
+    raise SystemExit(1)
+if html.count('data-prize=""') != 1:
+    raise SystemExit(1)
+if html.count('data-prize-before-price=""') != 1:
+    raise SystemExit(1)
+if html.count('class="terms prize-before-price"') != 1:
     raise SystemExit(1)
 PY
   grep -q 'data-post-brief=""' "${listed_body}" \
@@ -1136,6 +1190,21 @@ PY
     "${take_home}" || fail "\$8 must become #1 over the \$7 incumbent"
   grep -E -q 'data-rank="2"[^>]*data-brand="Acme"|data-brand="Acme"[^>]*data-rank="2"' \
     "${take_home}" || fail "\$7 incumbent must drop to #2 after a \$8 full bid"
+  python3 - "${take_home}" <<'PY' || fail "only the live #1 flyer may enlarge Terms before \$bid"
+import re
+import sys
+html = open(sys.argv[1], encoding="utf-8").read()
+rival = re.search(r'<li[^>]*data-brand="Rival"[^>]*>.*?</li>', html, re.S)
+acme = re.search(r'<li[^>]*data-brand="Acme"[^>]*>.*?</li>', html, re.S)
+if not rival or not acme:
+    raise SystemExit(1)
+if 'data-prize=""' not in rival.group(0) or 'prize-before-price' not in rival.group(0):
+    raise SystemExit(1)
+if 'data-prize' in acme.group(0) or 'prize-before-price' in acme.group(0):
+    raise SystemExit(1)
+if html.count('data-prize=""') != 1 or html.count('data-prize-before-price=""') != 1:
+    raise SystemExit(1)
+PY
 
   echo "== reject chat / NSFW / shortener / http brief URLs =="
   for bad in \
