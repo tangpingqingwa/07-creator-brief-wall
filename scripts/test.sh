@@ -245,6 +245,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover concentrated Open brief after Post first write is re-concentrated"
   grep -q 'occupied wall concentrates Post a brief after Open is re-concentrated again' tests/board.test.ts \
     || fail "board tests must cover concentrated Post a brief after Open first read is re-concentrated again"
+  grep -q 'occupied wall concentrates Open brief after Post is re-concentrated again' tests/board.test.ts \
+    || fail "board tests must cover concentrated Open brief after Post first write is re-concentrated again"
   grep -q 'data-first-click' src/lib/board-markup.tsx \
     || fail "occupied #1 Open brief must mark the first click"
   grep -q 'data-open-after-post-first' src/lib/board-markup.tsx \
@@ -253,12 +255,16 @@ if [[ -f package.json ]]; then
     || fail "Open brief must stamp the first read after Post"
   grep -q 'data-open-after-post-two-stamp' src/lib/board-markup.tsx \
     || fail "Open brief must concentrate after Post is re-concentrated"
+  grep -q 'data-open-after-post-three-stamp' src/lib/board-markup.tsx \
+    || fail "Open brief must concentrate after Post is re-concentrated again"
   grep -q 'data-first-click="open"' src/app/board.css \
     || fail "CSS must make Open brief win the first click"
   grep -q 'open-after-post-first' src/app/board.css \
     || fail "CSS must concentrate Open brief after Post first write"
   grep -q 'open-after-post-two' src/app/board.css \
     || fail "CSS must concentrate Open brief after Post is re-concentrated"
+  grep -q 'open-after-post-three' src/app/board.css \
+    || fail "CSS must concentrate Open brief after Post is re-concentrated again"
   grep -q 'data-post-brief' src/lib/board-markup.tsx \
     || fail "occupied wall must mark Post a brief"
   grep -q 'data-post-after-open' src/lib/board-markup.tsx \
@@ -315,6 +321,8 @@ if [[ -f package.json ]]; then
     || fail "occupied #1 Open brief must concentrate after Post"
   grep -q 'brief-url open-after-terms open-after-post-first open-after-post-two' src/lib/board-markup.tsx \
     || fail "occupied #1 Open brief must concentrate after Post is re-concentrated"
+  grep -q 'brief-url open-after-terms open-after-post-first open-after-post-two open-after-post-three' src/lib/board-markup.tsx \
+    || fail "occupied #1 Open brief must concentrate after Post is re-concentrated again"
   grep -q 'data-terms' src/lib/board-markup.tsx \
     || fail "flyer must mark the Terms prize"
   grep -q 'terms-label' src/lib/board-markup.tsx \
@@ -664,6 +672,9 @@ if [[ -f package.json ]]; then
   if grep -q 'data-open-after-post-two-stamp' "${home_body}"; then
     fail "empty plaster has no flyer; do not concentrate Open brief after Post is re-concentrated"
   fi
+  if grep -q 'data-open-after-post-three-stamp' "${home_body}"; then
+    fail "empty plaster has no flyer; do not concentrate Open brief after Post is re-concentrated again"
+  fi
   if grep -q 'data-terms=""' "${home_body}"; then
     fail "empty plaster has no flyer; do not show Terms"
   fi
@@ -778,7 +789,9 @@ PY
     || fail "paid #1 flyer must stamp Open brief as the first read"
   grep -q 'data-open-after-post-two-stamp=""' "${listed_body}" \
     || fail "paid #1 flyer must concentrate Open brief after Post is re-concentrated"
-  grep -q 'class="brief-url open-after-terms open-after-post-first open-after-post-two"' "${listed_body}" \
+  grep -q 'data-open-after-post-three-stamp=""' "${listed_body}" \
+    || fail "paid #1 flyer must concentrate Open brief after Post is re-concentrated again"
+  grep -q 'class="brief-url open-after-terms open-after-post-first open-after-post-two open-after-post-three"' "${listed_body}" \
     || fail "paid #1 Open brief hop must stay the re-concentrated flyer hop"
   grep -q 'data-open-after-terms=""' "${listed_body}" \
     || fail "paid flyer must mark Open brief after Terms"
@@ -810,17 +823,20 @@ first = card.find('data-first-click="open"')
 open_stamp = card.find('data-open-after-post-first=""')
 first_read = card.find('data-first-read="open"')
 open_two = card.find('data-open-after-post-two-stamp=""')
+open_three = card.find('data-open-after-post-three-stamp=""')
 bid = card.find('class="bid">$')
-if terms < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or bid < 0:
+if terms < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or bid < 0:
     raise SystemExit(1)
 open_label = card.find('class="open-label">Open brief')
 if not (terms < label < copy < hop <= after < note < open_label < bid):
     raise SystemExit(1)
-if not (hop <= first <= open_stamp < first_read <= open_two < open_label):
+if not (hop <= first <= open_stamp < first_read <= open_two < open_three < open_label):
     raise SystemExit(1)
 if open_stamp - first > 80:
     raise SystemExit(1)
 if open_two - first_read > 80:
+    raise SystemExit(1)
+if open_three - open_two > 80:
     raise SystemExit(1)
 if not re.search(r'class="bid">\$(?:<!-- -->)?5', card):
     raise SystemExit(1)
@@ -829,6 +845,8 @@ if html.count('data-open-after-post-first=""') != 1:
 if html.count('data-first-read="open"') != 1:
     raise SystemExit(1)
 if html.count('data-open-after-post-two-stamp=""') != 1:
+    raise SystemExit(1)
+if html.count('data-open-after-post-three-stamp=""') != 1:
     raise SystemExit(1)
 PY
   grep -q 'data-post-brief=""' "${listed_body}" \
@@ -873,11 +891,12 @@ first = html.find('data-first-click="open"')
 open_stamp = html.find('data-open-after-post-first=""')
 first_read = html.find('data-first-read="open"')
 open_two = html.find('data-open-after-post-two-stamp=""')
+open_three = html.find('data-open-after-post-three-stamp=""')
 open_hop = html.find('class="open-label">Open brief')
 claim = html.find('id="claim"')
-if nav < 0 or nav_end < 0 or hop < 0 or stamp < 0 or write < 0 or two < 0 or three < 0 or flyers < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or claim < 0:
+if nav < 0 or nav_end < 0 or hop < 0 or stamp < 0 or write < 0 or two < 0 or three < 0 or flyers < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or claim < 0:
     raise SystemExit(1)
-if not (nav < nav_end < flyers < first <= open_stamp < first_read <= open_two < open_hop < hop <= stamp < write < two < three < note < label < dest < claim):
+if not (nav < nav_end < flyers < first <= open_stamp < first_read <= open_two < open_three < open_hop < hop <= stamp < write < two < three < note < label < dest < claim):
     raise SystemExit(1)
 if stamp - hop > 80:
     raise SystemExit(1)
@@ -888,6 +907,8 @@ if three - two > 80:
 if open_stamp - first > 80:
     raise SystemExit(1)
 if open_two - first_read > 80:
+    raise SystemExit(1)
+if open_three - open_two > 80:
     raise SystemExit(1)
 if html.count('data-post-brief=""') != 1 or html.count('href="#claim"') != 1:
     raise SystemExit(1)
@@ -908,6 +929,8 @@ if html.count('data-open-after-post-first=""') != 1:
 if html.count('data-first-read="open"') != 1:
     raise SystemExit(1)
 if html.count('data-open-after-post-two-stamp=""') != 1:
+    raise SystemExit(1)
+if html.count('data-open-after-post-three-stamp=""') != 1:
     raise SystemExit(1)
 PY
   python3 - "${listed_body}" <<'PY' || fail "paid board must put flyers before the claim strip"
