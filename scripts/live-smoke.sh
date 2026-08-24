@@ -615,6 +615,8 @@ else
     && [[ -z "$confirm_loc" ]] \
     && html_has "$confirm_body" "Confirm this brief" \
     && html_has "$confirm_body" "data-confirm-brief" \
+    && html_has "$confirm_body" "data-confirm-before-leave" \
+    && html_has "$confirm_body" "Opening this flyer has not counted a hop" \
     && html_has "$confirm_body" "$FIVE_URL" \
     && html_has "$confirm_body" "Leave to the brief" \
     && [[ "$mid_clicks" == "$before_clicks" ]] \

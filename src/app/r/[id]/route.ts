@@ -45,7 +45,7 @@ function confirmDocument(body: string): string {
 `;
 }
 
-/** Confirm sheet. Terms + brief URL first. Does not increment clicks. */
+/** Confirm-before-leave. GET is 200 and does not increment clicks. */
 export async function GET(
   _request: Request,
   context: RouteContext,

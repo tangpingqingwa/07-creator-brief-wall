@@ -237,6 +237,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover Open brief after Terms"
   grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
     || fail "board tests must cover the confirm sheet"
+  grep -q 'GET confirm-before-leave does not increment clicks' tests/board.test.ts \
+    || fail "board tests must cover GET confirm-before-leave"
   grep -q 'occupied wall names one Post a brief hop' tests/board.test.ts \
     || fail "board tests must cover the occupied Post a brief hop"
   grep -q 'occupied wall posts a brief after Open brief' tests/board.test.ts \
@@ -418,10 +420,16 @@ PY
     || fail "CSS must keep empty plaster leading with Claim #1"
   grep -q 'data-occupied="false"' src/app/board.css \
     || fail "CSS must keep occupied chrome off empty plaster"
+  grep -q 'confirm-before-leave' src/app/board.css \
+    || fail "CSS must mark confirm-before-leave on GET /r/:id"
+  grep -q 'data-confirm-uncounted' src/app/board.css \
+    || fail "CSS must style the uncounted GET preview"
+  grep -qF '.confirm-sheet.confirm-before-leave[data-confirm-before-leave]' src/app/board.css \
+    || fail "CSS must concentrate leave on the confirm-before-leave sheet"
   if grep -nE 'data-post-after-open-seven|data-open-after-post-six-stamp' \
-    src/lib/board-markup.tsx src/app/outbid-form.tsx src/app/board.css >/dev/null
+    src/lib/board-markup.tsx src/app/outbid-form.tsx src/app/board.css src/lib/confirm-brief.ts >/dev/null
   then
-    fail "do not stamp *-after-*-N on empty plaster"
+    fail "do not stamp *-after-*-N on empty plaster or confirm-before-leave"
   fi
   grep -q 'older' tests/rank.test.ts || fail "rank tests missing older-wins-ties"
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach|\bcpm\b' \
@@ -593,12 +601,26 @@ PY
     || fail "POST /r/:id must increment on the confirmed leave"
   grep -q 'data-confirm-brief' src/lib/confirm-brief.ts \
     || fail "confirm sheet must mark data-confirm-brief"
+  grep -q 'data-confirm-before-leave' src/lib/confirm-brief.ts \
+    || fail "confirm sheet must stamp confirm-before-leave"
+  grep -q 'data-confirm-uncounted' src/lib/confirm-brief.ts \
+    || fail "confirm sheet must mark the uncounted GET preview"
+  grep -q 'Opening this flyer has not counted a hop' src/lib/confirm-brief.ts \
+    || fail "confirm sheet must say opening has not counted a hop"
   grep -q 'Leave to the brief' src/lib/confirm-brief.ts \
     || fail "confirm sheet must say Leave to the brief"
   grep -q 'method="post"' src/lib/confirm-brief.ts \
     || fail "confirm leave must POST /r/:id"
   grep -q 'public hops — not reach' src/lib/confirm-brief.ts \
     || fail "confirm sheet must not dress clicks as reach"
+  grep -q 'getPublicListing' src/app/r/\[id\]/route.ts \
+    || fail "GET /r/:id must load via getPublicListing"
+  awk '/export async function GET/,/export async function POST/' src/app/r/\[id\]/route.ts \
+    | grep -q 'incrementPublicClick' \
+    && fail "GET /r/:id must not call incrementPublicClick"
+  awk '/export async function POST/,0' src/app/r/\[id\]/route.ts \
+    | grep -q 'incrementPublicClick' \
+    || fail "POST /r/:id must call incrementPublicClick"
   grep -q 'href={`/r/${listing.id}`}' src/lib/board-markup.tsx \
     || fail "Open brief must go through /r/:id"
   if grep -nE '[^a-zA-Z_]fetch\(' src/lib/confirm-brief.ts >/dev/null; then
@@ -612,6 +634,8 @@ PY
     || fail "board tests must cover public clicks"
   grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
     || fail "board tests must cover the GET confirm sheet"
+  grep -q 'GET confirm-before-leave does not increment clicks' tests/board.test.ts \
+    || fail "board tests must cover GET confirm-before-leave"
   if grep -nE '[^a-zA-Z_]fetch\(' src/lib/week.ts src/lib/clicks.ts \
     src/lib/confirm-brief.ts src/app/r/\[id\]/route.ts >/dev/null
   then
@@ -1324,6 +1348,14 @@ PY
   [[ -z "${confirm_location}" ]] || fail "GET /r/:id must not redirect, got ${confirm_location}"
   grep -q 'data-confirm-brief=""' "${confirm_body}" \
     || fail "GET /r/:id must render the confirm sheet"
+  grep -q 'data-confirm-before-leave=""' "${confirm_body}" \
+    || fail "GET /r/:id must stamp confirm-before-leave"
+  grep -q 'class="confirm-sheet confirm-before-leave"' "${confirm_body}" \
+    || fail "GET /r/:id must use the confirm-before-leave sheet"
+  grep -q 'data-confirm-uncounted=""' "${confirm_body}" \
+    || fail "GET /r/:id must mark the uncounted preview"
+  grep -q 'Opening this flyer has not counted a hop' "${confirm_body}" \
+    || fail "GET /r/:id must say opening has not counted a hop"
   grep -q 'Confirm this brief' "${confirm_body}" \
     || fail "GET /r/:id must say Confirm this brief"
   grep -q 'stripped tracking' "${confirm_body}" \
@@ -1338,19 +1370,31 @@ PY
     || fail "confirm leave hop must be marked"
   grep -q 'public hops — not reach' "${confirm_body}" \
     || fail "confirm sheet must not dress clicks as reach"
+  grep -q 'data-clicks="0"' "${confirm_body}" \
+    || fail "GET /r/:id must show the uncounted click total"
   if grep -qE 'utm_|fbclid' "${confirm_body}"; then
     fail "GET /r/:id must not show tracking query"
   fi
-  python3 - "${confirm_body}" <<'PY' || fail "confirm sheet must put terms and URL before the leave hop"
+  if grep -qE 'data-post-after-open-seven|data-open-after-post-six' "${confirm_body}"; then
+    fail "GET /r/:id must not stamp *-after-*-N"
+  fi
+  python3 - "${confirm_body}" <<'PY' || fail "confirm sheet must put uncounted preview, terms, and URL before the leave hop"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()
+stamp = html.find('data-confirm-before-leave=""')
+uncounted = html.find('data-confirm-uncounted=""')
+copy = html.find("Opening this flyer has not counted a hop")
 terms = html.find("stripped tracking")
 url = html.find("https://example.com/clean")
 leave = html.find('data-leave-brief=""')
 bid = html.find('class="confirm-bid">$5')
-if terms < 0 or url < 0 or leave < 0 or bid < 0:
+if stamp < 0 or uncounted < 0 or copy < 0 or terms < 0 or url < 0 or leave < 0 or bid < 0:
     raise SystemExit(1)
-if not (terms < url < leave < bid):
+if not (stamp < uncounted <= copy < terms < url < leave < bid):
+    raise SystemExit(1)
+if html.count('data-confirm-before-leave=""') != 1:
+    raise SystemExit(1)
+if html.count('data-leave-brief=""') != 1:
     raise SystemExit(1)
 PY
 
