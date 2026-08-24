@@ -77,6 +77,14 @@ export function OutbidForm({
             : `Need $${floor} to take #1. $${amount} still lists, below the top. New spots start at $${MIN_BID_USD}.`
           : `Blank plaster. $${MIN_BID_USD} pastes the first flyer at #1.`}
       </p>
+      {occupied ? null : (
+        <>
+          <p className="empty" data-empty-week="true">
+            This week’s board is empty. The plaster is blank.
+          </p>
+          <p className="empty-hint">No seeded briefs. Rank is the bid.</p>
+        </>
+      )}
       <form
         id="brief-form"
         className="outbid-form"

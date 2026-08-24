@@ -200,9 +200,13 @@ if [[ -f package.json ]]; then
   grep -q 'name="bidUsd"' src/app/outbid-form.tsx || fail "form missing amount"
   grep -q 'clicks' src/lib/board-markup.tsx || fail "cards missing clicks"
   grep -q 'className="plaster"' src/lib/board-markup.tsx \
-    || fail "empty week must be blank plaster"
-  grep -q 'plaster is blank' src/lib/board-markup.tsx \
-    || fail "empty week must say the plaster is blank"
+    || fail "BoardCards empty helper must still be blank plaster"
+  grep -q 'export function OccupiedFlyers' src/lib/board-markup.tsx \
+    || fail "occupied week must compose OccupiedFlyers"
+  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+    || fail "empty week must say the plaster is blank on Claim #1"
+  grep -q 'data-empty-week="true"' src/app/outbid-form.tsx \
+    || fail "empty Claim #1 paper must carry the honest empty-week stamp"
   grep -q 'className="card' src/lib/board-markup.tsx || fail "a brief must be a flyer card"
   grep -q 'Claim #1 for' src/app/outbid-form.tsx || fail "form missing Claim #1"
   grep -q 'amount-stepper' src/app/outbid-form.tsx || fail "form missing ± amount stepper"
@@ -211,6 +215,14 @@ if [[ -f package.json ]]; then
     || fail "rank.ts must export claimNumberOneUsd"
   grep -q 'claimNumberOneUsd' src/app/board.tsx \
     || fail "board must seed the claim amount from this week’s top bid"
+  grep -q '<OccupiedFlyers listings={listings} />' src/app/board.tsx \
+    || fail "occupied week must render OccupiedFlyers"
+  if grep -q '<EmptyPlaster' src/app/board.tsx; then
+    fail "empty week must not render a second EmptyPlaster column beside Claim #1"
+  fi
+  if grep -q '<BoardCards' src/app/board.tsx; then
+    fail "empty and occupied walls must compose separately, not share BoardCards"
+  fi
   grep -q 'data-claim-amount' src/app/outbid-form.tsx \
     || fail "claim strip must expose this week’s #1 price"
   grep -q 'Need \$' src/app/outbid-form.tsx \
@@ -223,6 +235,8 @@ if [[ -f package.json ]]; then
     || fail "empty claim must use the empty-claim-first class"
   grep -q 'empty plaster still leads with Claim #1' tests/board.test.ts \
     || fail "board tests must cover empty plaster leading with Claim #1"
+  grep -q 'empty plaster stays Claim #1 with no Terms / Open leak' tests/board.test.ts \
+    || fail "board tests must cover empty plaster with no Terms / Open leak"
   grep -q 'claim strip defaults to this week' tests/board.test.ts \
     || fail "board tests must cover the live #1 claim amount"
   grep -q 'occupied wall puts flyers' tests/board.test.ts \
@@ -436,8 +450,26 @@ PY
     || fail "wall stage must mark occupied vs empty plaster"
   grep -q 'empty-claim-first' src/app/board.css \
     || fail "CSS must keep empty plaster leading with Claim #1"
+  grep -q 'wall-empty' src/app/board.css \
+    || fail "CSS must isolate blank plaster from occupied chrome"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] [data-terms]' src/app/board.css \
+    || fail "CSS must keep Terms off empty plaster"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] [data-open-brief]' src/app/board.css \
+    || fail "CSS must keep Open brief off empty plaster"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] [data-later-fact]' src/app/board.css \
+    || fail "CSS must keep later-fact \$bid off empty plaster"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .flyers' src/app/board.css \
+    || fail "CSS must keep occupied flyers off empty plaster"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .plaster' src/app/board.css \
+    || fail "CSS must keep a flyer-shaped plaster hole off empty Claim #1"
+  grep -qF 'grid-template-columns: minmax(16rem, 32rem)' src/app/board.css \
+    || fail "empty plaster CSS must collapse to Claim #1 paper"
   grep -q 'data-occupied="false"' src/app/board.css \
     || fail "CSS must keep occupied chrome off empty plaster"
+  if grep -nE 'empty-claim-plaster|data-empty-claim-plaster' src/lib/board-markup.tsx src/app/board.css src/app/board.tsx >/dev/null
+  then
+    fail "do not stamp empty-claim-plaster; compose empty vs occupied walls"
+  fi
   grep -q 'confirm-before-leave' src/app/board.css \
     || fail "CSS must mark confirm-before-leave on GET /r/:id"
   grep -q 'data-confirm-uncounted' src/app/board.css \
@@ -764,8 +796,16 @@ PY
     || fail "empty week must stamp Claim #1 first"
   grep -q 'class="paste-rail empty-claim-first"' "${home_body}" \
     || fail "empty week claim must use the empty-claim-first class"
+  grep -q 'class="wall-stage wall-empty"' "${home_body}" \
+    || fail "empty week must compose the empty wall stage"
   if grep -q 'wall-occupied' "${home_body}"; then
     fail "empty week must not use flyer-first occupied layout"
+  fi
+  if grep -q 'class="flyers"' "${home_body}"; then
+    fail "empty plaster has no flyer list"
+  fi
+  if grep -qE 'empty-claim-plaster|data-empty-claim-plaster' "${home_body}"; then
+    fail "empty plaster must stay Claim #1 by composition, not an extra stamp"
   fi
   if grep -q 'data-post-brief' "${home_body}"; then
     fail "empty week must not show a Post a brief hop"
@@ -855,11 +895,21 @@ if claim < 0 or stamp < 0 or plaster < 0 or not (claim <= stamp < plaster):
     raise SystemExit(1)
 if html.count('data-empty-claim-first=""') != 1:
     raise SystemExit(1)
+if html.count('data-empty-week="true"') != 1:
+    raise SystemExit(1)
+if 'class="wall-stage wall-empty"' not in html:
+    raise SystemExit(1)
+if 'class="plaster"' in html or 'class="flyers"' in html:
+    raise SystemExit(1)
 if "data-post-brief" in html or "data-open-brief" in html or "data-prize" in html:
     raise SystemExit(1)
 if "prize-before-price" in html or "data-later-fact" in html or "later-fact" in html:
     raise SystemExit(1)
+if 'data-terms=""' in html or "terms-label" in html or "data-open-after-terms" in html:
+    raise SystemExit(1)
 if "Post a brief" in html or "Open brief" in html:
+    raise SystemExit(1)
+if "empty-claim-plaster" in html or 'class="flyers"' in html:
     raise SystemExit(1)
 PY
   grep -q 'Outbid' src/app/outbid-form.tsx || fail "form missing Outbid"
@@ -948,6 +998,9 @@ PY
   fi
   if grep -q 'empty-claim-first' "${listed_body}"; then
     fail "occupied week must not use the empty-claim-first class"
+  fi
+  if grep -q 'wall-empty' "${listed_body}"; then
+    fail "occupied week must not use the empty wall stage"
   fi
   grep -q 'data-open-brief=""' "${listed_body}" \
     || fail "paid flyer must expose a labeled Open brief hop"

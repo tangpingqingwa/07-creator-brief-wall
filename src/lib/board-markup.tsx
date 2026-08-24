@@ -32,19 +32,7 @@ function PostBriefHop() {
   );
 }
 
-export function BoardCards({ listings }: { listings: RankedListing[] }) {
-  if (listings.length === 0) {
-    return (
-      <section className="plaster" aria-label="This week’s wall">
-        <p className="empty" data-empty-week="true">
-          This week’s board is empty. The plaster is blank.
-        </p>
-        <p className="empty-hint">
-          No seeded briefs. Rank is the bid.
-        </p>
-      </section>
-    );
-  }
+export function OccupiedFlyers({ listings }: { listings: RankedListing[] }) {
   return (
     <div className="flyers">
       <ol className="cards" aria-label="Paid briefs this week">
@@ -112,6 +100,20 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
   );
 }
 
+export function BoardCards({ listings }: { listings: RankedListing[] }) {
+  if (listings.length === 0) {
+    return (
+      <section className="plaster" aria-label="This week’s wall">
+        <p className="empty" data-empty-week="true">
+          This week’s board is empty. The plaster is blank.
+        </p>
+        <p className="empty-hint">No seeded briefs. Rank is the bid.</p>
+      </section>
+    );
+  }
+  return <OccupiedFlyers listings={listings} />;
+}
+
 export function BoardChrome({
   children,
   weekId,
@@ -136,7 +138,9 @@ export function BoardChrome({
         </nav>
       </header>
       <div
-        className={occupied ? "wall-stage wall-occupied" : "wall-stage"}
+        className={
+          occupied ? "wall-stage wall-occupied" : "wall-stage wall-empty"
+        }
         data-occupied={occupied ? "true" : "false"}
       >
         {children}
