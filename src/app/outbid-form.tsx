@@ -140,16 +140,18 @@ export function OutbidForm({
       <p className="claim-note">
         {occupied
           ? takesLead
-            ? `Need $${floor} to take #1. Pay $${amount} and this flyer is first.`
-            : `Need $${floor} to take #1. $${amount} still lists, below the top. New spots start at $${MIN_BID_USD}.`
-          : `Blank plaster. $${MIN_BID_USD} pastes the first flyer at #1.`}
+            ? `Need $${floor} to take #1. Pay $${amount} and this flyer is first. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.`
+            : `Need $${floor} to take #1. $${amount} still lists, below the top. New spots start at $${MIN_BID_USD}. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.`
+          : `Blank plaster. $${MIN_BID_USD} pastes the first flyer at #1. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.`}
       </p>
       {occupied ? null : (
         <>
           <p className="empty" data-empty-week="true">
             This week’s board is empty. The plaster is blank.
           </p>
-          <p className="empty-hint">No seeded briefs. Rank is the bid.</p>
+          <p className="empty-hint">
+            No seeded briefs. Rank is the bid. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
+          </p>
         </>
       )}
       <form

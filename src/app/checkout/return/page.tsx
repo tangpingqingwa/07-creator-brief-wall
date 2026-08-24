@@ -21,7 +21,10 @@ export default async function CheckoutReturnPage({
     return (
       <main className="board" data-return="cancel">
         <h1>Checkout canceled</h1>
-        <p>No rank change. An unpaid checkout does not list.</p>
+        <p>
+          No rank change. An unpaid checkout does not list. Rank updates only
+          after Polar reports paid. An abandoned brief is not Terms as #1.
+        </p>
         <p>
           <a href="/">Back to the board</a>
         </p>
@@ -35,7 +38,7 @@ export default async function CheckoutReturnPage({
       <p>
         {result.listing
           ? `${result.listing.brand} is listed at $${result.listing.bidUsd}.`
-          : "Payment completed. Rank updates only after paid."}
+          : "Payment completed. Rank updates only after Polar reports paid."}
       </p>
       <p>
         <a href="/">Back to the board</a>

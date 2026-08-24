@@ -1,5 +1,10 @@
 import type { AppDb, ListingRow } from "./db";
-import { listingFromRow, rankListings, type RankedListing } from "./rank";
+import {
+  isPolarPaidListing,
+  listingFromRow,
+  rankListings,
+  type RankedListing,
+} from "./rank";
 
 /**
  * Public wall window is rolling last 7 days from paid placement.
@@ -125,8 +130,23 @@ export function isLiveWeekId(
   return listingWeekId === utcWeekId(now);
 }
 
+/** Polar (or the fixture) wrote a completed payment for this listing. */
+export function hasCompletedPolarPayment(
+  db: AppDb,
+  listingId: string,
+): boolean {
+  const row = db
+    .prepare(
+      `SELECT 1 AS ok FROM payments
+       WHERE listing_id = ? AND status = 'completed' LIMIT 1`,
+    )
+    .get(listingId) as { ok: number } | undefined;
+  return Boolean(row);
+}
+
 /**
- * Live board rows: paid `created_at` in the rolling last 7 days.
+ * Live board rows: Polar-paid `created_at` in the rolling last 7 days.
+ * Unpaid / abandoned checkout never occupies the plaster.
  * `weekId` stays an audit label. Rows stay in the table after they age out.
  */
 export function listLiveBoard(
@@ -136,12 +156,23 @@ export function listLiveBoard(
   const since = rollingWeekStart(now).toISOString();
   const until = now.toISOString();
   const rows = db
-    .prepare(`${LISTING_SELECT} WHERE created_at >= ? AND created_at <= ?`)
+    .prepare(
+      `${LISTING_SELECT}
+       WHERE created_at >= ? AND created_at <= ?
+         AND EXISTS (
+           SELECT 1 FROM payments
+           WHERE payments.listing_id = listings.id
+             AND payments.status = 'completed'
+         )`,
+    )
     .all(since, until) as ListingRow[];
   return rankListings(
     rows
       .map(listingFromRow)
-      .filter((row) => bidInRollingWeek(row.createdAt, now)),
+      .filter(
+        (row) =>
+          isPolarPaidListing(row) && bidInRollingWeek(row.createdAt, now),
+      ),
   );
 }
 

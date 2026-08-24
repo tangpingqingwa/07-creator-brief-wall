@@ -80,9 +80,31 @@ function parsePlatforms(raw: string | null): Platform[] | undefined {
   }
 }
 
-/** Rank is the bid. Equal bids: older createdAt, then lower id. */
+/**
+ * Polar (or the fixture) has reported paid. Empty / epoch / unpaid
+ * checkout never ranks and must not paint Terms as #1.
+ */
+export function isPolarPaidListing(
+  listing: Pick<Listing, "createdAt">,
+): boolean {
+  const paidAt = listing.createdAt?.trim() ?? "";
+  if (!paidAt) {
+    return false;
+  }
+  const ms = Date.parse(paidAt);
+  return Number.isFinite(ms) && ms > Date.parse("1970-01-01T00:00:00.000Z");
+}
+
+/** Paid rows only. Unpaid or abandoned checkouts never take a rank. */
+export function paidListings<T extends Pick<Listing, "createdAt">>(
+  listings: readonly T[],
+): T[] {
+  return listings.filter(isPolarPaidListing);
+}
+
+/** Rank is the bid. Equal bids: older createdAt, then lower id. Polar-paid only. */
 export function rankListings(listings: readonly Listing[]): RankedListing[] {
-  const ordered = [...listings].sort((a, b) => {
+  const ordered = [...paidListings(listings)].sort((a, b) => {
     if (a.bidUsd !== b.bidUsd) {
       return b.bidUsd - a.bidUsd;
     }

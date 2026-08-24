@@ -158,6 +158,10 @@ if [[ -f package.json ]]; then
   [[ ${test_status} -eq 0 ]] || fail "unit tests failed"
   grep -Eq 'tests[[:space:]]+[1-9][0-9]*' "${test_log}" \
     || fail "test runner reported 0 tests"
+  grep -q 'unpaid stays off the plaster wall' "${test_log}" \
+    || fail "unpaid stays off the plaster wall leftover test did not run"
+  grep -q 'No Terms until Polar reports paid' "${test_log}" \
+    || fail "unpaid-off Polar paid leftover test did not run"
   rm -f "${test_log}"
 
   echo "== skeleton files =="
@@ -215,8 +219,8 @@ if [[ -f package.json ]]; then
     || fail "rank.ts must export claimNumberOneUsd"
   grep -q 'claimNumberOneUsd' src/app/board.tsx \
     || fail "board must seed the claim amount from this week’s top bid"
-  grep -q '<OccupiedFlyers listings={listings} />' src/app/board.tsx \
-    || fail "occupied week must render OccupiedFlyers"
+  grep -q '<OccupiedFlyers listings={paid} />' src/app/board.tsx \
+    || fail "occupied week must render OccupiedFlyers from Polar-paid rows"
   if grep -q '<EmptyPlaster' src/app/board.tsx; then
     fail "empty week must not render a second EmptyPlaster column beside Claim #1"
   fi
@@ -848,6 +852,104 @@ PY
   grep -q 'data-later-flyer' tests/board.test.ts \
     || fail "board tests must stamp later flyers"
   grep -q 'older' tests/rank.test.ts || fail "rank tests missing older-wins-ties"
+  echo "== UX: unpaid stays off the plaster wall — No Terms until Polar reports paid =="
+  grep -q 'export function isPolarPaidListing' src/lib/rank.ts \
+    || fail "rank.ts must export isPolarPaidListing"
+  grep -q 'export function paidListings' src/lib/rank.ts \
+    || fail "rank.ts must drop unpaid Polar checkout before ranking"
+  grep -q 'paidListings(listings)' src/lib/rank.ts \
+    || fail "rankListings must rank Polar-paid rows only"
+  grep -q 'const paid = rankListings(listings)' src/app/board.tsx \
+    || fail "board occupancy must compose Polar-paid rows only"
+  grep -q '<OccupiedFlyers listings={paid} />' src/app/board.tsx \
+    || fail "occupied flyers must compose Polar-paid rows only"
+  grep -q 'if (!isPolarPaidListing(listing))' src/lib/board-markup.tsx \
+    || fail "flyer cards must not print unpaid Terms as #1"
+  grep -q 'data-polar-paid' src/lib/board-markup.tsx \
+    || fail "paid flyer must stamp Polar-paid occupancy"
+  grep -q 'hasCompletedPolarPayment' src/lib/week.ts \
+    || fail "live board must require a completed Polar payment"
+  grep -q "payments.status = 'completed'" src/lib/week.ts \
+    || fail "live board SQL must require a completed Polar payment"
+  grep -q 'isPolarPaidListing' src/lib/clicks.ts \
+    || fail "GET /r/:id must refuse unpaid Polar checkout"
+  grep -q 'hasCompletedPolarPayment' src/lib/clicks.ts \
+    || fail "GET /r/:id must require a completed Polar payment"
+  grep -q 'Unpaid checkout stays off the board until Polar reports paid' src/app/outbid-form.tsx \
+    || fail "claim form must say unpaid checkout stays off the board"
+  grep -q 'An abandoned brief is not Terms as #1' src/app/outbid-form.tsx \
+    || fail "claim form must say an abandoned brief is not Terms as #1"
+  grep -q 'Unpaid checkout stays off the board until Polar reports paid' src/lib/board-markup.tsx \
+    || fail "empty plaster must say unpaid checkout stays off the board"
+  grep -q 'An abandoned brief is not Terms as #1' src/lib/board-markup.tsx \
+    || fail "empty plaster must say an abandoned brief is not Terms as #1"
+  grep -qF '.wall-occupied .card:not([data-polar-paid])' src/app/board.css \
+    || fail "CSS must hide unpaid leftover cards on occupied plaster"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .card:not([data-polar-paid])' src/app/board.css \
+    || fail "CSS must hide unpaid leftover cards on empty plaster"
+  python3 - src/app/board.css <<'PY' || fail "unpaid leftover CSS must hide unpaid cards, not recolor the plaster"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+block = re.search(
+    r"\.wall-occupied \.card:not\(\[data-polar-paid\]\),\s*\.wall-stage\.wall-empty\[data-occupied=\"false\"\] \.card:not\(\[data-polar-paid\]\)\s*\{([^}]*)\}",
+    css,
+    re.S,
+)
+if not block:
+    raise SystemExit(1)
+if "display: none" not in block.group(1):
+    raise SystemExit(1)
+if "background:" in block.group(1) or "var(--bid-ink)" in block.group(1):
+    raise SystemExit(1)
+PY
+  if grep -qE 'data-unpaid-off|data-unpaid-off-board|data-post-after-open-seven|data-open-after-post-six-stamp' \
+    src/lib/board-markup.tsx src/app/board.tsx src/app/outbid-form.tsx src/app/board.css src/lib/rank.ts src/lib/week.ts src/lib/clicks.ts
+  then
+    fail "unpaid-off occupancy must not add another named hop"
+  fi
+  grep -q 'unpaid stays off the plaster wall' tests/board.test.ts \
+    || fail "board tests must keep unpaid occupancy off the plaster wall"
+  grep -q 'No Terms until Polar reports paid' tests/board.test.ts \
+    || fail "board tests must wait for Polar paid before Terms as #1"
+  grep -q 'unpaid stays off the plaster wall' tests/rank.test.ts \
+    || fail "rank tests must keep unpaid occupancy off the plaster wall"
+  grep -q 'data-prize' src/lib/board-markup.tsx \
+    || fail "unpaid-off cut must keep occupied Terms as the prize"
+  grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
+    || fail "unpaid-off cut must keep occupied Open brief the first click"
+  grep -q 'Open brief' src/lib/board-markup.tsx \
+    || fail "unpaid-off cut must keep occupied Open brief"
+  grep -q 'Post a brief' src/lib/board-markup.tsx \
+    || fail "unpaid-off cut must keep occupied Post a brief"
+  grep -q 'Claim #1' src/app/outbid-form.tsx \
+    || fail "unpaid-off cut must keep Claim #1"
+  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
+    || fail "unpaid-off cut must keep empty later-write brief URL"
+  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+    || fail "unpaid-off cut must keep blank plaster"
+  grep -q 'amount-field' src/app/outbid-form.tsx \
+    || fail "unpaid-off cut must keep the dashed amount"
+  grep -q 'className="step"' src/app/outbid-form.tsx \
+    || fail "unpaid-off cut must keep ± steppers"
+  grep -q 'Outbid' src/app/outbid-form.tsx \
+    || fail "unpaid-off cut must keep Outbid"
+  grep -q 'className="plaster"' src/lib/board-markup.tsx \
+    || fail "unpaid-off cut must not rebuild the plaster wall"
+  grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
+    || fail "unpaid-off cut must keep occupied rolling last-7-days"
+  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx; then
+    fail "unpaid-off must not rebuild the plaster wall into a long form"
+  fi
+  if ! awk '
+    /wall-occupied \.card-lead \.terms\.prize-before-price \.terms-copy/ { prize=NR }
+    /wall-occupied \.card \.brief-url\[data-first-click="open"\]/ { open=NR }
+    /Empty plaster: Brief URL is a later write after Claim #1 \/ Outbid/ { empty=NR }
+    /Unpaid \/ abandoned Polar checkout never paints Terms as #1/ { unpaid=NR }
+    END { exit !(prize && open && empty && unpaid && prize < open && open < empty && empty < unpaid) }
+  ' src/app/board.css; then
+    fail "unpaid leftover CSS must sit after occupied prize / Open / empty later-write"
+  fi
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach|\bcpm\b' \
     src/lib/board-markup.tsx src/app/outbid-form.tsx src/lib/rank.ts src/app/board.css \
     src/lib/confirm-brief.ts
@@ -892,6 +994,8 @@ PY
     || fail "return page must show canceled copy"
   grep -q 'unpaid' tests/checkout.test.ts \
     || fail "checkout tests must cover unpaid sessions"
+  grep -q 'unpaid Polar checkout stays off the plaster until Polar reports paid' tests/checkout.test.ts \
+    || fail "checkout tests must keep unpaid Polar checkout off the plaster"
   grep -q 'FakePolarPort' tests/checkout.test.ts \
     || fail "checkout tests must use FakePolarPort"
   if grep -nE 'fetch\(|polar\.sh|api\.polar' src/app/api/checkout/route.ts \
@@ -1390,8 +1494,21 @@ PY
   curl -sS -o "${unpaid_home}" "http://127.0.0.1:${port}/"
   grep -q 'data-empty-week="true"' "${unpaid_home}" \
     || fail "unpaid checkout must not list"
+  grep -q 'data-occupied="false"' "${unpaid_home}" \
+    || fail "unpaid checkout must leave empty plaster"
+  grep -q 'Claim #1' "${unpaid_home}" \
+    || fail "unpaid leftover must still lead with Claim #1"
+  grep -q 'Then the brief URL' "${unpaid_home}" \
+    || fail "unpaid leftover must keep the later brief URL write"
+  grep -q 'Unpaid checkout stays off the board until Polar reports paid' "${unpaid_home}" \
+    || fail "unpaid leftover must say Polar paid is required"
+  grep -q 'An abandoned brief is not Terms as #1' "${unpaid_home}" \
+    || fail "unpaid leftover must say an abandoned brief is not Terms as #1"
   if grep -q 'Ghost' "${unpaid_home}"; then
     fail "unpaid checkout leaked Ghost onto the board"
+  fi
+  if grep -qE 'data-prize|data-open-brief|Open brief|Post a brief|data-first-click="open"|data-unpaid-off' "${unpaid_home}"; then
+    fail "unpaid leftover must not paint Terms as #1"
   fi
 
   paid_headers="$(mktemp)"

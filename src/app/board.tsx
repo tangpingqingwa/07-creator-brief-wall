@@ -1,5 +1,9 @@
 import React from "react";
-import { claimNumberOneUsd, type RankedListing } from "../lib/rank";
+import {
+  claimNumberOneUsd,
+  rankListings,
+  type RankedListing,
+} from "../lib/rank";
 import { BoardChrome, OccupiedFlyers } from "../lib/board-markup";
 import { OutbidForm } from "./outbid-form";
 
@@ -10,8 +14,9 @@ export function Board({
   listings: RankedListing[];
   weekId?: string;
 }) {
-  const topBidUsd = listings[0]?.bidUsd;
-  const occupied = listings.length > 0;
+  const paid = rankListings(listings);
+  const topBidUsd = paid[0]?.bidUsd;
+  const occupied = paid.length > 0;
   const claim = (
     <OutbidForm
       defaultAmount={claimNumberOneUsd(topBidUsd)}
@@ -22,7 +27,7 @@ export function Board({
     <BoardChrome weekId={weekId} occupied={occupied}>
       {occupied ? (
         <>
-          <OccupiedFlyers listings={listings} />
+          <OccupiedFlyers listings={paid} />
           {claim}
         </>
       ) : (

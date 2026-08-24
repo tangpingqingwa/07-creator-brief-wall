@@ -1,5 +1,9 @@
 import React, { type ReactNode } from "react";
-import type { RankedListing } from "./rank";
+import {
+  isPolarPaidListing,
+  rankListings,
+  type RankedListing,
+} from "./rank";
 
 function hostLabel(url: string): string {
   try {
@@ -73,6 +77,9 @@ function OpenBriefHop({ listing }: { listing: RankedListing }) {
 }
 
 function OccupiedLeadFlyer({ listing }: { listing: RankedListing }) {
+  if (!isPolarPaidListing(listing)) {
+    return null;
+  }
   const lead = true;
   const hop = <OpenBriefHop listing={listing} />;
   return (
@@ -82,6 +89,7 @@ function OccupiedLeadFlyer({ listing }: { listing: RankedListing }) {
       data-id={listing.id}
       data-brand={listing.brand}
       data-bid={listing.bidUsd}
+      data-polar-paid=""
     >
       <span className="tape" aria-hidden="true" />
       <span className="rank">#{listing.rank}</span>
@@ -108,6 +116,9 @@ function OccupiedLeadFlyer({ listing }: { listing: RankedListing }) {
 }
 
 function OccupiedLaterFlyer({ listing }: { listing: RankedListing }) {
+  if (!isPolarPaidListing(listing)) {
+    return null;
+  }
   const lead = false;
   const hop = <OpenBriefHop listing={listing} />;
   return (
@@ -118,6 +129,7 @@ function OccupiedLaterFlyer({ listing }: { listing: RankedListing }) {
       data-brand={listing.brand}
       data-bid={listing.bidUsd}
       data-later-flyer=""
+      data-polar-paid=""
     >
       <p className="later-rankline">
         <span className="rank">#{listing.rank}</span>
@@ -142,19 +154,21 @@ function OccupiedLaterFlyer({ listing }: { listing: RankedListing }) {
 }
 
 export function OccupiedFlyers({ listings }: { listings: RankedListing[] }) {
-  const lead = listings.find((listing) => listing.rank === 1);
-  const later = listings.filter((listing) => listing.rank !== 1);
+  const paid = rankListings(listings);
+  const lead = paid.find((listing) => listing.rank === 1);
+  const later = paid.filter((listing) => listing.rank !== 1);
+  if (!lead) {
+    return null;
+  }
   return (
     <div className="flyers">
-      {lead ? (
-        <ol
-          className="cards cards-lead"
-          aria-label="Paid briefs this week"
-          data-rolling-week=""
-        >
-          <OccupiedLeadFlyer key={lead.id} listing={lead} />
-        </ol>
-      ) : null}
+      <ol
+        className="cards cards-lead"
+        aria-label="Paid briefs this week"
+        data-rolling-week=""
+      >
+        <OccupiedLeadFlyer key={lead.id} listing={lead} />
+      </ol>
       {later.length > 0 ? (
         <section className="later-pack" data-later-pack="">
           <p className="later-note">These flyers are not this week’s #1 prize</p>
@@ -171,17 +185,20 @@ export function OccupiedFlyers({ listings }: { listings: RankedListing[] }) {
 }
 
 export function BoardCards({ listings }: { listings: RankedListing[] }) {
-  if (listings.length === 0) {
+  const paid = rankListings(listings);
+  if (paid.length === 0) {
     return (
       <section className="plaster" aria-label="This week’s wall">
         <p className="empty" data-empty-week="true">
           This week’s board is empty. The plaster is blank.
         </p>
-        <p className="empty-hint">No seeded briefs. Rank is the bid.</p>
+        <p className="empty-hint">
+          No seeded briefs. Rank is the bid. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
+        </p>
       </section>
     );
   }
-  return <OccupiedFlyers listings={listings} />;
+  return <OccupiedFlyers listings={paid} />;
 }
 
 export function BoardChrome({
