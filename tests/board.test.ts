@@ -2060,6 +2060,94 @@ test("empty plaster stays Claim #1 with no Terms / Open leak", () => {
   assert.doesNotMatch(occupied, FORBIDDEN);
 });
 
+test("empty plaster stays Claim #1 with no later-open / cards-later leak", () => {
+  const css = readFileSync(join(process.cwd(), "src", "app", "board.css"), "utf8");
+  const markup = readFileSync(
+    join(process.cwd(), "src", "lib", "board-markup.tsx"),
+    "utf8",
+  );
+  const board = readFileSync(join(process.cwd(), "src", "app", "board.tsx"), "utf8");
+  assert.match(css, /\.wall-occupied \.cards-later/);
+  assert.match(
+    css,
+    /\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]/,
+  );
+  assert.match(
+    css,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.cards-later/,
+  );
+  assert.match(
+    css,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \[data-later-open\]/,
+  );
+  assert.match(
+    css,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.later-open/,
+  );
+  assert.match(css, /\.wall-occupied a\.post-brief\.post-after-open \{/);
+  assert.doesNotMatch(css, /^a\.post-brief\.post-after-open \{/m);
+  assert.doesNotMatch(css, /^[^.\n]*\.cards-later \{/m);
+  assert.doesNotMatch(css, /^[^.\n]*\.brief-url\.later-open/m);
+  assert.doesNotMatch(board, /OccupiedFlyers listings=\{listings\} \/>[\s\S]*listings\.length === 0/);
+  assert.match(board, /occupied \? \(/);
+  assert.match(markup, /className="cards cards-later"/);
+  assert.doesNotMatch(markup, /empty-claim-plaster/);
+  assert.doesNotMatch(css, /empty-claim-plaster/);
+  assert.doesNotMatch(css, /data-post-after-open-seven|data-open-after-post-six/);
+
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.match(empty, /class="wall-stage wall-empty"/);
+  assert.match(empty, /data-occupied="false"/);
+  assert.match(empty, /Claim #1 for/);
+  assert.match(empty, /Blank plaster/);
+  assert.match(empty, /data-empty-claim-first=""/);
+  assert.doesNotMatch(empty, /class="flyers"/);
+  assert.doesNotMatch(empty, /cards-later/);
+  assert.doesNotMatch(empty, /cards-lead/);
+  assert.doesNotMatch(empty, /data-later-open/);
+  assert.doesNotMatch(empty, /later-open/);
+  assert.doesNotMatch(empty, /data-open-brief/);
+  assert.doesNotMatch(empty, /Open brief/);
+  assert.doesNotMatch(empty, /data-terms=/);
+  assert.doesNotMatch(empty, /class="terms-label"/);
+  assert.doesNotMatch(empty, /Post a brief/);
+  assert.doesNotMatch(empty, /data-post-brief/);
+  assert.doesNotMatch(empty, /prize-before-price/);
+  assert.doesNotMatch(empty, /data-later-fact/);
+  assert.doesNotMatch(empty, FORBIDDEN);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+        listing({
+          id: "lst_two",
+          brand: "Two Co",
+          terms: "later rank",
+          bidUsd: 5,
+          createdAt: "2026-08-18T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  assert.match(occupied, /class="wall-stage wall-occupied"/);
+  assert.match(occupied, /class="cards cards-later"/);
+  assert.match(occupied, /data-later-open=""/);
+  assert.match(occupied, /class="brief-url later-open"/);
+  assert.match(occupied, /data-first-click="open"/);
+  assert.doesNotMatch(occupied, /wall-empty/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+});
+
 test("card has brand, terms, $, clicks; no follower fields", () => {
   const html = renderBoard([
     listing({

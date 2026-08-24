@@ -237,6 +237,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover empty plaster leading with Claim #1"
   grep -q 'empty plaster stays Claim #1 with no Terms / Open leak' tests/board.test.ts \
     || fail "board tests must cover empty plaster with no Terms / Open leak"
+  grep -q 'empty plaster stays Claim #1 with no later-open / cards-later leak' tests/board.test.ts \
+    || fail "board tests must cover empty plaster with no later-open leak"
   grep -q 'claim strip defaults to this week' tests/board.test.ts \
     || fail "board tests must cover the live #1 claim amount"
   grep -q 'occupied wall puts flyers' tests/board.test.ts \
@@ -403,7 +405,7 @@ if [[ -f package.json ]]; then
     || fail "CSS must enlarge #1 Terms over \$bid"
   grep -q 'card-lead .terms.prize-before-price .terms-copy' src/app/board.css \
     || fail "CSS must enlarge only the #1 Terms copy"
-  grep -q 'card-lead .bid' src/app/board.css \
+  grep -q 'wall-occupied .card-lead .bid' src/app/board.css \
     || fail "CSS must keep #1 \$bid quieter than Terms"
   grep -q 'data-later-fact' src/lib/board-markup.tsx \
     || fail "occupied #1 flyer must stamp \$bid as a later fact"
@@ -411,7 +413,7 @@ if [[ -f package.json ]]; then
     || fail "occupied #1 \$bid must use the later-fact class"
   grep -q 'later-fact' src/app/board.css \
     || fail "CSS must keep #1 \$bid a later fact beside Terms"
-  grep -qF 'card-lead .bid.later-fact[data-later-fact]' src/app/board.css \
+  grep -qF 'wall-occupied .card-lead .bid.later-fact[data-later-fact]' src/app/board.css \
     || fail "CSS must mute #1 \$bid so it cannot shout beside Terms"
   grep -q 'function OpenBriefHop' src/lib/board-markup.tsx \
     || fail "occupied Open must compose OpenBriefHop, not stamp a mute class"
@@ -423,17 +425,21 @@ if [[ -f package.json ]]; then
     || fail "later-rank Open brief must mark data-later-open"
   grep -q 'brief-url later-open' src/lib/board-markup.tsx \
     || fail "later-rank Open brief must use the later-open hop"
-  grep -qF '.cards-later .brief-url.later-open[data-later-open]' src/app/board.css \
-    || fail "CSS must keep later-rank Open quieter than #1 Open"
+  grep -qF '.wall-occupied .cards-later .brief-url.later-open[data-later-open]' src/app/board.css \
+    || fail "CSS must keep later-rank Open quieter than #1 Open on occupied plaster"
   grep -qF '.wall-stage.wall-empty[data-occupied="false"] [data-later-open]' src/app/board.css \
     || fail "CSS must keep later-rank Open off empty plaster"
   grep -qF '.wall-stage.wall-empty[data-occupied="false"] .cards-later' src/app/board.css \
     || fail "CSS must keep later-rank flyers off empty plaster"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .later-open' src/app/board.css \
+    || fail "CSS must keep later-open hop off empty plaster"
+  grep -qF '.wall-occupied .cards-later' src/app/board.css \
+    || fail "later-rank CSS must stay on occupied plaster"
   if grep -nE 'open-later-rank|data-later-rank' src/lib/board-markup.tsx src/app/board.css >/dev/null
   then
     fail "do not stamp open-later-rank; compose later-rank Open as a quieter hop"
   fi
-  grep -q 'card-lead .clicks' src/app/board.css \
+  grep -q 'wall-occupied .card-lead .clicks' src/app/board.css \
     || fail "CSS must keep #1 clicks quieter than Terms"
   python3 - src/app/board.css <<'PY' || fail "#1 Terms copy must be larger than \$bid and clicks"
 import re
@@ -446,26 +452,26 @@ def size(pattern):
         raise SystemExit(1)
     return float(match.group(1))
 
-prize = size(r"\.card-lead \.terms\.prize-before-price \.terms-copy\s*\{[^}]*font-size:\s*([\d.]+)rem")
-bid = size(r"\.card-lead \.bid\s*\{[^}]*font-size:\s*([\d.]+)rem")
-clicks = size(r"\.card-lead \.clicks\s*\{[^}]*font-size:\s*([\d.]+)rem")
+prize = size(r"\.wall-occupied \.card-lead \.terms\.prize-before-price \.terms-copy\s*\{[^}]*font-size:\s*([\d.]+)rem")
+bid = size(r"\.wall-occupied \.card-lead \.bid\s*\{[^}]*font-size:\s*([\d.]+)rem")
+clicks = size(r"\.wall-occupied \.card-lead \.clicks\s*\{[^}]*font-size:\s*([\d.]+)rem")
 if not (prize > bid and prize > clicks):
     raise SystemExit(1)
 if "color: var(--muted)" not in re.search(
-    r"\.card-lead \.bid\.later-fact\[data-later-fact\]\s*\{[^}]*\}", css, re.S
+    r"\.wall-occupied \.card-lead \.bid\.later-fact\[data-later-fact\]\s*\{[^}]*\}", css, re.S
 ).group(0):
     raise SystemExit(1)
 if "color: var(--bid)" in re.search(
-    r"\.card-lead \.bid\.later-fact\[data-later-fact\]\s*\{[^}]*\}", css, re.S
+    r"\.wall-occupied \.card-lead \.bid\.later-fact\[data-later-fact\]\s*\{[^}]*\}", css, re.S
 ).group(0):
     raise SystemExit(1)
-later_open = size(r"\.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*font-size:\s*([\d.]+)rem")
-base_open = size(r"\.card \.brief-url \{\n[^}]*font-size:\s*([\d.]+)rem")
-lead_open = size(r"\.card \.brief-url\.open-after-post-five\s*\{[^}]*font-size:\s*([\d.]+)rem")
+later_open = size(r"\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*font-size:\s*([\d.]+)rem")
+base_open = size(r"\.wall-occupied \.card \.brief-url \{\n[^}]*font-size:\s*([\d.]+)rem")
+lead_open = size(r"\.wall-occupied \.card \.brief-url\.open-after-post-five\s*\{[^}]*font-size:\s*([\d.]+)rem")
 if not (later_open < base_open and later_open < lead_open):
     raise SystemExit(1)
 later_block = re.search(
-    r"\.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*\}", css, re.S
+    r"\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*\}", css, re.S
 )
 if later_block is None:
     raise SystemExit(1)
@@ -476,6 +482,8 @@ if "color: var(--ink)" in later_block.group(0):
 if "border: 0" not in later_block.group(0):
     raise SystemExit(1)
 if "background: transparent" not in later_block.group(0):
+    raise SystemExit(1)
+if re.search(r"(?m)^(?:a\.post-brief|\.cards-later |\.card \.brief-url)", css):
     raise SystemExit(1)
 PY
   grep -q '"rank brand brand"' src/app/board.css \
@@ -925,6 +933,12 @@ PY
   if grep -q 'cards-later' "${home_body}"; then
     fail "empty plaster has no later-rank flyer list"
   fi
+  if grep -q 'cards-lead' "${home_body}"; then
+    fail "empty plaster has no lead flyer list"
+  fi
+  if grep -q 'class="brief-url later-open"' "${home_body}"; then
+    fail "empty plaster has no flyer; do not recede a later-rank Open"
+  fi
   if grep -q 'data-open-after-terms' "${home_body}"; then
     fail "empty plaster has no flyer; do not show Open brief after Terms"
   fi
@@ -955,6 +969,8 @@ if "data-post-brief" in html or "data-open-brief" in html or "data-prize" in htm
 if "prize-before-price" in html or "data-later-fact" in html or "later-fact" in html:
     raise SystemExit(1)
 if 'data-later-open=""' in html or 'class="brief-url later-open"' in html or "cards-later" in html:
+    raise SystemExit(1)
+if "cards-lead" in html:
     raise SystemExit(1)
 if 'data-terms=""' in html or "terms-label" in html or "data-open-after-terms" in html:
     raise SystemExit(1)

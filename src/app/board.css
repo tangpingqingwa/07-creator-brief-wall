@@ -105,7 +105,7 @@ body {
 }
 
 /* Post a brief follows Open brief. It is not the first click on occupied plaster. */
-a.post-brief.post-after-open {
+.wall-occupied a.post-brief.post-after-open {
   justify-self: start;
   display: inline-flex;
   flex-direction: column;
@@ -123,7 +123,7 @@ a.post-brief.post-after-open {
   text-decoration: none;
 }
 
-a.post-brief .post-after-note {
+.wall-occupied a.post-brief .post-after-note {
   font-size: 0.62rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -131,16 +131,16 @@ a.post-brief .post-after-note {
   color: var(--muted);
 }
 
-a.post-brief .post-label {
+.wall-occupied a.post-brief .post-label {
   border-bottom: 1px solid currentColor;
   text-underline-offset: 0.18em;
 }
 
-a.post-brief:hover .post-label {
+.wall-occupied a.post-brief:hover .post-label {
   border-bottom-width: 2px;
 }
 
-a.post-brief .post-dest {
+.wall-occupied a.post-brief .post-dest {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 400;
@@ -149,42 +149,42 @@ a.post-brief .post-dest {
 }
 
 /* Same Post a brief hop, concentrated after Open wins the first click. */
-a.post-brief.post-after-open-first {
+.wall-occupied a.post-brief.post-after-open-first {
   padding: 0.5rem 0.7rem 0.55rem;
   border-width: 2px;
   font-size: 1.12rem;
 }
 
 /* Same Post a brief hop, concentrated after Open is re-concentrated. */
-a.post-brief.post-after-open-two {
+.wall-occupied a.post-brief.post-after-open-two {
   padding: 0.62rem 0.88rem 0.68rem;
   border-width: 3px;
   font-size: 1.22rem;
 }
 
 /* Same Post a brief hop, concentrated after Open is re-concentrated again. */
-a.post-brief.post-after-open-three {
+.wall-occupied a.post-brief.post-after-open-three {
   padding: 0.74rem 1.05rem 0.8rem;
   border-width: 4px;
   font-size: 1.32rem;
 }
 
 /* Same Post a brief hop, concentrated after Open is re-concentrated again under louder Open. */
-a.post-brief.post-after-open-four {
+.wall-occupied a.post-brief.post-after-open-four {
   padding: 0.86rem 1.22rem 0.92rem;
   border-width: 5px;
   font-size: 1.42rem;
 }
 
 /* Same Post a brief hop, concentrated after Open is re-concentrated again under louder Open brief. */
-a.post-brief.post-after-open-five {
+.wall-occupied a.post-brief.post-after-open-five {
   padding: 0.98rem 1.39rem 1.04rem;
   border-width: 6px;
   font-size: 1.52rem;
 }
 
 /* Same Post a brief hop, concentrated after Open is re-concentrated again under louder Open brief hop. */
-a.post-brief.post-after-open-six {
+.wall-occupied a.post-brief.post-after-open-six {
   padding: 1.1rem 1.56rem 1.16rem;
   border-width: 7px;
   font-size: 1.62rem;
@@ -218,6 +218,7 @@ a.post-brief.post-after-open-six {
 .wall-stage.wall-empty[data-occupied="false"] .plaster,
 .wall-stage.wall-empty[data-occupied="false"] .card,
 .wall-stage.wall-empty[data-occupied="false"] .cards-later,
+.wall-stage.wall-empty[data-occupied="false"] .cards-lead,
 .wall-stage.wall-empty[data-occupied="false"] [data-post-brief],
 .wall-stage.wall-empty[data-occupied="false"] [data-open-brief],
 .wall-stage.wall-empty[data-occupied="false"] [data-open-after-terms],
@@ -391,7 +392,7 @@ a.post-brief.post-after-open-six {
   color: var(--muted);
 }
 
-.cards {
+.wall-occupied .cards {
   list-style: none;
   margin: 0;
   padding: 0.4rem 0.2rem 1.4rem;
@@ -402,17 +403,17 @@ a.post-brief.post-after-open-six {
 }
 
 /* Occupied #1 is the first read. Later ranks sit after that hop. */
-.cards-lead {
+.wall-occupied .cards-lead {
   grid-template-columns: minmax(18rem, 1fr);
 }
 
-.cards-later {
+.wall-occupied .cards-later {
   margin-top: -0.55rem;
   padding-top: 0;
   opacity: 0.78;
 }
 
-.card {
+.wall-occupied .card {
   position: relative;
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -436,24 +437,24 @@ a.post-brief.post-after-open-six {
   transform: rotate(-0.6deg);
 }
 
-.card:nth-child(2n) {
+.wall-occupied .card:nth-child(2n) {
   transform: rotate(0.9deg);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 20%),
     var(--paper-2);
 }
 
-.card:nth-child(3n) {
+.wall-occupied .card:nth-child(3n) {
   transform: rotate(-1.4deg);
 }
 
-.card-lead {
+.wall-occupied .card-lead {
   transform: rotate(-0.2deg) scale(1.02);
   outline: 2px solid var(--bid);
   outline-offset: -6px;
 }
 
-.cards-later .card {
+.wall-occupied .cards-later .wall-occupied .card {
   min-height: 11.5rem;
   padding: 1.15rem 0.85rem 0.7rem;
   transform: rotate(0.4deg);
@@ -473,21 +474,21 @@ a.post-brief.post-after-open-six {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
 }
 
-.card .rank {
+.wall-occupied .card .rank {
   grid-area: rank;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--pin);
 }
 
-.card .brand {
+.wall-occupied .card .brand {
   grid-area: brand;
   font-weight: 700;
   font-size: 1.15rem;
   line-height: 1.15;
 }
 
-.card .terms {
+.wall-occupied .card .terms {
   grid-area: terms;
   display: flex;
   flex-direction: column;
@@ -497,7 +498,7 @@ a.post-brief.post-after-open-six {
   color: var(--ink);
 }
 
-.card .terms-label {
+.wall-occupied .card .terms-label {
   font-size: 0.68rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -505,19 +506,19 @@ a.post-brief.post-after-open-six {
   color: var(--muted);
 }
 
-.card .terms-copy {
+.wall-occupied .card .terms-copy {
   font-size: 1.12rem;
   line-height: 1.35;
 }
 
 /* Occupied #1 only: Terms reads first and larger than $bid + clicks. */
-.card-lead .terms.prize-before-price .terms-copy {
+.wall-occupied .card-lead .terms.prize-before-price .terms-copy {
   font-size: 1.58rem;
   line-height: 1.22;
   font-weight: 700;
 }
 
-.card .bid {
+.wall-occupied .card .bid {
   grid-area: bid;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -527,16 +528,16 @@ a.post-brief.post-after-open-six {
 }
 
 /* #1 money stays a later fact. Do not shout beside Terms. */
-.card-lead .bid {
+.wall-occupied .card-lead .bid {
   font-size: 0.82rem;
 }
 
-.card-lead .bid.later-fact[data-later-fact] {
+.wall-occupied .card-lead .bid.later-fact[data-later-fact] {
   font-weight: 500;
   color: var(--muted);
 }
 
-.card .clicks {
+.wall-occupied .card .clicks {
   grid-area: clicks;
   color: var(--muted);
   font-size: 0.82rem;
@@ -544,12 +545,12 @@ a.post-brief.post-after-open-six {
   align-self: end;
 }
 
-.card-lead .clicks {
+.wall-occupied .card-lead .clicks {
   font-size: 0.78rem;
 }
 
 /* Open brief is the hop after Terms, not a second $ prize. */
-.card .brief-url {
+.wall-occupied .card .brief-url {
   grid-area: url;
   display: inline-flex;
   flex-direction: column;
@@ -570,49 +571,49 @@ a.post-brief.post-after-open-six {
 }
 
 /* Occupied #1: Open brief wins the first click. Same ink, louder box. */
-.card .brief-url[data-first-click="open"] {
+.wall-occupied .card .brief-url[data-first-click="open"] {
   padding: 0.5rem 0.7rem 0.55rem;
   border-width: 2px;
   font-size: 1.12rem;
 }
 
 /* Same Open brief hop, concentrated after Post is the first write. */
-.card .brief-url.open-after-post-first {
+.wall-occupied .card .brief-url.open-after-post-first {
   padding: 0.62rem 0.88rem 0.68rem;
   border-width: 3px;
   font-size: 1.22rem;
 }
 
 /* Same Open brief hop, concentrated after Post is re-concentrated. */
-.card .brief-url.open-after-post-two {
+.wall-occupied .card .brief-url.open-after-post-two {
   padding: 0.74rem 1.05rem 0.8rem;
   border-width: 4px;
   font-size: 1.32rem;
 }
 
 /* Same Open brief hop, concentrated after Post is re-concentrated again. */
-.card .brief-url.open-after-post-three {
+.wall-occupied .card .brief-url.open-after-post-three {
   padding: 0.86rem 1.22rem 0.92rem;
   border-width: 5px;
   font-size: 1.42rem;
 }
 
 /* Same Open brief hop, concentrated after Post is re-concentrated again under louder Post. */
-.card .brief-url.open-after-post-four {
+.wall-occupied .card .brief-url.open-after-post-four {
   padding: 0.98rem 1.39rem 1.04rem;
   border-width: 6px;
   font-size: 1.52rem;
 }
 
 /* Same Open brief hop, concentrated after Post is re-concentrated again under louder Post a brief. */
-.card .brief-url.open-after-post-five {
+.wall-occupied .card .brief-url.open-after-post-five {
   padding: 1.1rem 1.56rem 1.16rem;
   border-width: 7px;
   font-size: 1.62rem;
 }
 
 /* Later-rank Open is the same hop, quieter, after occupied #1. */
-.cards-later .brief-url.later-open[data-later-open] {
+.wall-occupied .cards-later .brief-url.later-open[data-later-open] {
   display: inline;
   flex-direction: row;
   align-items: baseline;
@@ -628,21 +629,21 @@ a.post-brief.post-after-open-six {
   text-transform: none;
 }
 
-.cards-later .brief-url.later-open[data-later-open] .open-label {
+.wall-occupied .cards-later .brief-url.later-open[data-later-open] .open-label {
   border-bottom: 1px dashed currentColor;
   text-underline-offset: 0.12em;
 }
 
-.cards-later .brief-url.later-open[data-later-open] .host {
+.wall-occupied .cards-later .brief-url.later-open[data-later-open] .host {
   font-size: 0.72rem;
 }
 
-.card .open-label {
+.wall-occupied .card .open-label {
   border-bottom: 1px solid currentColor;
   text-underline-offset: 0.18em;
 }
 
-.card .open-after-note {
+.wall-occupied .card .open-after-note {
   font-size: 0.62rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -650,11 +651,11 @@ a.post-brief.post-after-open-six {
   color: var(--muted);
 }
 
-.card .brief-url:hover .open-label {
+.wall-occupied .card .brief-url:hover .open-label {
   border-bottom-width: 2px;
 }
 
-.card .brief-url .host {
+.wall-occupied .card .brief-url .host {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 400;
@@ -826,7 +827,7 @@ a.post-brief.post-after-open-six {
   font-size: 0.86em;
 }
 
-.board ol:not(.cards) {
+.board ol:not(.wall-occupied .cards) {
   margin: 0 0 1rem;
   padding-left: 1.25rem;
   color: var(--muted);
