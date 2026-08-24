@@ -249,6 +249,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover #1 Terms larger than \$bid"
   grep -q 'occupied #1 $bid stays a later fact and does not shout beside Terms' tests/board.test.ts \
     || fail "board tests must cover #1 \$bid staying a later fact"
+  grep -q 'occupied later-rank Open stays quieter so #1 Open is the first click' tests/board.test.ts \
+    || fail "board tests must cover quieter later-rank Open brief"
   grep -q 'one flyer opens the brief after Terms, not next to $bid' tests/board.test.ts \
     || fail "board tests must cover Open brief after Terms"
   grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
@@ -287,7 +289,7 @@ if [[ -f package.json ]]; then
     || fail "occupied #1 Open brief must mark the first click"
   grep -q 'data-open-after-post-first' src/lib/board-markup.tsx \
     || fail "Open brief must concentrate after Post is the first write"
-  grep -q 'data-first-read={listing.rank === 1 ? "open" : undefined}' src/lib/board-markup.tsx \
+  grep -q 'data-first-read="open"' src/lib/board-markup.tsx \
     || fail "Open brief must stamp the first read after Post"
   grep -q 'data-open-after-post-two-stamp' src/lib/board-markup.tsx \
     || fail "Open brief must concentrate after Post is re-concentrated"
@@ -411,6 +413,26 @@ if [[ -f package.json ]]; then
     || fail "CSS must keep #1 \$bid a later fact beside Terms"
   grep -qF 'card-lead .bid.later-fact[data-later-fact]' src/app/board.css \
     || fail "CSS must mute #1 \$bid so it cannot shout beside Terms"
+  grep -q 'function OpenBriefHop' src/lib/board-markup.tsx \
+    || fail "occupied Open must compose OpenBriefHop, not stamp a mute class"
+  grep -q 'cards-lead' src/lib/board-markup.tsx \
+    || fail "occupied #1 flyer must sit in the lead cards list"
+  grep -q 'cards-later' src/lib/board-markup.tsx \
+    || fail "later-rank flyers must sit in a later cards list"
+  grep -q 'data-later-open' src/lib/board-markup.tsx \
+    || fail "later-rank Open brief must mark data-later-open"
+  grep -q 'brief-url later-open' src/lib/board-markup.tsx \
+    || fail "later-rank Open brief must use the later-open hop"
+  grep -qF '.cards-later .brief-url.later-open[data-later-open]' src/app/board.css \
+    || fail "CSS must keep later-rank Open quieter than #1 Open"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] [data-later-open]' src/app/board.css \
+    || fail "CSS must keep later-rank Open off empty plaster"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .cards-later' src/app/board.css \
+    || fail "CSS must keep later-rank flyers off empty plaster"
+  if grep -nE 'open-later-rank|data-later-rank' src/lib/board-markup.tsx src/app/board.css >/dev/null
+  then
+    fail "do not stamp open-later-rank; compose later-rank Open as a quieter hop"
+  fi
   grep -q 'card-lead .clicks' src/app/board.css \
     || fail "CSS must keep #1 clicks quieter than Terms"
   python3 - src/app/board.css <<'PY' || fail "#1 Terms copy must be larger than \$bid and clicks"
@@ -436,6 +458,24 @@ if "color: var(--muted)" not in re.search(
 if "color: var(--bid)" in re.search(
     r"\.card-lead \.bid\.later-fact\[data-later-fact\]\s*\{[^}]*\}", css, re.S
 ).group(0):
+    raise SystemExit(1)
+later_open = size(r"\.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*font-size:\s*([\d.]+)rem")
+base_open = size(r"\.card \.brief-url \{\n[^}]*font-size:\s*([\d.]+)rem")
+lead_open = size(r"\.card \.brief-url\.open-after-post-five\s*\{[^}]*font-size:\s*([\d.]+)rem")
+if not (later_open < base_open and later_open < lead_open):
+    raise SystemExit(1)
+later_block = re.search(
+    r"\.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*\}", css, re.S
+)
+if later_block is None:
+    raise SystemExit(1)
+if "color: var(--muted)" not in later_block.group(0):
+    raise SystemExit(1)
+if "color: var(--ink)" in later_block.group(0):
+    raise SystemExit(1)
+if "border: 0" not in later_block.group(0):
+    raise SystemExit(1)
+if "background: transparent" not in later_block.group(0):
     raise SystemExit(1)
 PY
   grep -q '"rank brand brand"' src/app/board.css \
@@ -876,6 +916,15 @@ PY
   if grep -q 'later-fact' "${home_body}"; then
     fail "empty plaster has no flyer; do not mute a later-fact \$bid"
   fi
+  if grep -q 'data-later-open=""' "${home_body}"; then
+    fail "empty plaster has no flyer; do not stamp later-rank Open"
+  fi
+  if grep -q 'class="brief-url later-open"' "${home_body}"; then
+    fail "empty plaster has no flyer; do not mute a later-rank Open"
+  fi
+  if grep -q 'cards-later' "${home_body}"; then
+    fail "empty plaster has no later-rank flyer list"
+  fi
   if grep -q 'data-open-after-terms' "${home_body}"; then
     fail "empty plaster has no flyer; do not show Open brief after Terms"
   fi
@@ -904,6 +953,8 @@ if 'class="plaster"' in html or 'class="flyers"' in html:
 if "data-post-brief" in html or "data-open-brief" in html or "data-prize" in html:
     raise SystemExit(1)
 if "prize-before-price" in html or "data-later-fact" in html or "later-fact" in html:
+    raise SystemExit(1)
+if 'data-later-open=""' in html or 'class="brief-url later-open"' in html or "cards-later" in html:
     raise SystemExit(1)
 if 'data-terms=""' in html or "terms-label" in html or "data-open-after-terms" in html:
     raise SystemExit(1)
@@ -1042,6 +1093,15 @@ PY
     || fail "paid #1 flyer must keep \$bid a later fact"
   grep -q 'data-later-fact=""' "${listed_body}" \
     || fail "paid #1 flyer must stamp \$bid as a later fact"
+  if grep -q 'data-later-open=""' "${listed_body}"; then
+    fail "paid #1-only board must not stamp later-rank Open"
+  fi
+  if grep -q 'class="brief-url later-open"' "${listed_body}"; then
+    fail "paid #1-only board must not mute a later-rank Open"
+  fi
+  if grep -q 'cards-later' "${listed_body}"; then
+    fail "paid #1-only board must not render a later-rank flyer list"
+  fi
   python3 - "${listed_body}" <<'PY' || fail "paid flyer must put labeled Terms before Open brief and \$bid"
 import re
 import sys
@@ -1109,6 +1169,12 @@ if html.count('class="terms prize-before-price"') != 1:
 if html.count('data-later-fact=""') != 1:
     raise SystemExit(1)
 if html.count('class="bid later-fact"') != 1:
+    raise SystemExit(1)
+if 'data-later-open=""' in card or 'class="brief-url later-open"' in card:
+    raise SystemExit(1)
+if html.count('data-later-open=""') != 0:
+    raise SystemExit(1)
+if 'class="brief-url later-open"' in html or "cards-later" in html:
     raise SystemExit(1)
 PY
   grep -q 'data-post-brief=""' "${listed_body}" \
@@ -1355,6 +1421,22 @@ if html.count('data-prize=""') != 1 or html.count('data-prize-before-price=""') 
     raise SystemExit(1)
 if html.count('data-later-fact=""') != 1 or html.count('class="bid later-fact"') != 1:
     raise SystemExit(1)
+if 'data-later-open=""' not in acme.group(0) or 'class="brief-url later-open"' not in acme.group(0):
+    raise SystemExit(1)
+if 'data-later-open=""' in rival.group(0) or 'class="brief-url later-open"' in rival.group(0):
+    raise SystemExit(1)
+if html.count('data-later-open=""') != 1:
+    raise SystemExit(1)
+if html.count('class="brief-url later-open"') != 1:
+    raise SystemExit(1)
+if 'data-first-click="open"' not in rival.group(0):
+    raise SystemExit(1)
+if 'data-first-click="open"' in acme.group(0):
+    raise SystemExit(1)
+if 'aria-label="Paid briefs this week"' not in html or 'aria-label="Later briefs this week"' not in html:
+    raise SystemExit(1)
+if html.find('aria-label="Paid briefs this week"') >= html.find('aria-label="Later briefs this week"'):
+    raise SystemExit(1)
 PY
 
   echo "== reject chat / NSFW / shortener / http brief URLs =="
@@ -1553,7 +1635,7 @@ PY
     || fail "rolled empty week must still lead with Claim #1"
   grep -q 'class="paste-rail empty-claim-first"' "${rolled_body}" \
     || fail "rolled empty week must stamp the empty Claim #1 class"
-  if grep -qE 'Acme|Rival|CleanUrl|data-post-brief|data-open-brief|data-prize|prize-before-price|data-later-fact|later-fact' "${rolled_body}"; then
+  if grep -qE 'Acme|Rival|CleanUrl|data-post-brief|data-open-brief|data-prize|prize-before-price|data-later-fact|later-fact|data-later-open=""|class="brief-url later-open"|cards-later' "${rolled_body}"; then
     fail "previous week listings must be absent from the live board"
   fi
   unset WEEK_NOW

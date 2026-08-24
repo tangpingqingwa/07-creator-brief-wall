@@ -32,69 +32,100 @@ function PostBriefHop() {
   );
 }
 
+function OpenBriefHop({ listing }: { listing: RankedListing }) {
+  const host = hostLabel(listing.briefUrl);
+  if (listing.rank === 1) {
+    return (
+      <a
+        className="brief-url open-after-terms open-after-post-first open-after-post-two open-after-post-three open-after-post-four open-after-post-five"
+        href={`/r/${listing.id}`}
+        data-brief-url={listing.briefUrl}
+        data-open-brief=""
+        data-open-after-terms=""
+        data-first-click="open"
+        data-open-after-post-first=""
+        data-first-read="open"
+        data-open-after-post-two-stamp=""
+        data-open-after-post-three-stamp=""
+        data-open-after-post-four-stamp=""
+        data-open-after-post-five-stamp=""
+        aria-label={`Open brief at ${host}`}
+      >
+        <span className="open-after-note">after Terms</span>
+        <span className="open-label">Open brief</span>
+        <span className="host">{host}</span>
+      </a>
+    );
+  }
+  return (
+    <a
+      className="brief-url later-open"
+      href={`/r/${listing.id}`}
+      data-brief-url={listing.briefUrl}
+      data-open-brief=""
+      data-later-open=""
+      aria-label={`Open brief at ${host}`}
+    >
+      <span className="open-label">Open brief</span>
+      <span className="host">{host}</span>
+    </a>
+  );
+}
+
+function OccupiedFlyer({ listing }: { listing: RankedListing }) {
+  const lead = listing.rank === 1;
+  return (
+    <li
+      className={lead ? "card card-lead" : "card"}
+      data-rank={listing.rank}
+      data-id={listing.id}
+      data-brand={listing.brand}
+      data-bid={listing.bidUsd}
+    >
+      <span className="tape" aria-hidden="true" />
+      <span className="rank">#{listing.rank}</span>
+      <span className="brand">{listing.brand}</span>
+      <p
+        className={lead ? "terms prize-before-price" : "terms"}
+        data-terms=""
+        data-prize={lead ? "" : undefined}
+        data-prize-before-price={lead ? "" : undefined}
+      >
+        <span className="terms-label">Terms</span>
+        <span className="terms-copy">{listing.terms}</span>
+      </p>
+      <OpenBriefHop listing={listing} />
+      <span
+        className={lead ? "bid later-fact" : "bid"}
+        data-later-fact={lead ? "" : undefined}
+      >
+        ${listing.bidUsd}
+      </span>
+      <span className="clicks" data-clicks={listing.clicks}>
+        {listing.clicks} clicks
+      </span>
+      <span className="brief-url-text">{listing.briefUrl}</span>
+    </li>
+  );
+}
+
 export function OccupiedFlyers({ listings }: { listings: RankedListing[] }) {
+  const lead = listings.find((listing) => listing.rank === 1);
+  const later = listings.filter((listing) => listing.rank !== 1);
   return (
     <div className="flyers">
-      <ol className="cards" aria-label="Paid briefs this week">
-        {listings.map((listing) => (
-          <li
-            key={listing.id}
-            className={`card${listing.rank === 1 ? " card-lead" : ""}`}
-            data-rank={listing.rank}
-            data-id={listing.id}
-            data-brand={listing.brand}
-            data-bid={listing.bidUsd}
-          >
-            <span className="tape" aria-hidden="true" />
-            <span className="rank">#{listing.rank}</span>
-            <span className="brand">{listing.brand}</span>
-            <p
-              className={
-                listing.rank === 1 ? "terms prize-before-price" : "terms"
-              }
-              data-terms=""
-              data-prize={listing.rank === 1 ? "" : undefined}
-              data-prize-before-price={listing.rank === 1 ? "" : undefined}
-            >
-              <span className="terms-label">Terms</span>
-              <span className="terms-copy">{listing.terms}</span>
-            </p>
-            <a
-              className={
-                listing.rank === 1
-                  ? "brief-url open-after-terms open-after-post-first open-after-post-two open-after-post-three open-after-post-four open-after-post-five"
-                  : "brief-url open-after-terms"
-              }
-              href={`/r/${listing.id}`}
-              data-brief-url={listing.briefUrl}
-              data-open-brief=""
-              data-open-after-terms=""
-              data-first-click={listing.rank === 1 ? "open" : undefined}
-              data-open-after-post-first={listing.rank === 1 ? "" : undefined}
-              data-first-read={listing.rank === 1 ? "open" : undefined}
-              data-open-after-post-two-stamp={listing.rank === 1 ? "" : undefined}
-              data-open-after-post-three-stamp={listing.rank === 1 ? "" : undefined}
-              data-open-after-post-four-stamp={listing.rank === 1 ? "" : undefined}
-              data-open-after-post-five-stamp={listing.rank === 1 ? "" : undefined}
-              aria-label={`Open brief at ${hostLabel(listing.briefUrl)}`}
-            >
-              <span className="open-after-note">after Terms</span>
-              <span className="open-label">Open brief</span>
-              <span className="host">{hostLabel(listing.briefUrl)}</span>
-            </a>
-            <span
-              className={listing.rank === 1 ? "bid later-fact" : "bid"}
-              data-later-fact={listing.rank === 1 ? "" : undefined}
-            >
-              ${listing.bidUsd}
-            </span>
-            <span className="clicks" data-clicks={listing.clicks}>
-              {listing.clicks} clicks
-            </span>
-            <span className="brief-url-text">{listing.briefUrl}</span>
-          </li>
-        ))}
-      </ol>
+      {lead ? (
+        <ol className="cards cards-lead" aria-label="Paid briefs this week">
+          <OccupiedFlyer key={lead.id} listing={lead} />
+        </ol>
+      ) : null}
+      {later.length > 0 ? (
+        <ol className="cards cards-later" aria-label="Later briefs this week">
+          {later.map((listing) => (
+            <OccupiedFlyer key={listing.id} listing={listing} />
+          ))}
+        </ol>
+      ) : null}
       <PostBriefHop />
     </div>
   );
