@@ -498,6 +498,13 @@ a.post-brief.post-after-open-three {
   font-size: 1.32rem;
 }
 
+/* Same Open brief hop, concentrated after Post is re-concentrated again. */
+.card .brief-url.open-after-post-three {
+  padding: 0.86rem 1.22rem 0.92rem;
+  border-width: 5px;
+  font-size: 1.42rem;
+}
+
 .card .open-label {
   border-bottom: 1px solid currentColor;
   text-underline-offset: 0.18em;
