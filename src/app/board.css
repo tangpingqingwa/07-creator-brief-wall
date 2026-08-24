@@ -232,7 +232,9 @@ body {
 .wall-stage.wall-empty[data-occupied="false"] [data-prize],
 .wall-stage.wall-empty[data-occupied="false"] .prize-before-price,
 .wall-stage.wall-empty[data-occupied="false"] [data-later-fact],
-.wall-stage.wall-empty[data-occupied="false"] .later-fact {
+.wall-stage.wall-empty[data-occupied="false"] .later-fact,
+.wall-stage.wall-empty[data-occupied="false"] [data-rolling-week],
+.wall-stage.wall-empty[data-occupied="false"] .week-window {
   display: none;
 }
 
@@ -754,6 +756,15 @@ body {
 
 .wall-occupied .cards-later .card.later-flyer[data-later-flyer] .clicks {
   font-size: 0.72rem;
+}
+
+/* Occupied rolling last-7-days window. After Terms / Open; later ranks stay quieter. */
+.wall-occupied .cards-lead[data-rolling-week] {
+  margin: 0;
+}
+
+.wall-occupied .rules-note.week-window {
+  font-size: 0.86rem;
 }
 
 /* Empty plaster: Brief URL is a later write after Claim #1 / Outbid. */

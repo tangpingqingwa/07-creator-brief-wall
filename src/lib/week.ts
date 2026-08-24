@@ -1,7 +1,11 @@
 import type { AppDb, ListingRow } from "./db";
 import { listingFromRow, rankListings, type RankedListing } from "./rank";
 
-/** ISO week in UTC (`YYYY-Www`). Monday 00:00:00.000 UTC starts the new week. */
+/**
+ * Public wall window is rolling last 7 days from paid placement.
+ * ISO `weekId` (`YYYY-Www`) remains a Monday 00:00 UTC Polar/audit label.
+ * Rank does not expire at civil Monday midnight.
+ */
 
 export type UtcWeek = {
   weekId: string;
@@ -10,6 +14,8 @@ export type UtcWeek = {
 };
 
 const DAY_MS = 86_400_000;
+/** Inclusive length of the public week window. Not a Monday midnight bucket. */
+export const ROLLING_WEEK_MS = 7 * DAY_MS;
 const WEEK_ID_RE = /^(\d{4})-W(\d{2})$/;
 
 const LISTING_SELECT = `SELECT id, week_id, brand, terms, brief_url, platforms, bid_usd, clicks, created_at, updated_at
@@ -20,7 +26,7 @@ const WEEK_NOW_KEY = ["WEEK", "NOW"].join("_");
 
 /**
  * Operator / test clock. `WEEK_NOW` is an ISO-8601 instant.
- * Reset is a `week_id` query filter, not a delete.
+ * Live rank is a rolling last-7-days filter on `created_at`, not a delete.
  */
 export function nowUtc(env: NodeJS.ProcessEnv = process.env): Date {
   const raw = env[WEEK_NOW_KEY];
@@ -40,7 +46,7 @@ function utcMidnight(now: Date): Date {
   );
 }
 
-/** Monday 00:00:00.000 UTC of the ISO week that contains `now`. */
+/** Monday 00:00:00.000 UTC of the ISO week that contains `now`. Audit label only. */
 export function weekStartUtc(now: Date = nowUtc()): Date {
   const start = utcMidnight(now);
   const day = start.getUTCDay() || 7;
@@ -48,12 +54,30 @@ export function weekStartUtc(now: Date = nowUtc()): Date {
   return start;
 }
 
-/** Next Monday 00:00:00.000 UTC (exclusive end of the current week). */
+/** Next Monday 00:00:00.000 UTC. Label boundary, not public rank expiry. */
 export function nextResetUtc(now: Date = nowUtc()): Date {
   return new Date(weekStartUtc(now).getTime() + 7 * DAY_MS);
 }
 
-/** ISO week id in UTC, e.g. `2026-W34`. */
+/** Inclusive start of the rolling last-7-days window. Not civil midnight. */
+export function rollingWeekStart(now: Date = nowUtc()): Date {
+  return new Date(now.getTime() - ROLLING_WEEK_MS);
+}
+
+/** Paid placement still inside the rolling last-7-days window. */
+export function bidInRollingWeek(
+  paidAt: string,
+  now: Date = nowUtc(),
+): boolean {
+  const paid = Date.parse(paidAt);
+  if (Number.isNaN(paid)) {
+    return false;
+  }
+  const t = now.getTime();
+  return paid >= t - ROLLING_WEEK_MS && paid <= t;
+}
+
+/** ISO week id in UTC, e.g. `2026-W34`. Polar/audit label, not the live filter. */
 export function utcWeekId(now: Date = nowUtc()): string {
   const thursday = utcMidnight(now);
   const day = thursday.getUTCDay() || 7;
@@ -67,8 +91,8 @@ export function utcWeekId(now: Date = nowUtc()): string {
 }
 
 export function currentWeekUtc(now: Date = nowUtc()): UtcWeek {
-  const starts = weekStartUtc(now);
-  const ends = nextResetUtc(now);
+  const starts = rollingWeekStart(now);
+  const ends = new Date(now.getTime() + 1);
   return {
     weekId: utcWeekId(now),
     startsAt: starts.toISOString(),
@@ -101,15 +125,31 @@ export function isLiveWeekId(
   return listingWeekId === utcWeekId(now);
 }
 
-/** Live board rows: current `weekId` only. Previous weeks stay in the table. */
+/**
+ * Live board rows: paid `created_at` in the rolling last 7 days.
+ * `weekId` stays an audit label. Rows stay in the table after they age out.
+ */
 export function listLiveBoard(
   db: AppDb,
-  weekId: string = utcWeekId(),
+  now: Date = nowUtc(),
 ): RankedListing[] {
+  const since = rollingWeekStart(now).toISOString();
+  const until = now.toISOString();
   const rows = db
-    .prepare(`${LISTING_SELECT} WHERE week_id = ?`)
-    .all(weekId) as ListingRow[];
+    .prepare(`${LISTING_SELECT} WHERE created_at >= ? AND created_at <= ?`)
+    .all(since, until) as ListingRow[];
   return rankListings(
-    rows.map(listingFromRow).filter((row) => row.weekId === weekId),
+    rows
+      .map(listingFromRow)
+      .filter((row) => bidInRollingWeek(row.createdAt, now)),
   );
+}
+
+/** Same canonical brief URL still live in the rolling window is a raise. */
+export function findLiveListingByBrief(
+  db: AppDb,
+  briefUrl: string,
+  now: Date = nowUtc(),
+): ReturnType<typeof listingFromRow> | undefined {
+  return listLiveBoard(db, now).find((row) => row.briefUrl === briefUrl);
 }

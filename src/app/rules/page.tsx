@@ -89,12 +89,18 @@ export default function RulesPage() {
         <tbody>
           <tr>
             <th>Period</th>
-            <td>7 days. Live rank is this UTC week only.</td>
+            <td>
+              Rolling last 7 days from paid placement. Live rank is that window
+              only.
+            </td>
           </tr>
           <tr>
             <th>Boundary</th>
             <td>
-              <strong>Monday 00:00:00.000 UTC</strong>
+              <strong>Rolling last 7 days. Not Monday 00:00 UTC.</strong> A brand
+              outside civil midnight does not lose the plaster on a timezone
+              tax. <code>weekId</code> stays an ISO week label (
+              <code>YYYY-Www</code>, Monday 00:00:00.000 UTC) for Polar/audit.
             </td>
           </tr>
           <tr>
@@ -103,17 +109,21 @@ export default function RulesPage() {
             </th>
             <td>
               ISO week in UTC, <code>YYYY-Www</code> (e.g. <code>2026-W34</code>
-              ).
+              ). Label only — not the live expiry.
             </td>
           </tr>
           <tr>
             <th>What resets</th>
-            <td>Live rank, bids, and click counters for the new week.</td>
+            <td>
+              Live rank after seven days from first paid placement. Clicks and
+              bids do not carry once that window ends.
+            </td>
           </tr>
           <tr>
             <th>What does not carry</th>
             <td>
-              Previous week bid amounts. Want next week’s #1? Pay again.
+              A bid paid more than seven days ago. Want this window’s #1? Pay
+              again.
             </td>
           </tr>
         </tbody>

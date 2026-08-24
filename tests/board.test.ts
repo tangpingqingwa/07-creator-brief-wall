@@ -3322,7 +3322,10 @@ test("GET confirm-before-leave does not increment clicks", () => {
     });
     const preview = getPublicListing(db, "lst_preview");
     assert.equal(preview.clicks, 0);
-    const stillZero = listLiveBoard(db, WEEK);
+    const stillZero = listLiveBoard(
+      db,
+      new Date("2026-08-17T00:00:00.000Z"),
+    );
     assert.equal(stillZero[0]?.clicks, 0);
     const html = confirmBriefHtml(preview);
     assert.match(html, /data-confirm-before-leave=""/);
@@ -3359,7 +3362,10 @@ test("public brief-URL clicks increment once per hop and 302 without trackers", 
     assert.equal(preview.clicks, 0);
     assert.equal(preview.briefUrl, "https://example.com/brief?id=99");
 
-    const stillZero = listLiveBoard(db, WEEK);
+    const stillZero = listLiveBoard(
+      db,
+      new Date("2026-08-17T00:00:00.000Z"),
+    );
     assert.equal(stillZero[0]?.clicks, 0);
 
     const first = incrementPublicClick(db, "lst_click");
@@ -3370,7 +3376,7 @@ test("public brief-URL clicks increment once per hop and 302 without trackers", 
     const second = incrementPublicClick(db, "lst_click");
     assert.equal(second.listing.clicks, 2);
 
-    const live = listLiveBoard(db, WEEK);
+    const live = listLiveBoard(db, new Date("2026-08-17T00:00:00.000Z"));
     assert.equal(live[0]?.clicks, 2);
     assert.match(renderBoard(live), /data-clicks="2"/);
 
@@ -3413,12 +3419,20 @@ test("previous week rows are absent from the live board", () => {
       createdAt: "2026-08-17T00:00:00.000Z",
     });
 
-    const live = listLiveBoard(db, WEEK);
-    assert.equal(live.length, 1);
-    assert.equal(live[0]?.id, "lst_live");
-    assert.equal(live[0]?.brand, "This Week");
-    assert.ok(!live.some((row) => row.brand === "Last Week"));
-    assert.equal(listLiveBoard(db, "2026-W35").length, 0);
+    const live = listLiveBoard(db, new Date("2026-08-17T00:00:00.000Z"));
+    assert.equal(live.length, 2);
+    assert.equal(live[0]?.id, "lst_old");
+    assert.equal(live[1]?.id, "lst_live");
+    const laterMonday = listLiveBoard(
+      db,
+      new Date("2026-08-24T00:00:00.000Z"),
+    );
+    assert.equal(laterMonday.length, 1);
+    assert.equal(laterMonday[0]?.id, "lst_live");
+    assert.equal(
+      listLiveBoard(db, new Date("2026-08-24T00:00:01.000Z")).length,
+      0,
+    );
 
     const stored = db.prepare("SELECT COUNT(*) AS n FROM listings").get() as {
       n: number;
@@ -3427,4 +3441,76 @@ test("previous week rows are absent from the live board", () => {
   } finally {
     db.close();
   }
+});
+
+test("occupied week window is rolling last-7-days — not Monday 00:00 UTC", () => {
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.match(empty, /data-occupied="false"/);
+  assert.match(empty, /Claim #1 for/);
+  assert.match(empty, /Blank plaster/);
+  assert.match(empty, /data-empty-claim-first=""/);
+  assert.match(empty, /data-first-click="claim"/);
+  assert.match(empty, /Then the brief URL/);
+  assert.doesNotMatch(empty, /data-rolling-week/);
+  assert.doesNotMatch(empty, /Rolling last 7 days/);
+  assert.doesNotMatch(empty, /data-open-brief/);
+  assert.doesNotMatch(empty, /data-prize=/);
+  assert.doesNotMatch(empty, /Post a brief/);
+  assert.doesNotMatch(empty, /24h lock/);
+  assert.doesNotMatch(empty, FORBIDDEN);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-16T12:00:00.000Z",
+        }),
+        listing({
+          id: "lst_two",
+          brand: "Two Co",
+          terms: "later rank",
+          bidUsd: 5,
+          createdAt: "2026-08-16T18:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const prizeAt = occupied.indexOf('data-prize=""');
+  const firstClickAt = occupied.indexOf('data-first-click="open"');
+  const laterOpenAt = occupied.indexOf('data-later-open=""');
+  const postAt = occupied.indexOf('data-post-brief=""');
+  const windowAt = occupied.indexOf('data-rolling-week=""');
+  const claimAt = occupied.indexOf('id="claim"');
+  const flyersAt = occupied.indexOf('aria-label="Paid briefs this week"');
+  assert.ok(prizeAt >= 0 && firstClickAt > prizeAt);
+  assert.ok(laterOpenAt > firstClickAt && postAt > laterOpenAt);
+  assert.ok(flyersAt >= 0 && windowAt >= flyersAt && firstClickAt > windowAt);
+  assert.ok(claimAt > postAt);
+  assert.match(occupied, /data-occupied="true"/);
+  assert.match(occupied, /data-rolling-week=""/);
+  assert.match(occupied, /Rolling last 7 days\. Not Monday 00:00 UTC\./);
+  assert.match(occupied, /class="terms-label">Terms/);
+  assert.match(occupied, /data-first-click="open"/);
+  assert.match(occupied, /data-later-flyer=""/);
+  assert.match(occupied, /Post a brief/);
+  assert.doesNotMatch(occupied, /data-empty-claim-first/);
+  assert.doesNotMatch(occupied, /24h lock/);
+  assert.doesNotMatch(occupied, /data-post-after-open-seven/);
+  assert.doesNotMatch(occupied, /data-open-after-post-six-stamp/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+
+  const css = cssSource;
+  assert.match(css, /\.wall-occupied \.cards-lead\[data-rolling-week\]/);
+  assert.match(
+    css,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \[data-rolling-week\]/,
+  );
+  assert.doesNotMatch(css, /background:\s*var\(--bid-ink\)/);
 });

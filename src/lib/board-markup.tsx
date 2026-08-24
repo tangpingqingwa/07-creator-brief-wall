@@ -147,7 +147,11 @@ export function OccupiedFlyers({ listings }: { listings: RankedListing[] }) {
   return (
     <div className="flyers">
       {lead ? (
-        <ol className="cards cards-lead" aria-label="Paid briefs this week">
+        <ol
+          className="cards cards-lead"
+          aria-label="Paid briefs this week"
+          data-rolling-week=""
+        >
           <OccupiedLeadFlyer key={lead.id} listing={lead} />
         </ol>
       ) : null}
@@ -211,8 +215,11 @@ export function BoardChrome({
       >
         {children}
       </div>
-      <p className="rules-note">
-        Rank is the bid. Minimum $5. The board resets Monday 00:00 UTC.{" "}
+      <p className={occupied ? "rules-note week-window" : "rules-note"}>
+        Rank is the bid. Minimum $5.{" "}
+        {occupied
+          ? "Rolling last 7 days. Not Monday 00:00 UTC."
+          : "The board resets Monday 00:00 UTC."}{" "}
         <a href="/about">About</a> · <a href="/rules">Rules</a>
       </p>
     </main>

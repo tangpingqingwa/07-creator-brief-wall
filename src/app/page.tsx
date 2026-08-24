@@ -14,8 +14,9 @@ export default async function HomePage() {
   noStore();
   await connection();
   await headers();
-  const week = currentWeekUtc(nowUtc());
+  const now = nowUtc();
+  const week = currentWeekUtc(now);
   return (
-    <Board listings={listLiveBoard(getDb(), week.weekId)} weekId={week.weekId} />
+    <Board listings={listLiveBoard(getDb(), now)} weekId={week.weekId} />
   );
 }

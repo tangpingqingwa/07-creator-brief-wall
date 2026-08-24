@@ -740,6 +740,8 @@ PY
     || fail "later-rank cut must not rebuild the plaster wall"
   grep -qF '.wall-occupied .later-pack[data-later-pack]' src/app/board.css \
     || fail "CSS must group later ranks in a pack after #1"
+  grep -qF '.wall-occupied .cards-lead[data-rolling-week]' src/app/board.css \
+    || fail "CSS must compose occupied rolling last-7-days on the lead flyers"
   grep -qF '.wall-occupied .cards-later .card.later-flyer[data-later-flyer]' src/app/board.css \
     || fail "CSS must compose later ranks as hopper slips"
   grep -qF '.wall-occupied .cards-later .card.later-flyer[data-later-flyer] .later-terms-copy' src/app/board.css \
@@ -752,11 +754,23 @@ PY
     || fail "empty plaster CSS must keep later-flyer off Claim #1"
   grep -qF '.wall-stage.wall-empty[data-occupied="false"] [data-later-flyer]' src/app/board.css \
     || fail "empty plaster CSS must keep later-flyer stamps off Claim #1"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] [data-rolling-week]' src/app/board.css \
+    || fail "empty plaster CSS must keep rolling-week stamps off Claim #1"
   if grep -qE 'data-post-after-open-seven|data-open-after-post-six-stamp' src/app/board.tsx src/app/board.css src/app/outbid-form.tsx src/lib/board-markup.tsx; then
     fail "later-rank quiet must not add another numbered hop stamp"
   fi
   if grep -qE 'data-later-quiet|data-later-rank-quiet|open-later-rank' src/lib/board-markup.tsx src/app/board.css src/app/outbid-form.tsx; then
     fail "do not stamp-only mute later flyers"
+  fi
+  grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
+    || fail "occupied flyers must stamp the rolling last-7-days window"
+  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/lib/board-markup.tsx \
+    || fail "occupied flyers must name the rolling last-7-days window"
+  if awk '/function EmptyClaimFirstWrite/,/export function OutbidForm/' src/app/outbid-form.tsx | grep -q 'data-rolling-week'; then
+    fail "empty plaster must not stamp the rolling week window"
+  fi
+  if grep -Eqi '24h lock|lock on #1' src/lib/board-markup.tsx src/app/outbid-form.tsx src/app/board.css; then
+    fail "rolling week is not a 24h lock on #1"
   fi
   if grep -nE 'open-later-rank|data-later-rank[^-]' src/lib/board-markup.tsx src/app/board.css >/dev/null
   then
@@ -819,13 +833,16 @@ PY
     /wall-occupied \.card \.brief-url\[data-first-click="open"\]/ { open=NR }
     /wall-occupied \.later-pack\[data-later-pack\] \{/ { pack=NR }
     /cards-later \.card\.later-flyer\[data-later-flyer\] \{/ { later=NR }
+    /wall-occupied \.cards-lead\[data-rolling-week\]/ { rolling=NR }
     /Empty plaster: Brief URL is a later write after Claim #1 \/ Outbid/ { empty=NR }
-    END { exit !(prize && open && pack && later && empty && prize < open && open < pack && pack < later && later < empty) }
+    END { exit !(prize && open && pack && later && rolling && empty && prize < open && open < pack && pack < later && later < rolling && rolling < empty) }
   ' src/app/board.css; then
     fail "later-rank CSS must sit after occupied prize / Open and before empty later-write"
   fi
   grep -q 'occupied later flyers stay quieter than #1 Terms' tests/board.test.ts \
     || fail "board tests must cover quieter later flyers than #1 Terms"
+  grep -q 'occupied week window is rolling last-7-days' tests/board.test.ts \
+    || fail "board tests must cover occupied rolling last-7-days window"
   grep -q 'These flyers are not this week’s #1 prize' tests/board.test.ts \
     || fail "board tests must name later flyers as not the #1 prize"
   grep -q 'data-later-flyer' tests/board.test.ts \
@@ -948,6 +965,8 @@ PY
     || fail "rules must state raise pays difference"
   grep -q 'Monday 00:00' src/app/rules/page.tsx \
     || fail "rules must state weekly UTC reset"
+  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/app/rules/page.tsx \
+    || fail "rules must name the rolling last-7-days window"
   grep -q 'NSFW' src/app/rules/page.tsx || fail "rules must document NSFW rejects"
   grep -q 'Telegram' src/app/rules/page.tsx \
     || fail "rules must document chat-link rejects"
@@ -974,14 +993,22 @@ PY
     || fail "week.ts must export utcWeekId"
   grep -q 'Monday 00:00' src/lib/week.ts \
     || fail "week.ts must document Monday 00:00 UTC reset"
+  grep -q 'ROLLING_WEEK_MS' src/lib/week.ts \
+    || fail "week.ts must export the rolling last-7-days window"
+  grep -q 'export function bidInRollingWeek' src/lib/week.ts \
+    || fail "week.ts must export bidInRollingWeek"
+  grep -q 'export function rollingWeekStart' src/lib/week.ts \
+    || fail "week.ts must export rollingWeekStart"
+  grep -q 'created_at >=' src/lib/week.ts \
+    || fail "live board must filter by rolling created_at, not week_id delete"
   grep -q 'WEEK_NOW' src/lib/week.ts \
     || fail "week.ts must honor WEEK_NOW as the operator/test clock"
-  grep -q 'week_id = ?' src/lib/week.ts \
-    || fail "live board must filter by week_id, not delete"
   grep -q 'currentWeekUtc' src/app/page.tsx \
     || fail "page.tsx must use currentWeekUtc"
   grep -q 'listLiveBoard' src/app/page.tsx \
     || fail "page.tsx must load the current week only"
+  grep -q 'findLiveListingByBrief' src/lib/polar.ts \
+    || fail "checkout raise must use the rolling live listing"
   grep -q 'export function incrementPublicClick' src/lib/clicks.ts \
     || fail "clicks.ts must export incrementPublicClick"
   grep -q 'export function getPublicListing' src/lib/clicks.ts \
@@ -1029,6 +1056,12 @@ PY
     || fail "week tests must cover Monday 00:00 UTC roll"
   grep -q 'previous week rows are absent from the live board' tests/week.test.ts \
     || fail "week tests must hide previous week rows"
+  grep -Fq 'rolling last-7-days window is 7 * 24h' tests/week.test.ts \
+    || fail "week tests must cover rolling last-7-days length"
+  grep -q 'Monday 00:00 UTC does not drop a bid still inside the rolling week' tests/week.test.ts \
+    || fail "week tests must keep a Sunday pay across Monday midnight"
+  grep -q 'live board keeps a Sunday pay across Monday 00:00 UTC' tests/week.test.ts \
+    || fail "week tests must keep Sunday pay on the live board across Monday"
   grep -q 'incrementPublicClick' tests/board.test.ts \
     || fail "board tests must cover public clicks"
   grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
@@ -1233,6 +1266,12 @@ PY
   if grep -q 'later-fact' "${home_body}"; then
     fail "empty plaster has no flyer; do not mute a later-fact \$bid"
   fi
+  if grep -q 'data-rolling-week' "${home_body}"; then
+    fail "empty plaster has no flyer; do not stamp the rolling week window"
+  fi
+  if grep -qi 'Rolling last 7 days' "${home_body}"; then
+    fail "empty plaster must not name the occupied rolling week window"
+  fi
   if grep -q 'data-later-open=""' "${home_body}"; then
     fail "empty plaster has no flyer; do not stamp later-rank Open"
   fi
@@ -1295,6 +1334,8 @@ if "data-post-brief" in html or "data-open-brief" in html or "data-prize" in htm
     raise SystemExit(1)
 if "prize-before-price" in html or "data-later-fact" in html or "later-fact" in html:
     raise SystemExit(1)
+if "data-rolling-week" in html or "Rolling last 7 days" in html:
+    raise SystemExit(1)
 if 'data-later-open=""' in html or 'class="brief-url later-open"' in html or "cards-later" in html:
     raise SystemExit(1)
 if "cards-lead" in html:
@@ -1332,6 +1373,8 @@ PY
   grep -qi 'rank is the bid' "${rules_body}" || fail "GET /rules must say rank is the bid"
   grep -qi 'older wins' "${rules_body}" || fail "GET /rules must say older wins ties"
   grep -qi 'difference' "${rules_body}" || fail "GET /rules must say raise pays difference"
+  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' "${rules_body}" \
+    || fail "GET /rules must name the rolling last-7-days window"
 
   echo "== fixture \$5 appears on the board after completion =="
   unpaid_body="$(mktemp)"
@@ -1564,6 +1607,10 @@ PY
     || fail "Post a brief must name Claim #1 as the landing"
   grep -q 'Post a brief this week' "${listed_body}" \
     || fail "occupied claim must say Post a brief this week"
+  grep -q 'data-rolling-week=""' "${listed_body}" \
+    || fail "occupied wall must stamp the rolling last-7-days window"
+  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' "${listed_body}" \
+    || fail "occupied wall must name the rolling last-7-days window"
   python3 - "${listed_body}" <<'PY' || fail "Open brief must win the first click; Post a brief follows after the flyers"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()
@@ -1590,9 +1637,10 @@ open_four = html.find('data-open-after-post-four-stamp=""')
 open_five = html.find('data-open-after-post-five-stamp=""')
 open_hop = html.find('class="open-label">Open brief')
 claim = html.find('id="claim"')
-if nav < 0 or nav_end < 0 or hop < 0 or stamp < 0 or write < 0 or two < 0 or three < 0 or four < 0 or five < 0 or six < 0 or flyers < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or open_four < 0 or open_five < 0 or claim < 0:
+rolling = html.find('data-rolling-week=""')
+if nav < 0 or nav_end < 0 or hop < 0 or stamp < 0 or write < 0 or two < 0 or three < 0 or four < 0 or five < 0 or six < 0 or flyers < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or open_four < 0 or open_five < 0 or claim < 0 or rolling < 0:
     raise SystemExit(1)
-if not (nav < nav_end < flyers < first <= open_stamp < first_read <= open_two < open_three < open_four < open_five < open_hop < hop <= stamp < write < two < three < four < five < six < note < label < dest < claim):
+if not (nav < nav_end < flyers <= rolling < first <= open_stamp < first_read <= open_two < open_three < open_four < open_five < open_hop < hop <= stamp < write < two < three < four < five < six < note < label < dest < claim):
     raise SystemExit(1)
 if stamp - hop > 80:
     raise SystemExit(1)
