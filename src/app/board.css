@@ -183,6 +183,13 @@ a.post-brief.post-after-open-five {
   font-size: 1.52rem;
 }
 
+/* Same Post a brief hop, concentrated after Open is re-concentrated again under louder Open brief hop. */
+a.post-brief.post-after-open-six {
+  padding: 1.1rem 1.56rem 1.16rem;
+  border-width: 7px;
+  font-size: 1.62rem;
+}
+
 .wall-stage {
   display: grid;
   grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
