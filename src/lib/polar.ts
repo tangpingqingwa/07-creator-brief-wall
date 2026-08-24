@@ -12,7 +12,7 @@ import {
   type Listing,
 } from "./rank";
 import { canonicalizeBriefUrl, UrlError } from "./urls";
-import { utcWeekId } from "./week";
+import { findLiveListingByBrief, nowUtc, utcWeekId } from "./week";
 
 export { utcWeekId } from "./week";
 
@@ -247,12 +247,12 @@ export function getListingById(
   return row ? listingFromRow(row) : undefined;
 }
 
-/** Same canonical brief URL this week is a raise; a new URL pays a full bid. */
+/** Same canonical brief URL still live in the rolling week is a raise. */
 export function planCheckout(
   db: AppDb,
   draft: ListingDraft,
 ): Extract<CheckoutQuote, { ok: true }> {
-  const existing = findListingByBrief(db, draft.weekId, draft.briefUrl);
+  const existing = findLiveListingByBrief(db, draft.briefUrl);
   const quote = quoteCheckout(existing, draft.bidUsd);
   if (!quote.ok) {
     throw new CheckoutError(checkoutErrorCode(draft.bidUsd, existing), 400, quote.error);
@@ -369,7 +369,7 @@ function applyPaidRaise(
   checkoutId: string,
   paidAt: string,
 ): Listing {
-  const existing = findListingByBrief(db, draft.weekId, draft.briefUrl);
+  const existing = findLiveListingByBrief(db, draft.briefUrl);
   if (!existing) {
     throw new CheckoutError(
       "raise_too_small",
@@ -482,7 +482,7 @@ export function recordOpenCheckout(
   db: AppDb,
   checkoutId: string,
   draft: ListingDraft,
-  createdAt: string = new Date().toISOString(),
+  createdAt: string = nowUtc().toISOString(),
 ): void {
   if (loadDraft(db, checkoutId)) {
     return;
@@ -558,7 +558,7 @@ export class FakePolarPort implements PolarPort {
       );
     }
     const checkoutId = newId("chk");
-    insertOpenDraft(this.db, checkoutId, draft, new Date().toISOString(), quote);
+    insertOpenDraft(this.db, checkoutId, draft, nowUtc().toISOString(), quote);
     return { checkoutId, url: checkoutUrl(input.successUrl, checkoutId) };
   }
 
@@ -576,7 +576,7 @@ export class FakePolarPort implements PolarPort {
         .get(row.listing_id) as ListingRow | undefined;
       return listing ? listingFromRow(listing) : null;
     }
-    const paidAt = new Date().toISOString();
+    const paidAt = nowUtc().toISOString();
     return applyPaidListing(this.db, draftFromRow(row), checkoutId, paidAt);
   }
 
@@ -585,7 +585,7 @@ export class FakePolarPort implements PolarPort {
     if (!row || row.status !== "open") {
       return;
     }
-    const now = new Date().toISOString();
+    const now = nowUtc().toISOString();
     this.db
       .prepare(
         `UPDATE checkout_drafts SET status = 'canceled', completed_at = ? WHERE checkout_id = ?`,
@@ -631,7 +631,7 @@ export class FakePolarPort implements PolarPort {
     if (loadDraft(this.db, checkoutId)) {
       return;
     }
-    insertOpenDraft(this.db, checkoutId, draft, new Date().toISOString());
+    insertOpenDraft(this.db, checkoutId, draft, nowUtc().toISOString());
   }
 }
 
@@ -843,7 +843,7 @@ async function parseCheckoutWebhook(
     checkoutId,
     draft: resolved,
     amountUsd: resolved.bidUsd,
-    paidAt: new Date().toISOString(),
+    paidAt: nowUtc().toISOString(),
   };
 }
 

@@ -490,8 +490,9 @@ if [[ "$about_code" == "200" && "$rules_code" == "200" ]] \
   && html_has "$about_body" '[Ww]eekly' \
   && html_has "$rules_body" 'Rank is the bid' \
   && html_has "$rules_body" 'Monday 00:00' \
+  && html_has "$rules_body" 'Rolling last 7 days' \
   && html_has "$rules_body" '[Ww]eekly'; then
-  record "about-rules" "PASS" "GET /about and /rules 200; rank is the bid; weekly reset"
+  record "about-rules" "PASS" "GET /about and /rules 200; rank is the bid; rolling last 7 days"
 else
   record "about-rules" "FAIL" "about HTTP ${about_code} rules HTTP ${rules_code}"
 fi

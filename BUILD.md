@@ -10,7 +10,7 @@ Pay-to-rank clone of outbid.lol for **creator briefs**. Brands pay to be seen by
 
 ## 0. Outcome
 
-Public English site: weekly board of briefs worth taking. One form (brand, terms, brief URL, amount, Outbid). Polar takes USD. Cards show **$** and **clicks**. Monday 00:00 UTC the board is empty again.
+Public English site: weekly board of briefs worth taking. One form (brand, terms, brief URL, amount, Outbid). Polar takes USD. Cards show **$** and **clicks**. Live rank is the rolling last 7 days from paid placement, not Monday 00:00 UTC.
 
 ---
 
@@ -84,7 +84,7 @@ raise(listing, newBid):
   if another listing has bid >= newBid and is older, this row still sorts below it
 ```
 
-Week key: ISO week in UTC (`weekId`). Reset is a query filter, not a delete, plus a documented operator/test clock.
+Week key: ISO week in UTC (`weekId`) is a Polar/audit label. Live rank is a rolling last-7-days filter on paid `createdAt`, not Monday 00:00 UTC. Reset is that query filter, not a delete, plus a documented operator/test clock.
 
 ---
 
@@ -94,7 +94,7 @@ Week key: ISO week in UTC (`weekId`). Reset is a query filter, not a delete, plu
 |---|---|
 | `rank.test.ts` | $5 lists; $6 is #1; equal bids keep older higher; raise pays difference only |
 | `urls.test.ts` | strips `utm_*` / `fbclid`; rejects telegram/discord; rejects NSFW; rejects `bit.ly` |
-| `week.test.ts` | Monday 00:00 UTC rolls `weekId`; previous rows absent from live board |
+| `week.test.ts` | Monday 00:00 UTC rolls `weekId` label; live board is rolling last 7 days; aged rows absent |
 | `board.test.ts` | card has brand, terms, $, clicks; HTML has **no** follower/subscriber/CPM fields |
 | `checkout.test.ts` | FakePolarPort; unpaid session does not list; webhook/fixture completion lists |
 | `scripts/test.sh` | contract files + (once app exists) `tsc` + `node:test`. Never Polar live. |
@@ -142,7 +142,7 @@ Each heading below is a fleet unit. Do not start PR N+1 in the same change as PR
 
 ### PR 6: Weekly reset + public brief-URL clicks
 
-- **Description:** ISO week in UTC. Live board is current `weekId` only. `GET /r/:id` confirms terms + URL. `POST /r/:id` increments public clicks and 302s to the canonical brief URL with no added trackers.
+- **Description:** ISO week in UTC as Polar/audit label. Live board is rolling last 7 days from paid placement, not Monday 00:00 UTC. `GET /r/:id` confirms terms + URL. `POST /r/:id` increments public clicks and 302s to the canonical brief URL with no added trackers.
 - **Files:** `src/lib/week.ts`, `src/lib/clicks.ts`, `src/lib/confirm-brief.ts`, `src/app/r/[id]/route.ts`, `tests/week.test.ts`, `tests/board.test.ts`
 - **Dependencies:** PR 2
 - **Acceptance:** SPEC §6.7 and public clicks on the brief URL.

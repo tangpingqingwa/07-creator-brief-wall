@@ -179,6 +179,7 @@ test("rules state min $5, rank=bid, older wins, raise pays difference", () => {
   assert.match(html, /\$5/);
   assert.match(html, /Older wins ties/);
   assert.match(html, /Raise pays difference/);
+  assert.match(html, /Rolling last 7 days\. Not Monday 00:00 UTC/);
   assert.match(html, /Monday 00:00:00\.000 UTC/);
   assert.match(html, /fake followers/i);
   assert.match(html, /NSFW/);

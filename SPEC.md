@@ -28,7 +28,7 @@ Clone of [outbid.lol](https://outbid.lol/) mechanics, applied to creator briefs.
 - Public English leaderboard of paid briefs. No login to **read**.
 - Whole-USD bids. Documented minimum **$5**. Rank = current bid.
 - Listing is **brand + payout/terms summary + brief URL**. Clicks on the brief URL are counted and public.
-- Weekly reset. Board starts empty each Monday 00:00 UTC.
+- Weekly reset. Live board is the rolling last 7 days from paid placement. Not Monday 00:00 UTC.
 - Honest fields only. **No invented follower counts, reach, CPM, or “avg views.”**
 - Payments via Polar (live) and a fixture checkout (tests / CI).
 - Pages: board, about, rules, checkout return.
@@ -125,7 +125,7 @@ Copied from outbid.lol, with this vertical’s minimum and weekly reset.
 4. **Equal bids:** the **older** listing (earlier `createdAt` at that amount, then earlier first payment) keeps the higher rank.
 5. **Raise:** submit the same canonical brief URL again. The new bid must be an integer **at least $1 above the listing’s current bid**. To take #1 from someone else, the new bid must be **at least $1 above the current top bid**. The payer pays only the **difference**. Someone else cannot steal that rank by paying only that difference — they must pay a full bid **strictly greater** than the current top.
 6. A completed Polar payment (or fixture payment in tests) is what claims the rank. Unpaid checkout sessions do nothing.
-7. **Weekly reset:** Monday 00:00 UTC. Every listing on the live board expires. Clicks and bids do not carry over. The new week starts empty. Optional read-only archive of the previous week is allowed; it must not affect live rank.
+7. **Weekly reset:** rolling last 7 days from first paid placement (`createdAt`). Every listing ages off the live board seven days later. Clicks and bids do not carry over. The window starts empty when nothing paid remains inside it. Optional read-only archive of aged rows is allowed; it must not affect live rank. Monday 00:00 UTC is the ISO `weekId` Polar/audit label, **not** the public expiry. A brand outside that civil midnight does not lose the plaster on a timezone tax. Not a 24h lock on #1.
 
 Display order: `bidUsd DESC`, then `createdAt ASC` (older wins ties), then `id ASC`.
 

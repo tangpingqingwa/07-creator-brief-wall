@@ -56,14 +56,14 @@ Live Polar missing token was walked on a dedicated loopback process (`POLAR_LIVE
 |---|---|---|
 | Health | **PASS** | `GET /healthz` 200 `{ ok: true }` |
 | Empty board | **PASS** | `GET /` 200 week `2026-W34` empty + bid form. No seeded briefs. No invented follower counts. |
-| About / rules | **PASS** | `GET /about` and `GET /rules` 200. Rank is the bid. Weekly reset (`Monday 00:00`). |
+| About / rules | **PASS** | `GET /about` and `GET /rules` 200. Rank is the bid. Weekly reset (rolling last 7 days, not Monday 00:00 UTC). |
 | Place $5 | **PASS** | Fixture pay $5 → #1 `SmokeFive 20260823081900`. Brand + terms + $5. Tracking stripped. |
 | Outbid | **PASS** | Second brief at $6 is #1. First $5 stays on the board at #2. |
 | Raise | **PASS** | First listing $5→$7 (pays difference) and becomes #1. $6 stays. |
 | Tie | **PASS** | Both $8. Older `SmokeEightA 20260823081900` stays #1. |
 | Click | **PASS** | `GET /r/lst_7f6ceb9479de0418` 302 → `https://five.example/smoke-20260823081900`. Clicks `0→1`. No tracking junk added. |
 | Reject | **PASS-ERROR** | Chat `t.me` + NSFW `onlyfans` → 400. Neither lists. |
-| Reset | **PASS** | `WEEK_NOW=2099-01-05T00:00:00.000Z` → week `2099-W02` empty. Previous rows hidden. |
+| Reset | **PASS** | `WEEK_NOW=2099-01-05T00:00:00.000Z` → rolling window empty. Previous rows hidden. |
 | Secret | **BLOCKED-SECRET** | `BLOCKED-SECRET: POLAR_ACCESS_TOKEN` |
 | Live Polar checkout | **PASS** | Real Polar sandbox Checkout URL (`sandbox.polar.sh`). Unpaid session not listed. Not a fixture listing. |
 
