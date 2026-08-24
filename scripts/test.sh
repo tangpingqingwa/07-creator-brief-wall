@@ -217,6 +217,12 @@ if [[ -f package.json ]]; then
     || fail "occupied claim must say what it costs to take #1"
   grep -q 'Blank plaster' src/app/outbid-form.tsx \
     || fail "empty claim must say blank plaster is #1 for the minimum"
+  grep -q 'data-empty-claim-first' src/app/outbid-form.tsx \
+    || fail "empty claim must stamp Claim #1 first"
+  grep -q 'empty-claim-first' src/app/outbid-form.tsx \
+    || fail "empty claim must use the empty-claim-first class"
+  grep -q 'empty plaster still leads with Claim #1' tests/board.test.ts \
+    || fail "board tests must cover empty plaster leading with Claim #1"
   grep -q 'claim strip defaults to this week' tests/board.test.ts \
     || fail "board tests must cover the live #1 claim amount"
   grep -q 'occupied wall puts flyers' tests/board.test.ts \
@@ -408,6 +414,15 @@ PY
     || fail "occupied wall CSS must put flyers in the first reading slot"
   grep -q 'data-occupied' src/lib/board-markup.tsx \
     || fail "wall stage must mark occupied vs empty plaster"
+  grep -q 'empty-claim-first' src/app/board.css \
+    || fail "CSS must keep empty plaster leading with Claim #1"
+  grep -q 'data-occupied="false"' src/app/board.css \
+    || fail "CSS must keep occupied chrome off empty plaster"
+  if grep -nE 'data-post-after-open-seven|data-open-after-post-six-stamp' \
+    src/lib/board-markup.tsx src/app/outbid-form.tsx src/app/board.css >/dev/null
+  then
+    fail "do not stamp *-after-*-N on empty plaster"
+  fi
   grep -q 'older' tests/rank.test.ts || fail "rank tests missing older-wins-ties"
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach|\bcpm\b' \
     src/lib/board-markup.tsx src/app/outbid-form.tsx src/lib/rank.ts src/app/board.css \
@@ -703,6 +718,10 @@ PY
     || fail "empty week claim must say blank plaster is the first flyer"
   grep -q 'data-occupied="false"' "${home_body}" \
     || fail "empty week must mark the wall unoccupied"
+  grep -q 'data-empty-claim-first=""' "${home_body}" \
+    || fail "empty week must stamp Claim #1 first"
+  grep -q 'class="paste-rail empty-claim-first"' "${home_body}" \
+    || fail "empty week claim must use the empty-claim-first class"
   if grep -q 'wall-occupied' "${home_body}"; then
     fail "empty week must not use flyer-first occupied layout"
   fi
@@ -778,12 +797,19 @@ PY
   if grep -qi 'Post a brief' "${home_body}"; then
     fail "empty week Claim #1 is already first; do not add Post a brief"
   fi
-  python3 - "${home_body}" <<'PY' || fail "empty week must keep the claim strip before blank plaster"
+  python3 - "${home_body}" <<'PY' || fail "empty week must keep Claim #1 before blank plaster"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()
 claim = html.find('id="claim"')
+stamp = html.find('data-empty-claim-first=""')
 plaster = html.find('data-empty-week="true"')
-if claim < 0 or plaster < 0 or claim >= plaster:
+if claim < 0 or stamp < 0 or plaster < 0 or not (claim <= stamp < plaster):
+    raise SystemExit(1)
+if html.count('data-empty-claim-first=""') != 1:
+    raise SystemExit(1)
+if "data-post-brief" in html or "data-open-brief" in html or "data-prize" in html:
+    raise SystemExit(1)
+if "prize-before-price" in html or "Post a brief" in html or "Open brief" in html:
     raise SystemExit(1)
 PY
   grep -q 'Outbid' src/app/outbid-form.tsx || fail "form missing Outbid"
@@ -867,6 +893,12 @@ PY
     || fail "paid board must mark the wall occupied"
   grep -q 'wall-occupied' "${listed_body}" \
     || fail "paid board must use flyer-first occupied layout"
+  if grep -q 'data-empty-claim-first' "${listed_body}"; then
+    fail "occupied week must not stamp empty Claim #1 first"
+  fi
+  if grep -q 'empty-claim-first' "${listed_body}"; then
+    fail "occupied week must not use the empty-claim-first class"
+  fi
   grep -q 'data-open-brief=""' "${listed_body}" \
     || fail "paid flyer must expose a labeled Open brief hop"
   grep -q 'data-first-click="open"' "${listed_body}" \
@@ -1378,7 +1410,11 @@ PY
   [[ "${rolled_code}" == "200" ]] || fail "GET / after week roll expected 200 got ${rolled_code}"
   grep -q 'data-empty-week="true"' "${rolled_body}" \
     || fail "week roll must hide previous week from the live board"
-  if grep -qE 'Acme|Rival|CleanUrl' "${rolled_body}"; then
+  grep -q 'data-empty-claim-first=""' "${rolled_body}" \
+    || fail "rolled empty week must still lead with Claim #1"
+  grep -q 'class="paste-rail empty-claim-first"' "${rolled_body}" \
+    || fail "rolled empty week must stamp the empty Claim #1 class"
+  if grep -qE 'Acme|Rival|CleanUrl|data-post-brief|data-open-brief|data-prize|prize-before-price' "${rolled_body}"; then
     fail "previous week listings must be absent from the live board"
   fi
   unset WEEK_NOW
