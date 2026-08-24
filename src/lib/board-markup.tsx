@@ -94,7 +94,12 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
               <span className="open-label">Open brief</span>
               <span className="host">{hostLabel(listing.briefUrl)}</span>
             </a>
-            <span className="bid">${listing.bidUsd}</span>
+            <span
+              className={listing.rank === 1 ? "bid later-fact" : "bid"}
+              data-later-fact={listing.rank === 1 ? "" : undefined}
+            >
+              ${listing.bidUsd}
+            </span>
             <span className="clicks" data-clicks={listing.clicks}>
               {listing.clicks} clicks
             </span>

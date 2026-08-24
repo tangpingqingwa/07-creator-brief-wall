@@ -233,6 +233,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover labeled Terms before \$bid"
   grep -q 'occupied #1 Terms reads first and larger than $bid and clicks' tests/board.test.ts \
     || fail "board tests must cover #1 Terms larger than \$bid"
+  grep -q 'occupied #1 $bid stays a later fact and does not shout beside Terms' tests/board.test.ts \
+    || fail "board tests must cover #1 \$bid staying a later fact"
   grep -q 'one flyer opens the brief after Terms, not next to $bid' tests/board.test.ts \
     || fail "board tests must cover Open brief after Terms"
   grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
@@ -387,6 +389,14 @@ if [[ -f package.json ]]; then
     || fail "CSS must enlarge only the #1 Terms copy"
   grep -q 'card-lead .bid' src/app/board.css \
     || fail "CSS must keep #1 \$bid quieter than Terms"
+  grep -q 'data-later-fact' src/lib/board-markup.tsx \
+    || fail "occupied #1 flyer must stamp \$bid as a later fact"
+  grep -q 'later-fact' src/lib/board-markup.tsx \
+    || fail "occupied #1 \$bid must use the later-fact class"
+  grep -q 'later-fact' src/app/board.css \
+    || fail "CSS must keep #1 \$bid a later fact beside Terms"
+  grep -qF 'card-lead .bid.later-fact[data-later-fact]' src/app/board.css \
+    || fail "CSS must mute #1 \$bid so it cannot shout beside Terms"
   grep -q 'card-lead .clicks' src/app/board.css \
     || fail "CSS must keep #1 clicks quieter than Terms"
   python3 - src/app/board.css <<'PY' || fail "#1 Terms copy must be larger than \$bid and clicks"
@@ -404,6 +414,14 @@ prize = size(r"\.card-lead \.terms\.prize-before-price \.terms-copy\s*\{[^}]*fon
 bid = size(r"\.card-lead \.bid\s*\{[^}]*font-size:\s*([\d.]+)rem")
 clicks = size(r"\.card-lead \.clicks\s*\{[^}]*font-size:\s*([\d.]+)rem")
 if not (prize > bid and prize > clicks):
+    raise SystemExit(1)
+if "color: var(--muted)" not in re.search(
+    r"\.card-lead \.bid\.later-fact\[data-later-fact\]\s*\{[^}]*\}", css, re.S
+).group(0):
+    raise SystemExit(1)
+if "color: var(--bid)" in re.search(
+    r"\.card-lead \.bid\.later-fact\[data-later-fact\]\s*\{[^}]*\}", css, re.S
+).group(0):
     raise SystemExit(1)
 PY
   grep -q '"rank brand brand"' src/app/board.css \
@@ -812,6 +830,12 @@ PY
   if grep -q 'prize-before-price' "${home_body}"; then
     fail "empty plaster has no flyer; do not stamp prize before price"
   fi
+  if grep -q 'data-later-fact' "${home_body}"; then
+    fail "empty plaster has no flyer; do not stamp \$bid as a later fact"
+  fi
+  if grep -q 'later-fact' "${home_body}"; then
+    fail "empty plaster has no flyer; do not mute a later-fact \$bid"
+  fi
   if grep -q 'data-open-after-terms' "${home_body}"; then
     fail "empty plaster has no flyer; do not show Open brief after Terms"
   fi
@@ -833,7 +857,9 @@ if html.count('data-empty-claim-first=""') != 1:
     raise SystemExit(1)
 if "data-post-brief" in html or "data-open-brief" in html or "data-prize" in html:
     raise SystemExit(1)
-if "prize-before-price" in html or "Post a brief" in html or "Open brief" in html:
+if "prize-before-price" in html or "data-later-fact" in html or "later-fact" in html:
+    raise SystemExit(1)
+if "Post a brief" in html or "Open brief" in html:
     raise SystemExit(1)
 PY
   grep -q 'Outbid' src/app/outbid-form.tsx || fail "form missing Outbid"
@@ -959,6 +985,10 @@ PY
     || fail "paid #1 flyer must mark Terms as the prize"
   grep -q 'data-prize-before-price=""' "${listed_body}" \
     || fail "paid #1 flyer must stamp prize before price"
+  grep -q 'class="bid later-fact"' "${listed_body}" \
+    || fail "paid #1 flyer must keep \$bid a later fact"
+  grep -q 'data-later-fact=""' "${listed_body}" \
+    || fail "paid #1 flyer must stamp \$bid as a later fact"
   python3 - "${listed_body}" <<'PY' || fail "paid flyer must put labeled Terms before Open brief and \$bid"
 import re
 import sys
@@ -983,11 +1013,13 @@ open_two = card.find('data-open-after-post-two-stamp=""')
 open_three = card.find('data-open-after-post-three-stamp=""')
 open_four = card.find('data-open-after-post-four-stamp=""')
 open_five = card.find('data-open-after-post-five-stamp=""')
-bid = card.find('class="bid">$')
-if terms < 0 or prize < 0 or prize_stamp < 0 or prize_class < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or open_four < 0 or open_five < 0 or bid < 0:
+later = card.find('data-later-fact=""')
+bid_class = card.find('class="bid later-fact"')
+bid = card.find('class="bid later-fact"')
+if terms < 0 or prize < 0 or prize_stamp < 0 or prize_class < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or open_four < 0 or open_five < 0 or later < 0 or bid_class < 0 or bid < 0:
     raise SystemExit(1)
 open_label = card.find('class="open-label">Open brief')
-if not (prize_class <= terms <= prize <= prize_stamp < label < copy < hop <= after < note < open_label < bid):
+if not (prize_class <= terms <= prize <= prize_stamp < label < copy < hop <= after < note < open_label < bid_class <= later):
     raise SystemExit(1)
 if not (hop <= first <= open_stamp < first_read <= open_two < open_three < open_four < open_five < open_label):
     raise SystemExit(1)
@@ -1001,7 +1033,7 @@ if open_four - open_three > 80:
     raise SystemExit(1)
 if open_five - open_four > 80:
     raise SystemExit(1)
-if not re.search(r'class="bid">\$(?:<!-- -->)?5', card):
+if not re.search(r'class="bid later-fact"[^>]*>\$(?:<!-- -->)?5', card):
     raise SystemExit(1)
 if html.count('data-open-after-post-first=""') != 1:
     raise SystemExit(1)
@@ -1020,6 +1052,10 @@ if html.count('data-prize=""') != 1:
 if html.count('data-prize-before-price=""') != 1:
     raise SystemExit(1)
 if html.count('class="terms prize-before-price"') != 1:
+    raise SystemExit(1)
+if html.count('data-later-fact=""') != 1:
+    raise SystemExit(1)
+if html.count('class="bid later-fact"') != 1:
     raise SystemExit(1)
 PY
   grep -q 'data-post-brief=""' "${listed_body}" \
@@ -1256,9 +1292,15 @@ if not rival or not acme:
     raise SystemExit(1)
 if 'data-prize=""' not in rival.group(0) or 'prize-before-price' not in rival.group(0):
     raise SystemExit(1)
+if 'data-later-fact=""' not in rival.group(0) or 'class="bid later-fact"' not in rival.group(0):
+    raise SystemExit(1)
 if 'data-prize' in acme.group(0) or 'prize-before-price' in acme.group(0):
     raise SystemExit(1)
+if 'data-later-fact' in acme.group(0) or 'later-fact' in acme.group(0):
+    raise SystemExit(1)
 if html.count('data-prize=""') != 1 or html.count('data-prize-before-price=""') != 1:
+    raise SystemExit(1)
+if html.count('data-later-fact=""') != 1 or html.count('class="bid later-fact"') != 1:
     raise SystemExit(1)
 PY
 
@@ -1458,7 +1500,7 @@ PY
     || fail "rolled empty week must still lead with Claim #1"
   grep -q 'class="paste-rail empty-claim-first"' "${rolled_body}" \
     || fail "rolled empty week must stamp the empty Claim #1 class"
-  if grep -qE 'Acme|Rival|CleanUrl|data-post-brief|data-open-brief|data-prize|prize-before-price' "${rolled_body}"; then
+  if grep -qE 'Acme|Rival|CleanUrl|data-post-brief|data-open-brief|data-prize|prize-before-price|data-later-fact|later-fact' "${rolled_body}"; then
     fail "previous week listings must be absent from the live board"
   fi
   unset WEEK_NOW
