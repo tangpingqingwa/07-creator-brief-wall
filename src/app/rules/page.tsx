@@ -77,8 +77,9 @@ export default function RulesPage() {
           <tr>
             <th>Payment claims rank</th>
             <td>
-              A completed payment claims the rank. Unpaid checkout does not. We
-              do not invent a paid brief.
+              A completed Polar payment claims the rank. Unpaid checkout stays
+              off the board until Polar reports paid. An abandoned brief is not
+              Terms as #1. We do not invent a paid brief.
             </td>
           </tr>
         </tbody>

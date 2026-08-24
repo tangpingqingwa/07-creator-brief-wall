@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { openDatabase, resetDbCache, type ListingRow } from "../src/lib/db";
 import {
@@ -19,7 +20,9 @@ import {
   planCheckout,
   polarApiBase,
 } from "../src/lib/polar";
+import { Board } from "../src/app/board";
 import { listingFromRow, rankListings } from "../src/lib/rank";
+import { listLiveBoard } from "../src/lib/week";
 
 const WEEK = "2026-W34";
 const SUCCESS_URL = "http://127.0.0.1:3000/checkout/return";
@@ -120,21 +123,59 @@ test("FakePolarPort $5 appears on the board after completion", async () => {
   assert.equal(ranked[0]?.brand, "Acme");
 });
 
-test("unpaid session does not list", async () => {
+test("unpaid Polar checkout stays off the plaster until Polar reports paid", async () => {
   const db = openDatabase(":memory:");
   const polar = new FakePolarPort(db);
-  const started = await polar.createCheckout({
-    amountUsd: 5,
-    listingDraft: draft({ brand: "Ghost", briefUrl: "https://example.com/ghost" }),
-    successUrl: SUCCESS_URL,
-  });
-  await polar.abandonCheckout(started.checkoutId);
-  assert.equal(await polar.completeCheckout(started.checkoutId), null);
-  assert.equal(
-    (db.prepare("SELECT COUNT(*) AS n FROM listings").get() as { n: number }).n,
-    0,
-  );
-  assert.equal(polar.getCheckout(started.checkoutId)?.status, "canceled");
+  const previousWeekNow = process.env.WEEK_NOW;
+  process.env.WEEK_NOW = "2026-08-17T00:00:00.000Z";
+  try {
+    const started = await polar.createCheckout({
+      amountUsd: 5,
+      listingDraft: draft({
+        brand: "Ghost",
+        terms: "Abandoned Polar checkout.",
+        briefUrl: "https://example.com/ghost",
+      }),
+      successUrl: SUCCESS_URL,
+    });
+    const leftover = listLiveBoard(db, new Date("2026-08-17T00:00:00.000Z"));
+    assert.deepEqual(leftover, []);
+    const leftoverHtml = renderToStaticMarkup(
+      createElement(Board, { listings: leftover, weekId: WEEK }),
+    );
+    assert.match(leftoverHtml, /data-occupied="false"/);
+    assert.match(leftoverHtml, /Claim #1 for/);
+    assert.match(leftoverHtml, /data-first-click="claim"/);
+    assert.match(leftoverHtml, /Then the brief URL/);
+    assert.match(
+      leftoverHtml,
+      /Unpaid checkout stays off the board until Polar reports paid/,
+    );
+    assert.match(leftoverHtml, /An abandoned brief is not Terms as #1/);
+    assert.doesNotMatch(leftoverHtml, /Ghost|Abandoned Polar checkout/);
+    assert.doesNotMatch(leftoverHtml, /data-prize=/);
+    assert.doesNotMatch(leftoverHtml, /Open brief/);
+    assert.doesNotMatch(leftoverHtml, /Post a brief/);
+    assert.doesNotMatch(leftoverHtml, /data-first-click="open"/);
+
+    await polar.abandonCheckout(started.checkoutId);
+    assert.equal(await polar.completeCheckout(started.checkoutId), null);
+    assert.equal(
+      (db.prepare("SELECT COUNT(*) AS n FROM listings").get() as { n: number }).n,
+      0,
+    );
+    assert.equal(polar.getCheckout(started.checkoutId)?.status, "canceled");
+    assert.deepEqual(
+      listLiveBoard(db, new Date("2026-08-17T00:00:00.000Z")),
+      [],
+    );
+  } finally {
+    if (previousWeekNow === undefined) {
+      delete process.env.WEEK_NOW;
+    } else {
+      process.env.WEEK_NOW = previousWeekNow;
+    }
+  }
 });
 
 test("webhook / fixture completion lists; abandoned webhook does not", async () => {
@@ -459,6 +500,8 @@ test("/checkout/return markup shows success or cancel", async () => {
   assert.match(cancelHtml, /data-return="cancel"/);
   assert.match(cancelHtml, /No rank change/);
   assert.match(cancelHtml, /does not list/);
+  assert.match(cancelHtml, /Polar reports paid/);
+  assert.match(cancelHtml, /An abandoned brief is not Terms as #1/);
 });
 
 test("same brief URL raise charges new − current; rival pays a full bid", async () => {

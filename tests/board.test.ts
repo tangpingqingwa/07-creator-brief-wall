@@ -6,10 +6,16 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ClickError, getPublicListing, incrementPublicClick } from "../src/lib/clicks";
 import { Board } from "../src/app/board";
-import { BoardCards, BoardChrome } from "../src/lib/board-markup";
+import { BoardCards, BoardChrome, OccupiedFlyers } from "../src/lib/board-markup";
 import { confirmBriefHtml } from "../src/lib/confirm-brief";
 import { openDatabase } from "../src/lib/db";
-import { claimNumberOneUsd, rankListings, type Listing } from "../src/lib/rank";
+import {
+  claimNumberOneUsd,
+  isPolarPaidListing,
+  paidListings,
+  rankListings,
+  type Listing,
+} from "../src/lib/rank";
 import { insertFixtureListing } from "../src/lib/test-listings";
 import { listLiveBoard } from "../src/lib/week";
 
@@ -1953,7 +1959,7 @@ test("empty plaster stays Claim #1 with no Terms / Open leak", () => {
   const board = readFileSync(join(process.cwd(), "src", "app", "board.tsx"), "utf8");
   const form = readFileSync(join(process.cwd(), "src", "app", "outbid-form.tsx"), "utf8");
   assert.match(markup, /export function OccupiedFlyers/);
-  assert.match(board, /<OccupiedFlyers listings=\{listings\} \/>/);
+  assert.match(board, /<OccupiedFlyers listings=\{paid\} \/>/);
   assert.doesNotMatch(board, /EmptyPlaster/);
   assert.doesNotMatch(board, /<BoardCards/);
   assert.match(form, /data-empty-week="true"/);
@@ -3513,4 +3519,260 @@ test("occupied week window is rolling last-7-days — not Monday 00:00 UTC", () 
     /\.wall-stage\.wall-empty\[data-occupied="false"\] \[data-rolling-week\]/,
   );
   assert.doesNotMatch(css, /background:\s*var\(--bid-ink\)/);
+});
+
+test("unpaid stays off the plaster wall — No Terms until Polar reports paid", () => {
+  const markup = readFileSync(
+    join(process.cwd(), "src", "lib", "board-markup.tsx"),
+    "utf8",
+  );
+  const board = readFileSync(join(process.cwd(), "src", "app", "board.tsx"), "utf8");
+  const week = readFileSync(join(process.cwd(), "src", "lib", "week.ts"), "utf8");
+  const clicks = readFileSync(join(process.cwd(), "src", "lib", "clicks.ts"), "utf8");
+  const rank = readFileSync(join(process.cwd(), "src", "lib", "rank.ts"), "utf8");
+  assert.match(rank, /export function isPolarPaidListing/);
+  assert.match(rank, /export function paidListings/);
+  assert.match(rank, /paidListings\(listings\)/);
+  assert.match(board, /const paid = rankListings\(listings\)/);
+  assert.match(board, /<OccupiedFlyers listings=\{paid\} \/>/);
+  assert.match(markup, /if \(!isPolarPaidListing\(listing\)\) \{\n    return null;/);
+  assert.match(markup, /data-polar-paid=""/);
+  assert.match(markup, /const paid = rankListings\(listings\)/);
+  assert.match(week, /hasCompletedPolarPayment/);
+  assert.match(week, /AND payments.status = 'completed'/);
+  assert.match(clicks, /isPolarPaidListing/);
+  assert.match(clicks, /hasCompletedPolarPayment/);
+  assert.match(formSource, /Unpaid checkout stays off the board until Polar reports paid/);
+  assert.match(formSource, /An abandoned brief is not Terms as #1/);
+  assert.match(cssSource, /\.wall-occupied \.card:not\(\[data-polar-paid\]\)/);
+  assert.match(
+    cssSource,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.card:not\(\[data-polar-paid\]\)/,
+  );
+  const unpaidHide = cssSource.match(
+    /\.wall-occupied \.card:not\(\[data-polar-paid\]\),\s*\.wall-stage\.wall-empty\[data-occupied="false"\] \.card:not\(\[data-polar-paid\]\)\s*\{([^}]*)\}/,
+  );
+  assert.ok(unpaidHide);
+  assert.match(unpaidHide[1], /display:\s*none/);
+  assert.doesNotMatch(unpaidHide[1], /background:|var\(--bid-ink\)/);
+  assert.doesNotMatch(markup, /data-unpaid-off|data-unpaid-off-board|data-post-after-open-seven|data-open-after-post-six-stamp/);
+  assert.doesNotMatch(board, /data-unpaid-off|data-unpaid-off-board|data-post-after-open-seven/);
+  assert.doesNotMatch(formSource, /data-unpaid-off|data-unpaid-off-board|data-post-after-open-seven/);
+  assert.doesNotMatch(cssSource, /data-unpaid-off|data-unpaid-off-board/);
+  assert.match(markup, /data-prize=/);
+  assert.match(markup, /data-first-click="open"/);
+  assert.match(markup, /Open brief/);
+  assert.match(markup, /Post a brief/);
+  assert.match(formSource, /Claim #1 for/);
+  assert.match(formSource, /Then the brief URL/);
+  assert.match(formSource, /className="amount-field"/);
+  assert.match(formSource, /className="step"/);
+  assert.match(formSource, /Outbid/);
+  assert.match(markup, /className="plaster"/);
+
+  const unpaid = listing({
+    id: "lst_ghost",
+    brand: "Ghost",
+    terms: "Abandoned Polar checkout.",
+    briefUrl: "https://example.com/ghost",
+    bidUsd: 99,
+    createdAt: "",
+  });
+  const abandoned = listing({
+    id: "lst_abandoned",
+    brand: "Vapor Co",
+    terms: "Epoch createdAt is not Polar paid.",
+    briefUrl: "https://example.com/vapor",
+    bidUsd: 80,
+    createdAt: "1970-01-01T00:00:00.000Z",
+  });
+  const paid = listing({
+    id: "lst_paid_only",
+    brand: "Acme",
+    terms: "$800 flat, 1 TikTok",
+    briefUrl: "https://example.com/acme",
+    bidUsd: 5,
+    createdAt: "2026-08-17T00:00:00.000Z",
+  });
+  const laterPaid = listing({
+    id: "lst_later",
+    brand: "Hopper Co",
+    terms: "later rank",
+    briefUrl: "https://example.com/hopper",
+    bidUsd: 5,
+    createdAt: "2026-08-18T00:00:00.000Z",
+  });
+
+  assert.equal(isPolarPaidListing(unpaid), false);
+  assert.equal(isPolarPaidListing(abandoned), false);
+  assert.equal(isPolarPaidListing(paid), true);
+  assert.deepEqual(paidListings([unpaid, abandoned]), []);
+  assert.deepEqual(rankListings([unpaid, abandoned]), []);
+  const rankedPaid = rankListings([unpaid, abandoned, paid, laterPaid]);
+  assert.equal(rankedPaid.length, 2);
+  assert.equal(rankedPaid[0]?.id, "lst_paid_only");
+  assert.equal(rankedPaid[0]?.rank, 1);
+  assert.doesNotMatch(
+    rankedPaid.map((row) => row.id).join(","),
+    /lst_ghost|lst_abandoned/,
+  );
+
+  const leftover = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: [
+        { ...unpaid, rank: 1 },
+        { ...abandoned, rank: 2 },
+      ],
+    }),
+  );
+  assert.match(leftover, /data-occupied="false"/);
+  assert.match(leftover, /class="wall-stage wall-empty"/);
+  assert.match(leftover, /Claim #1 for/);
+  assert.match(leftover, /data-first-click="claim"/);
+  assert.match(leftover, /Then the brief URL/);
+  assert.match(leftover, /Blank plaster/);
+  assert.match(leftover, /Unpaid checkout stays off the board until Polar reports paid/);
+  assert.match(leftover, /An abandoned brief is not Terms as #1/);
+  assert.match(leftover, />Outbid</);
+  const leftoverClaim = leftover.indexOf("Claim #1 for");
+  const leftoverOutbid = leftover.indexOf(">Outbid<");
+  const leftoverLater = leftover.indexOf("Then the brief URL");
+  assert.ok(leftoverClaim >= 0 && leftoverOutbid > leftoverClaim);
+  assert.ok(leftoverLater > leftoverOutbid);
+  assert.doesNotMatch(leftover, /Ghost|Vapor Co|Abandoned Polar checkout|Epoch createdAt/);
+  assert.doesNotMatch(leftover, /data-bid="99"|data-bid="80"/);
+  assert.doesNotMatch(leftover, />\$99<|>\$80</);
+  assert.doesNotMatch(leftover, /data-prize=/);
+  assert.doesNotMatch(leftover, /data-open-brief/);
+  assert.doesNotMatch(leftover, /Open brief/);
+  assert.doesNotMatch(leftover, /Post a brief/);
+  assert.doesNotMatch(leftover, /data-first-click="open"/);
+  assert.doesNotMatch(leftover, /data-later-flyer/);
+  assert.doesNotMatch(leftover, /data-later-pack/);
+  assert.doesNotMatch(leftover, /data-rolling-week/);
+  assert.doesNotMatch(leftover, /data-unpaid-off/);
+  assert.doesNotMatch(leftover, /data-post-after-open-seven|data-open-after-post-six-stamp/);
+  assert.doesNotMatch(leftover, FORBIDDEN);
+
+  const leftoverCards = renderBoard([unpaid, abandoned]);
+  assert.match(leftoverCards, /data-empty-week="true"/);
+  assert.match(leftoverCards, /The plaster is blank/);
+  assert.match(leftoverCards, /Unpaid checkout stays off the board until Polar reports paid/);
+  assert.doesNotMatch(leftoverCards, /Ghost|Vapor Co|data-prize=|Open brief|Post a brief/);
+
+  const leftoverFlyer = renderToStaticMarkup(
+    createElement(OccupiedFlyers, {
+      listings: [{ ...unpaid, rank: 1 }, { ...abandoned, rank: 2 }],
+    }),
+  );
+  assert.equal(leftoverFlyer, "");
+
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.match(empty, /Claim #1 for/);
+  assert.match(empty, /data-first-click="claim"/);
+  assert.match(empty, /Then the brief URL/);
+  assert.match(empty, /Unpaid checkout stays off the board until Polar reports paid/);
+  assert.doesNotMatch(empty, /data-prize=/);
+  assert.doesNotMatch(empty, /Open brief/);
+  assert.doesNotMatch(empty, /Post a brief/);
+  assert.doesNotMatch(empty, /data-unpaid-off/);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: [
+        { ...unpaid, rank: 1 },
+        ...rankListings([paid, laterPaid]),
+      ],
+    }),
+  );
+  const prizeAt = occupied.indexOf('data-prize=""');
+  const firstClickAt = occupied.indexOf('data-first-click="open"');
+  const laterOpenAt = occupied.indexOf('data-later-open=""');
+  const postAt = occupied.indexOf('data-post-brief=""');
+  const windowAt = occupied.indexOf('data-rolling-week=""');
+  const claimAt = occupied.indexOf('id="claim"');
+  assert.ok(prizeAt >= 0 && firstClickAt > prizeAt);
+  assert.ok(laterOpenAt > firstClickAt && postAt > laterOpenAt);
+  assert.ok(windowAt >= 0 && firstClickAt > windowAt);
+  assert.ok(claimAt > postAt);
+  assert.match(occupied, /data-occupied="true"/);
+  assert.match(occupied, /data-polar-paid=""/);
+  assert.match(occupied, /class="terms-label">Terms/);
+  assert.match(occupied, /\$800 flat, 1 TikTok/);
+  assert.match(occupied, /data-first-click="open"/);
+  assert.match(occupied, /data-later-flyer=""/);
+  assert.match(occupied, /Post a brief/);
+  assert.match(occupied, /Unpaid checkout stays off the board until Polar reports paid/);
+  assert.match(occupied, /Rolling last 7 days\. Not Monday 00:00 UTC\./);
+  assert.doesNotMatch(occupied, /Ghost|Vapor Co|Abandoned Polar checkout/);
+  assert.doesNotMatch(occupied, /data-empty-claim-first/);
+  assert.doesNotMatch(occupied, /data-unpaid-off/);
+  assert.doesNotMatch(occupied, /data-post-after-open-seven/);
+  assert.doesNotMatch(occupied, /data-open-after-post-six-stamp/);
+  assert.equal((occupied.match(/data-prize=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-first-click="open"/g) ?? []).length, 1);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+
+  const db = openDatabase(":memory:");
+  try {
+    db.prepare(
+      `INSERT INTO listings (
+        id, week_id, brand, terms, brief_url, platforms, bid_usd, clicks, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "lst_ghost_row",
+      WEEK,
+      "Ghost",
+      "Abandoned Polar checkout.",
+      "https://example.com/ghost-row",
+      null,
+      99,
+      4,
+      "2026-08-17T00:00:00.000Z",
+      "2026-08-17T00:00:00.000Z",
+    );
+    db.prepare(
+      `INSERT INTO payments (
+        id, listing_id, week_id, brief_url, amount_usd, kind, status, polar_checkout_id, created_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "pay_ghost_pending",
+      "lst_ghost_row",
+      WEEK,
+      "https://example.com/ghost-row",
+      99,
+      "place",
+      "pending",
+      "chk_ghost",
+      "2026-08-17T00:00:00.000Z",
+      null,
+    );
+    insertFixtureListing(db, {
+      id: "lst_paid_row",
+      weekId: WEEK,
+      brand: "Acme",
+      terms: "$800 flat, 1 TikTok",
+      briefUrl: "https://example.com/acme-row",
+      bidUsd: 5,
+      createdAt: "2026-08-17T01:00:00.000Z",
+    });
+    const live = listLiveBoard(db, new Date("2026-08-17T12:00:00.000Z"));
+    assert.equal(live.length, 1);
+    assert.equal(live[0]?.id, "lst_paid_row");
+    assert.doesNotMatch(live.map((row) => row.id).join(","), /lst_ghost_row/);
+    assert.throws(
+      () => getPublicListing(db, "lst_ghost_row"),
+      (error: unknown) =>
+        error instanceof ClickError && error.code === "listing_not_found",
+    );
+    assert.equal(getPublicListing(db, "lst_paid_row").brand, "Acme");
+    const stillZero = getPublicListing(db, "lst_paid_row");
+    assert.equal(stillZero.clicks, 0);
+  } finally {
+    db.close();
+  }
 });

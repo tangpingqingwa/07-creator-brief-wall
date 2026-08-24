@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   claimNumberOneUsd,
+  isPolarPaidListing,
+  paidListings,
   place,
   quoteCheckout,
   raise,
@@ -173,6 +175,48 @@ test("new bid must be at least current + $1, and top + $1 to become #1", () => {
   ]);
   assert.equal(overtaken[0]?.id, "raiser");
   assert.equal(overtaken[0]?.bidUsd, 11);
+});
+
+test("unpaid stays off the plaster wall — No Terms until Polar reports paid", () => {
+  const unpaid = listing({
+    id: "lst_unpaid",
+    brand: "Ghost",
+    terms: "Abandoned Polar checkout.",
+    briefUrl: "https://example.com/ghost",
+    bidUsd: 99,
+    createdAt: "",
+  });
+  const abandoned = listing({
+    id: "lst_abandoned",
+    brand: "Vapor Co",
+    terms: "Epoch createdAt is not Polar paid.",
+    briefUrl: "https://example.com/vapor",
+    bidUsd: 80,
+    createdAt: "1970-01-01T00:00:00.000Z",
+  });
+  const paid = listing({
+    id: "lst_paid_only",
+    brand: "Acme",
+    terms: "$800 flat, 1 TikTok",
+    briefUrl: "https://example.com/acme",
+    bidUsd: 5,
+    createdAt: "2026-08-17T00:00:00.000Z",
+  });
+
+  assert.equal(isPolarPaidListing(unpaid), false);
+  assert.equal(isPolarPaidListing(abandoned), false);
+  assert.equal(isPolarPaidListing(paid), true);
+  assert.deepEqual(paidListings([unpaid, abandoned]), []);
+  assert.deepEqual(rankListings([unpaid, abandoned]), []);
+  const ranked = rankListings([unpaid, abandoned, paid]);
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0]?.id, "lst_paid_only");
+  assert.equal(ranked[0]?.rank, 1);
+  assert.equal(ranked[0]?.brand, "Acme");
+  assert.doesNotMatch(
+    ranked.map((row) => row.id).join(","),
+    /lst_unpaid|lst_abandoned/,
+  );
 });
 
 test("cannot steal #1 by paying only the incumbent’s difference", () => {

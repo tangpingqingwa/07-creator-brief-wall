@@ -1,6 +1,7 @@
 import type { AppDb, ListingRow } from "./db";
-import { listingFromRow, type Listing } from "./rank";
+import { isPolarPaidListing, listingFromRow, type Listing } from "./rank";
 import { outboundBriefUrl } from "./urls";
+import { hasCompletedPolarPayment } from "./week";
 
 export class ClickError extends Error {
   readonly httpStatus: number;
@@ -39,11 +40,15 @@ function outboundHop(listing: Listing): string {
   }
 }
 
-/** Load a listing for the confirm sheet. Does not count a click. */
+/** Load a Polar-paid listing for the confirm sheet. Does not count a click. */
 export function getPublicListing(db: AppDb, listingId: string): Listing {
   const id = listingId.trim();
   const listing = id ? loadListing(db, id) : undefined;
-  if (!listing) {
+  if (
+    !listing ||
+    !isPolarPaidListing(listing) ||
+    !hasCompletedPolarPayment(db, listing.id)
+  ) {
     throw new ClickError("listing_not_found", 404);
   }
   outboundHop(listing);

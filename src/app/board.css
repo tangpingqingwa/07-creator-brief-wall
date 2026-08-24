@@ -803,6 +803,12 @@ body {
 
 /* End empty-plaster later-write. Occupied Outbid stays on the claim rail. */
 
+/* Unpaid / abandoned Polar checkout never paints Terms as #1. */
+.wall-occupied .card:not([data-polar-paid]),
+.wall-stage.wall-empty[data-occupied="false"] .card:not([data-polar-paid]) {
+  display: none;
+}
+
 .wall-occupied .card .open-label {
   border-bottom: 1px solid currentColor;
   text-underline-offset: 0.18em;
