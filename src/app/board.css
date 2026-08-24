@@ -202,6 +202,22 @@ a.post-brief.post-after-open-six {
   grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
 }
 
+/* Empty plaster still leads with Claim #1. Occupied chrome stays off this week. */
+.wall-stage[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] {
+  order: -1;
+}
+
+.wall-stage[data-occupied="false"] [data-post-brief],
+.wall-stage[data-occupied="false"] [data-open-brief],
+.wall-stage[data-occupied="false"] [data-prize],
+.wall-stage[data-occupied="false"] .prize-before-price,
+.paste-rail[data-empty-claim-first] + .plaster [data-post-brief],
+.paste-rail[data-empty-claim-first] + .plaster [data-open-brief],
+.paste-rail[data-empty-claim-first] + .plaster [data-prize],
+.paste-rail[data-empty-claim-first] + .plaster .prize-before-price {
+  display: none;
+}
+
 .paste-rail {
   position: sticky;
   top: 0.75rem;

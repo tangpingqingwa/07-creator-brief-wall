@@ -22,10 +22,11 @@ export function OutbidForm({
 
   return (
     <aside
-      className="paste-rail"
+      className={occupied ? "paste-rail" : "paste-rail empty-claim-first"}
       id="claim"
       data-claim-amount={floor}
       data-top-bid={topBidUsd ?? ""}
+      data-empty-claim-first={occupied ? undefined : ""}
     >
       <p className="paste-kicker">
         {occupied ? "Post a brief this week" : "This week’s wall"}
