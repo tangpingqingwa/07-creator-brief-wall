@@ -12,7 +12,7 @@ function hostLabel(url: string): string {
 function PostBriefHop() {
   return (
     <a
-      className="post-brief post-after-open post-after-open-first post-after-open-two post-after-open-three"
+      className="post-brief post-after-open post-after-open-first post-after-open-two post-after-open-three post-after-open-four"
       href="#claim"
       data-post-brief=""
       data-post-after-open=""
@@ -20,6 +20,7 @@ function PostBriefHop() {
       data-first-write="post"
       data-post-after-open-two=""
       data-post-after-open-three=""
+      data-post-after-open-four=""
       aria-label="Post a brief after Open brief"
     >
       <span className="post-after-note">after Open brief</span>
