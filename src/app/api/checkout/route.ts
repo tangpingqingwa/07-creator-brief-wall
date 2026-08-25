@@ -32,6 +32,12 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.redirect(started.url, 303);
   } catch (error) {
     if (error instanceof CheckoutError) {
+      if (error.code === "raise_too_small" && prefersHtmlError(request)) {
+        return NextResponse.redirect(
+          new URL("/checkout/raise-too-small", origin),
+          303,
+        );
+      }
       return Response.json(
         { error: error.message, code: error.code },
         { status: error.httpStatus },
@@ -48,6 +54,18 @@ export async function POST(request: Request): Promise<Response> {
     }
     throw error;
   }
+}
+
+function prefersHtmlError(request: Request): boolean {
+  const contentType = request.headers.get("content-type") ?? "";
+  const accept = request.headers.get("accept") ?? "";
+  if (contentType.includes("application/json")) {
+    return false;
+  }
+  if (/\bapplication\/json\b/.test(accept) && !/\btext\/html\b/.test(accept)) {
+    return false;
+  }
+  return true;
 }
 
 async function readDraft(request: Request): Promise<ListingDraft> {

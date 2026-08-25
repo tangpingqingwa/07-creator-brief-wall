@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  RAISE_TOO_SMALL_COPY,
   claimNumberOneUsd,
   isPolarPaidListing,
   paidListings,
@@ -98,7 +99,10 @@ test("raise pays difference only", () => {
     newBidUsd: 7,
     chargeUsd: 2,
   });
-  assert.equal(raise(listingRow, 5).ok, false);
+  assert.deepEqual(raise(listingRow, 5), {
+    ok: false,
+    error: RAISE_TOO_SMALL_COPY,
+  });
   assert.equal(raise(listingRow, 5.5).ok, false);
   assert.deepEqual(quoteCheckout(listingRow, 7), {
     ok: true,
@@ -134,6 +138,26 @@ test("raise that matches an older equal bid still sorts below it", () => {
   ]);
   assert.equal(ranked[0]?.id, "incumbent");
   assert.equal(ranked[1]?.id, "challenger");
+});
+
+test("occupied raise-too-small names Polar still charges only the difference — unpaid Polar checkout stays off", () => {
+  const current = listing({
+    id: "raiser",
+    bidUsd: 5,
+    createdAt: "2026-08-17T00:00:00.000Z",
+  });
+  assert.deepEqual(raise(current, 5), {
+    ok: false,
+    error: RAISE_TOO_SMALL_COPY,
+  });
+  assert.deepEqual(quoteCheckout(current, 5), {
+    ok: false,
+    error: RAISE_TOO_SMALL_COPY,
+  });
+  assert.match(RAISE_TOO_SMALL_COPY, /Polar still charges only the difference/);
+  assert.match(RAISE_TOO_SMALL_COPY, /not a new full bid/);
+  assert.match(RAISE_TOO_SMALL_COPY, /Unpaid Polar checkout stays off the wall/);
+  assert.doesNotMatch(RAISE_TOO_SMALL_COPY, /a new full bid of \$5/);
 });
 
 test("new bid must be at least current + $1, and top + $1 to become #1", () => {
