@@ -181,7 +181,7 @@ State: no ads, no API keys, no revenue share. Brands pay to be seen by creators.
 
 ### Rules (`/rules`)
 
-Publish §6–§7 in operator language. Include min $5, older-wins-ties, raise = difference, weekly reset, no fake followers, no chat/NSFW.
+Publish §6–§7 in operator language. Include min $5, older-wins-ties, raise = difference, weekly reset, no fake followers, no chat/NSFW. Occupied `/rules` names Polar charges the difference on a raise, not a new full bid. Unpaid Polar checkout stays off the wall.
 
 ### Checkout return
 

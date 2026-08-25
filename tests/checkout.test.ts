@@ -23,6 +23,7 @@ import {
 } from "../src/lib/polar";
 import { Board } from "../src/app/board";
 import { AboutCopy } from "../src/lib/about-copy";
+import { RulesCopy } from "../src/lib/rules-copy";
 import { listingFromRow, rankListings } from "../src/lib/rank";
 import { findLiveListingByBrief, listLiveBoard, utcWeekId } from "../src/lib/week";
 
@@ -290,6 +291,109 @@ test("occupied /about names Polar raise-pays-difference — unpaid Polar checkou
       assert.equal(
         occupiedAbout,
         renderToStaticMarkup(createElement(AboutCopy, { occupied: true })),
+      );
+    } finally {
+      if (previousWeekNow === undefined) {
+        delete process.env.WEEK_NOW;
+      } else {
+        process.env.WEEK_NOW = previousWeekNow;
+      }
+    }
+  });
+});
+
+test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkout stays off", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "cbw-rules-raise-"));
+  const dbPath = join(dir, "app.sqlite");
+  const previousWeekNow = process.env.WEEK_NOW;
+  process.env.WEEK_NOW = "2026-08-17T00:00:00.000Z";
+  await withDatabasePath(dbPath, async () => {
+    try {
+      const emptyOccupied = listLiveBoard(openDatabase(dbPath)).length > 0;
+      assert.equal(emptyOccupied, false);
+      const emptyHtml = renderToStaticMarkup(
+        createElement(RulesCopy, { occupied: emptyOccupied }),
+      );
+      assert.match(emptyHtml, /data-page="rules"/);
+      assert.match(emptyHtml, /data-occupied="false"/);
+      assert.match(emptyHtml, /Raise pays difference/);
+      assert.doesNotMatch(emptyHtml, /data-rules-raise/);
+      assert.doesNotMatch(emptyHtml, /Polar charges the difference on a raise/);
+      assert.doesNotMatch(emptyHtml, /data-raise-difference/);
+      assert.doesNotMatch(emptyHtml, /data-raise-charged/);
+      assert.doesNotMatch(emptyHtml, /data-about-raise/);
+
+      const polar = new FakePolarPort();
+      const unpaidStart = await polar.createCheckout({
+        amountUsd: 5,
+        listingDraft: draft({
+          brand: "Ghost",
+          terms: "Abandoned Polar checkout.",
+          briefUrl: "https://example.com/ghost-rules",
+        }),
+        successUrl: SUCCESS_URL,
+      });
+      const unpaidCancel = await handleCheckoutReturn(
+        { checkoutId: unpaidStart.checkoutId, status: "cancel" },
+        polar,
+      );
+      assert.equal(unpaidCancel.status, "cancel");
+      assert.equal(unpaidCancel.listing, null);
+      assert.equal(listLiveBoard(openDatabase(dbPath)).length, 0);
+
+      const unpaidRules = renderToStaticMarkup(
+        createElement(RulesCopy, {
+          occupied: listLiveBoard(openDatabase(dbPath)).length > 0,
+        }),
+      );
+      assert.match(unpaidRules, /data-occupied="false"/);
+      assert.doesNotMatch(unpaidRules, /data-rules-raise/);
+      assert.doesNotMatch(unpaidRules, /Polar charges the difference on a raise/);
+      assert.doesNotMatch(unpaidRules, /Ghost/);
+      assert.equal(
+        unpaidRules,
+        renderToStaticMarkup(createElement(RulesCopy, { occupied: false })),
+      );
+
+      const paidStart = await polar.createCheckout({
+        amountUsd: 5,
+        listingDraft: draft(),
+        successUrl: SUCCESS_URL,
+      });
+      const placed = await handleCheckoutReturn(
+        { checkoutId: paidStart.checkoutId },
+        polar,
+      );
+      assert.equal(placed.status, "success");
+      assert.equal(placed.payment?.kind, "place");
+      assert.equal(placed.listing?.bidUsd, 5);
+      assert.equal(listLiveBoard(openDatabase(dbPath)).length, 1);
+
+      const occupiedRules = renderToStaticMarkup(
+        createElement(RulesCopy, {
+          occupied: listLiveBoard(openDatabase(dbPath)).length > 0,
+        }),
+      );
+      assert.match(occupiedRules, /data-page="rules"/);
+      assert.match(occupiedRules, /data-occupied="true"/);
+      assert.match(occupiedRules, /data-rules-raise=""/);
+      assert.match(
+        occupiedRules,
+        /Polar charges the difference on a raise — not a new full bid/,
+      );
+      assert.match(
+        occupiedRules,
+        /Unpaid Polar checkout stays off the wall until Polar reports paid/,
+      );
+      assert.match(occupiedRules, /Rank is the bid/);
+      assert.match(occupiedRules, /Raise pays difference/);
+      assert.doesNotMatch(occupiedRules, /data-raise-difference/);
+      assert.doesNotMatch(occupiedRules, /data-raise-charged/);
+      assert.doesNotMatch(occupiedRules, /data-raise-charge=/);
+      assert.doesNotMatch(occupiedRules, /data-about-raise/);
+      assert.equal(
+        occupiedRules,
+        renderToStaticMarkup(createElement(RulesCopy, { occupied: true })),
       );
     } finally {
       if (previousWeekNow === undefined) {

@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { test } from "node:test";
 import { AboutCopy } from "../src/lib/about-copy";
-import RulesPage from "../src/app/rules/page";
+import { RulesCopy } from "../src/lib/rules-copy";
 import { CheckoutError, parseCheckoutInput } from "../src/lib/polar";
 import {
   briefUrlKey,
@@ -213,8 +213,11 @@ test("checkout stores the stripped URL and rejects chat / NSFW / shortener / htt
 });
 
 test("rules state min $5, rank=bid, older wins, raise pays difference", () => {
-  const html = renderToStaticMarkup(createElement(RulesPage));
+  const html = renderToStaticMarkup(
+    createElement(RulesCopy, { occupied: false }),
+  );
   assert.match(html, /data-page="rules"/);
+  assert.match(html, /data-occupied="false"/);
   assert.match(html, /Rank is the bid/);
   assert.match(html, /\$5/);
   assert.match(html, /Older wins ties/);
@@ -227,14 +230,56 @@ test("rules state min $5, rank=bid, older wins, raise pays difference", () => {
   assert.match(html, /https:/);
   assert.match(html, /utm_\*/);
   assert.match(html, /bit\.ly/);
+  assert.doesNotMatch(html, /data-rules-raise/);
+  assert.doesNotMatch(html, /Polar charges the difference on a raise/);
 });
 
 test("occupied /rules raise identity is last-7-days, not the UTC week label", () => {
-  const html = renderToStaticMarkup(createElement(RulesPage));
+  const html = renderToStaticMarkup(
+    createElement(RulesCopy, { occupied: true }),
+  );
   assert.match(html, /Same canonical brief URL still inside last 7 days raises/);
   assert.match(html, /weekId<\/code> stays an audit label — not raise identity/);
   assert.doesNotMatch(html, /same UTC week raises/i);
   assert.doesNotMatch(html, /same weekId/i);
   assert.match(html, /Raise pays difference/);
   assert.match(html, /Rolling last 7 days\. Not Monday 00:00 UTC/);
+});
+
+test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkout stays off", () => {
+  const empty = renderToStaticMarkup(
+    createElement(RulesCopy, { occupied: false }),
+  );
+  assert.match(empty, /data-page="rules"/);
+  assert.match(empty, /data-occupied="false"/);
+  assert.match(empty, /Raise pays difference/);
+  assert.match(empty, /Unpaid checkout stays off the board until Polar reports paid/);
+  assert.doesNotMatch(empty, /data-rules-raise/);
+  assert.doesNotMatch(empty, /Polar charges the difference on a raise/);
+  assert.doesNotMatch(empty, /not a new full bid/);
+  assert.doesNotMatch(empty, /data-raise-difference/);
+  assert.doesNotMatch(empty, /data-raise-charged/);
+  assert.doesNotMatch(empty, /data-about-raise/);
+
+  const occupied = renderToStaticMarkup(
+    createElement(RulesCopy, { occupied: true }),
+  );
+  assert.match(occupied, /data-page="rules"/);
+  assert.match(occupied, /data-occupied="true"/);
+  assert.match(occupied, /data-rules-raise=""/);
+  assert.match(
+    occupied,
+    /Polar charges the difference on a raise — not a new full bid/,
+  );
+  assert.match(
+    occupied,
+    /Unpaid Polar checkout stays off the wall until Polar reports paid/,
+  );
+  assert.match(occupied, /Rank is the bid/);
+  assert.match(occupied, /Raise pays difference/);
+  assert.doesNotMatch(occupied, /data-raise-difference/);
+  assert.doesNotMatch(occupied, /data-raise-charged/);
+  assert.doesNotMatch(occupied, /data-raise-charge=/);
+  assert.doesNotMatch(occupied, /data-about-raise/);
+  assert.doesNotMatch(occupied, /[0-9][0-9,]*\s*(followers|subscribers)/i);
 });

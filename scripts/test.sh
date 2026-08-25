@@ -174,6 +174,8 @@ if [[ -f package.json ]]; then
     || fail "occupied /about raise-pays-difference leftover test did not run"
   grep -q 'unpaid Polar checkout stays off' "${test_log}" \
     || fail "occupied /about unpaid Polar checkout leftover test did not run"
+  grep -q 'occupied /rules names Polar raise-pays-difference' "${test_log}" \
+    || fail "occupied /rules raise-pays-difference leftover test did not run"
   rm -f "${test_log}"
 
   echo "== skeleton files =="
@@ -1139,14 +1141,14 @@ PY
   [[ -z "${POLAR_LIVE:-}" ]] || fail "POLAR_LIVE must stay unset in test.sh"
 
   echo "== UX: occupied raise identity is last-7-days — not the UTC week label =="
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/app/rules/page.tsx \
+  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
     || fail "occupied /rules must name last-7-days raise identity"
-  grep -q 'weekId</code> stays an audit label — not raise identity' src/app/rules/page.tsx \
+  grep -q 'weekId</code> stays an audit label — not raise identity' src/lib/rules-copy.tsx \
     || fail "occupied /rules must keep weekId as an audit label"
-  if grep -qi 'same UTC week raises' src/app/rules/page.tsx; then
+  if grep -qi 'same UTC week raises' src/lib/rules-copy.tsx; then
     fail "occupied /rules must not tax raise identity as the UTC week"
   fi
-  if grep -qi 'in the same weekId' src/app/rules/page.tsx SPEC.md; then
+  if grep -qi 'in the same weekId' src/lib/rules-copy.tsx SPEC.md; then
     fail "raise identity must not key on weekId"
   fi
   grep -Fq 'Identity for raise: same **canonical brief URL** still inside the rolling last 7 days' SPEC.md \
@@ -1182,9 +1184,9 @@ PY
     || fail "rules tests must cover last-7-days raise identity"
   grep -q 'same brief still inside last-7-days raises after the UTC week label rolls' tests/checkout.test.ts \
     || fail "checkout tests must cover Sunday pay Monday raise"
-  grep -q 'Raise pays difference' src/app/rules/page.tsx \
+  grep -q 'Raise pays difference' src/lib/rules-copy.tsx \
     || fail "raise-identity cut must keep raise pays difference"
-  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/app/rules/page.tsx \
+  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/lib/rules-copy.tsx \
     || fail "raise-identity cut must keep occupied rolling last-7-days"
   grep -q 'data-prize=""' src/lib/board-markup.tsx \
     || fail "raise-identity cut must keep occupied Terms as the prize"
@@ -1216,13 +1218,13 @@ PY
     || fail "raise-identity cut must keep empty rolling-copy"
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "raise-identity cut must keep occupied rolling last-7-days"
-  if grep -qE 'data-post-after-open-seven|data-open-after-post-six-stamp' src/app/board.tsx src/app/board.css src/app/outbid-form.tsx src/lib/board-markup.tsx src/app/rules/page.tsx; then
+  if grep -qE 'data-post-after-open-seven|data-open-after-post-six-stamp' src/app/board.tsx src/app/board.css src/app/outbid-form.tsx src/lib/board-markup.tsx src/app/rules/page.tsx src/lib/rules-copy.tsx; then
     fail "raise identity must not add another numbered hop stamp"
   fi
-  if grep -Eqi '24h lock|lock on #1' src/app/rules/page.tsx src/lib/rank.ts src/lib/polar.ts src/lib/week.ts; then
+  if grep -Eqi '24h lock|lock on #1' src/app/rules/page.tsx src/lib/rules-copy.tsx src/lib/rank.ts src/lib/polar.ts src/lib/week.ts; then
     fail "raise identity is not a 24h lock on #1"
   fi
-  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx src/app/rules/page.tsx; then
+  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx src/app/rules/page.tsx src/lib/rules-copy.tsx; then
     fail "raise identity must not rebuild the plaster wall into a long form"
   fi
   python3 - src/app/board.css <<'PY' || fail "raise identity must not recolor the plaster"
@@ -1315,7 +1317,7 @@ PY
     || fail "raise-pays-difference cut must not rebuild the plaster wall"
   grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
     || fail "raise-pays-difference cut must not restamp empty rolling-copy"
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/app/rules/page.tsx \
+  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
     || fail "raise-pays-difference cut must not restamp raise-rolling-identity"
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "raise-pays-difference cut must keep occupied rolling last-7-days"
@@ -1412,7 +1414,7 @@ PY
     || fail "raise return cut must not rebuild the plaster wall"
   grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
     || fail "raise return cut must not restamp empty rolling-copy"
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/app/rules/page.tsx \
+  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
     || fail "raise return cut must not restamp raise-rolling-identity"
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "raise return cut must keep occupied rolling last-7-days"
@@ -1470,7 +1472,7 @@ import re
 import sys
 css = open(sys.argv[1], encoding="utf-8").read()
 block = re.search(
-    r"/\* Occupied /about: Polar charges the difference on a raise\. Unpaid stays off\. \*/(.*?)@media",
+    r"/\* Occupied /about: Polar charges the difference on a raise\. Unpaid stays off\. \*/(.*?)(?:/\* Occupied /rules:|@media)",
     css,
     re.S,
 )
@@ -1521,7 +1523,7 @@ PY
     || fail "occupied /about cut must not rebuild the plaster wall"
   grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
     || fail "occupied /about cut must not restamp empty rolling-copy"
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/app/rules/page.tsx \
+  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
     || fail "occupied /about cut must not restamp raise-rolling-identity"
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "occupied /about cut must keep occupied rolling last-7-days"
@@ -1542,11 +1544,132 @@ PY
     fail "occupied /about CSS must sit after occupied checkout return, not restamp it"
   fi
 
+  echo "== UX: occupied /rules names Polar raise-pays-difference — unpaid Polar checkout stays off =="
+  grep -q 'export function RulesCopy' src/lib/rules-copy.tsx \
+    || fail "occupied /rules must compose RulesCopy"
+  grep -q 'export default async function RulesPage' src/app/rules/page.tsx \
+    || fail "occupied /rules must keep the Rules page"
+  grep -q 'await connection()' src/app/rules/page.tsx \
+    || fail "occupied /rules must re-render occupancy on each request"
+  grep -q 'data-rules-raise=""' src/lib/rules-copy.tsx \
+    || fail "occupied /rules must stamp Polar raise-pays-difference"
+  grep -q 'Polar charges the difference on a raise' src/lib/rules-copy.tsx \
+    || fail "occupied /rules must name Polar charges the difference on a raise"
+  grep -q 'not a new full bid' src/lib/rules-copy.tsx \
+    || fail "occupied /rules must name Polar raise as not a new full bid"
+  grep -q 'Unpaid Polar checkout stays off the wall' src/lib/rules-copy.tsx \
+    || fail "occupied /rules must keep unpaid Polar checkout off the wall"
+  grep -q 'listLiveBoard' src/app/rules/page.tsx \
+    || fail "occupied /rules must read live paid listings"
+  if awk '/occupied \? \(/,/Weekly UTC reset/' src/lib/rules-copy.tsx | grep -q 'data-raise-difference'; then
+    fail "occupied /rules must not restamp occupied checkout copy"
+  fi
+  if awk '/occupied \? \(/,/Weekly UTC reset/' src/lib/rules-copy.tsx | grep -q 'data-raise-charged'; then
+    fail "occupied /rules must not restamp occupied checkout return"
+  fi
+  if awk '/occupied \? \(/,/Weekly UTC reset/' src/lib/rules-copy.tsx | grep -q 'data-about-raise'; then
+    fail "occupied /rules must not restamp occupied /about"
+  fi
+  grep -Fq 'Occupied `/rules` names Polar charges the difference on a raise' SPEC.md \
+    || fail "SPEC must name occupied /rules Polar raise-pays-difference"
+  grep -Fq 'Unpaid Polar checkout stays off the wall' SPEC.md \
+    || fail "SPEC must keep unpaid Polar checkout off the wall on occupied /rules"
+  grep -q 'Occupied /rules: Polar charges the difference on a raise. Unpaid stays off.' src/app/board.css \
+    || fail "CSS must name occupied /rules Polar raise-pays-difference"
+  grep -qF '.board[data-page="rules"][data-occupied="true"] .rules-raise[data-rules-raise]' src/app/board.css \
+    || fail "CSS must compose occupied /rules Polar raise-pays-difference"
+  grep -qF '.board[data-page="rules"][data-occupied="false"] .rules-raise[data-rules-raise]' src/app/board.css \
+    || fail "empty /rules CSS must keep occupied Polar raise-pays-difference off"
+  python3 - src/app/board.css <<'PY' || fail "occupied /rules CSS must stay muted, not recolor the plaster"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+block = re.search(
+    r"/\* Occupied /rules: Polar charges the difference on a raise\. Unpaid stays off\. \*/(.*?)@media",
+    css,
+    re.S,
+)
+if not block:
+    raise SystemExit(1)
+if "background:" in block.group(1) or "var(--bid-ink)" in block.group(1):
+    raise SystemExit(1)
+if '.board[data-page="rules"][data-occupied="true"] .rules-raise[data-rules-raise]' not in block.group(1):
+    raise SystemExit(1)
+if '.board[data-page="rules"][data-occupied="false"] .rules-raise[data-rules-raise]' not in block.group(1):
+    raise SystemExit(1)
+if '.board[data-page="about"][data-occupied="true"] .about-raise[data-about-raise]' in block.group(1):
+    raise SystemExit(1)
+PY
+  grep -q 'occupied /rules names Polar raise-pays-difference' tests/urls.test.ts \
+    || fail "url tests must cover occupied /rules Polar raise-pays-difference"
+  grep -q 'occupied /rules names Polar raise-pays-difference' tests/checkout.test.ts \
+    || fail "checkout tests must cover occupied /rules Polar raise-pays-difference after pay"
+  grep -q 'unpaid Polar checkout stays off' tests/checkout.test.ts \
+    || fail "checkout tests must keep unpaid Polar checkout off occupied /rules"
+  grep -q 'data-raise-difference=""' src/app/outbid-form.tsx \
+    || fail "occupied /rules cut must not restamp occupied checkout copy"
+  grep -q 'only the difference, not a new bid' src/app/outbid-form.tsx \
+    || fail "occupied /rules cut must not restamp occupied checkout copy"
+  grep -q 'data-raise-charged=""' src/app/checkout/return/page.tsx \
+    || fail "occupied /rules cut must not restamp occupied checkout return"
+  grep -q 'the difference, not a new full bid' src/app/checkout/return/page.tsx \
+    || fail "occupied /rules cut must not restamp occupied checkout return"
+  grep -q 'data-about-raise=""' src/lib/about-copy.tsx \
+    || fail "occupied /rules cut must not restamp occupied /about"
+  grep -q 'Polar charges the difference on a raise' src/lib/about-copy.tsx \
+    || fail "occupied /rules cut must not restamp occupied /about"
+  grep -q 'data-prize=""' src/lib/board-markup.tsx \
+    || fail "occupied /rules cut must keep occupied Terms as the prize"
+  grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
+    || fail "occupied /rules cut must keep #1 Open the first occupied click"
+  grep -q 'Open brief' src/lib/board-markup.tsx \
+    || fail "occupied /rules cut must keep Open brief"
+  grep -q 'Post a brief' src/lib/board-markup.tsx \
+    || fail "occupied /rules cut must keep Post a brief"
+  grep -q 'Claim #1' src/app/outbid-form.tsx \
+    || fail "occupied /rules cut must keep Claim #1"
+  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
+    || fail "occupied /rules cut must keep empty later-write brief URL"
+  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+    || fail "occupied /rules cut must keep blank plaster"
+  grep -q 'amount-field' src/app/outbid-form.tsx \
+    || fail "occupied /rules cut must keep the dashed amount"
+  grep -q 'className="step"' src/app/outbid-form.tsx \
+    || fail "occupied /rules cut must keep ± steppers"
+  grep -q 'Outbid' src/app/outbid-form.tsx \
+    || fail "occupied /rules cut must keep Outbid"
+  grep -q 'className="plaster"' src/lib/board-markup.tsx \
+    || fail "occupied /rules cut must not rebuild the plaster wall"
+  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
+    || fail "occupied /rules cut must not restamp empty rolling-copy"
+  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
+    || fail "occupied /rules cut must not restamp raise-rolling-identity"
+  grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
+    || fail "occupied /rules cut must keep occupied rolling last-7-days"
+  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp|data-raise-after-open|data-post-after-open-N' \
+    src/app/outbid-form.tsx src/app/board.tsx src/lib/board-markup.tsx src/app/board.css src/app/rules/page.tsx src/lib/rules-copy.tsx
+  then
+    fail "occupied /rules must not add another named hop"
+  fi
+  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx src/app/rules/page.tsx src/lib/rules-copy.tsx; then
+    fail "occupied /rules must not rebuild the plaster wall into a long form"
+  fi
+  if ! awk '
+    /Occupied checkout: Polar charges the difference on a raise/ { raise=NR }
+    /Occupied \/checkout\/return after a raise: Polar charged the difference/ { ret=NR }
+    /Occupied \/about: Polar charges the difference on a raise/ { about=NR }
+    /Occupied \/rules: Polar charges the difference on a raise/ { rules=NR }
+    END { exit !(raise && ret && about && rules && raise < ret && ret < about && about < rules) }
+  ' src/app/board.css; then
+    fail "occupied /rules CSS must sit after occupied /about, not restamp it"
+  fi
+
   echo "== about, rules, URL hygiene =="
   for f in \
     src/app/about/page.tsx \
     src/lib/about-copy.tsx \
     src/app/rules/page.tsx \
+    src/lib/rules-copy.tsx \
     src/lib/urls.ts \
     tests/urls.test.ts
   do
@@ -1570,21 +1693,21 @@ PY
     || fail "about must state independence from platforms"
   grep -q 'creator-brief-wall' src/lib/about-copy.tsx \
     || fail "about must name the creator-brief-wall vertical"
-  grep -q '\$5' src/app/rules/page.tsx || fail "rules must state min \$5"
-  grep -q 'Rank is the bid' src/app/rules/page.tsx \
+  grep -q '\$5' src/lib/rules-copy.tsx || fail "rules must state min \$5"
+  grep -q 'Rank is the bid' src/lib/rules-copy.tsx \
     || fail "rules must state rank is the bid"
-  grep -q 'Older wins ties' src/app/rules/page.tsx \
+  grep -q 'Older wins ties' src/lib/rules-copy.tsx \
     || fail "rules must state older wins ties"
-  grep -q 'Raise pays difference' src/app/rules/page.tsx \
+  grep -q 'Raise pays difference' src/lib/rules-copy.tsx \
     || fail "rules must state raise pays difference"
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/app/rules/page.tsx \
+  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
     || fail "rules must name last-7-days raise identity"
-  grep -q 'Monday 00:00' src/app/rules/page.tsx \
+  grep -q 'Monday 00:00' src/lib/rules-copy.tsx \
     || fail "rules must state weekly UTC reset"
-  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/app/rules/page.tsx \
+  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/lib/rules-copy.tsx \
     || fail "rules must name the rolling last-7-days window"
-  grep -q 'NSFW' src/app/rules/page.tsx || fail "rules must document NSFW rejects"
-  grep -q 'Telegram' src/app/rules/page.tsx \
+  grep -q 'NSFW' src/lib/rules-copy.tsx || fail "rules must document NSFW rejects"
+  grep -q 'Telegram' src/lib/rules-copy.tsx \
     || fail "rules must document chat-link rejects"
   grep -q 'utm_' tests/urls.test.ts || fail "url tests must strip tracking query"
   grep -q 't.me' tests/urls.test.ts || fail "url tests must reject Telegram"
@@ -2031,6 +2154,11 @@ PY
   if grep -qi 'same UTC week raises' "${rules_body}"; then
     fail "GET /rules must not tax raise identity as the UTC week"
   fi
+  grep -q 'data-occupied="false"' "${rules_body}" \
+    || fail "empty GET /rules must stay unoccupied"
+  if grep -qE 'data-rules-raise|Polar charges the difference on a raise' "${rules_body}"; then
+    fail "empty GET /rules must not stamp occupied Polar raise-pays-difference"
+  fi
 
   echo "== fixture \$5 appears on the board after completion =="
   unpaid_body="$(mktemp)"
@@ -2067,6 +2195,15 @@ PY
     || fail "unpaid Polar checkout must stay off occupied /about"
   if grep -qE 'data-about-raise|Polar charges the difference on a raise' "${unpaid_about}"; then
     fail "unpaid Polar checkout must not occupy /about raise-pays-difference"
+  fi
+  unpaid_rules="$(mktemp)"
+  curl -sS -o "${unpaid_rules}" "http://127.0.0.1:${port}/rules"
+  grep -q 'data-page="rules"' "${unpaid_rules}" \
+    || fail "unpaid leftover must still serve /rules"
+  grep -q 'data-occupied="false"' "${unpaid_rules}" \
+    || fail "unpaid Polar checkout must stay off occupied /rules"
+  if grep -qE 'data-rules-raise|Polar charges the difference on a raise' "${unpaid_rules}"; then
+    fail "unpaid Polar checkout must not occupy /rules raise-pays-difference"
   fi
   if grep -q 'Ghost' "${unpaid_home}"; then
     fail "unpaid checkout leaked Ghost onto the board"
@@ -2149,6 +2286,31 @@ PY
   fi
   if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp' "${occupied_about}"; then
     fail "occupied /about must not add another named hop"
+  fi
+  occupied_rules="$(mktemp)"
+  occupied_rules_code="$(curl -sS -o "${occupied_rules}" -w '%{http_code}' "http://127.0.0.1:${port}/rules")"
+  [[ "${occupied_rules_code}" == "200" ]] || fail "occupied GET /rules expected 200 got ${occupied_rules_code}"
+  grep -q 'data-page="rules"' "${occupied_rules}" \
+    || fail "occupied GET /rules missing rules page"
+  grep -q 'data-occupied="true"' "${occupied_rules}" \
+    || fail "occupied GET /rules must mark the wall occupied"
+  grep -q 'data-rules-raise=""' "${occupied_rules}" \
+    || fail "occupied /rules must stamp Polar raise-pays-difference"
+  grep -q 'Polar charges the difference on a raise' "${occupied_rules}" \
+    || fail "occupied /rules must name Polar charges the difference on a raise"
+  grep -q 'not a new full bid' "${occupied_rules}" \
+    || fail "occupied /rules must name Polar raise as not a new full bid"
+  grep -q 'Unpaid Polar checkout stays off the wall' "${occupied_rules}" \
+    || fail "occupied /rules must keep unpaid Polar checkout off the wall"
+  grep -qi 'rank is the bid' "${occupied_rules}" \
+    || fail "occupied /rules must still say rank is the bid"
+  grep -q 'Raise pays difference' "${occupied_rules}" \
+    || fail "occupied /rules must keep raise-rolling-identity"
+  if grep -qE 'data-raise-difference|data-raise-charged=""|data-about-raise' "${occupied_rules}"; then
+    fail "occupied /rules must not restamp checkout copy, checkout return, or occupied /about"
+  fi
+  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp' "${occupied_rules}"; then
+    fail "occupied /rules must not add another named hop"
   fi
   grep -q 'data-occupied="true"' "${listed_body}" \
     || fail "paid board must mark the wall occupied"
@@ -2856,8 +3018,9 @@ PY
   unset WEEK_NOW
 
   rm -f "${health_body}" "${home_body}" "${about_body}" "${rules_body}" \
-    "${unpaid_body}" "${unpaid_home}" "${unpaid_about}" \
+    "${unpaid_body}" "${unpaid_home}" "${unpaid_about}" "${unpaid_rules}" \
     "${paid_headers}" "${return_body}" "${listed_body}" "${occupied_about}" \
+    "${occupied_rules}" \
     "${same_bid_body}" "${raise_headers}" "${raise_return}" "${raised_body}" \
     "${steal_headers}" "${steal_home}" "${take_headers}" "${take_home}" \
     "${reject_home}" "${track_headers}" "${track_home}" \
