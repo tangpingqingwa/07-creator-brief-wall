@@ -22,6 +22,7 @@ import {
   polarApiBase,
 } from "../src/lib/polar";
 import { Board } from "../src/app/board";
+import { AboutCopy } from "../src/lib/about-copy";
 import { listingFromRow, rankListings } from "../src/lib/rank";
 import { findLiveListingByBrief, listLiveBoard, utcWeekId } from "../src/lib/week";
 
@@ -199,6 +200,105 @@ test("unpaid Polar checkout stays off the plaster until Polar reports paid", asy
       process.env.WEEK_NOW = previousWeekNow;
     }
   }
+});
+
+test("occupied /about names Polar raise-pays-difference — unpaid Polar checkout stays off", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "cbw-about-raise-"));
+  const dbPath = join(dir, "app.sqlite");
+  const previousWeekNow = process.env.WEEK_NOW;
+  process.env.WEEK_NOW = "2026-08-17T00:00:00.000Z";
+  await withDatabasePath(dbPath, async () => {
+    try {
+      const emptyOccupied = listLiveBoard(openDatabase(dbPath)).length > 0;
+      assert.equal(emptyOccupied, false);
+      const emptyHtml = renderToStaticMarkup(
+        createElement(AboutCopy, { occupied: emptyOccupied }),
+      );
+      assert.match(emptyHtml, /data-page="about"/);
+      assert.match(emptyHtml, /data-occupied="false"/);
+      assert.doesNotMatch(emptyHtml, /data-about-raise/);
+      assert.doesNotMatch(emptyHtml, /Polar charges the difference on a raise/);
+      assert.doesNotMatch(emptyHtml, /data-raise-difference/);
+      assert.doesNotMatch(emptyHtml, /data-raise-charged/);
+
+      const polar = new FakePolarPort();
+      const unpaidStart = await polar.createCheckout({
+        amountUsd: 5,
+        listingDraft: draft({
+          brand: "Ghost",
+          terms: "Abandoned Polar checkout.",
+          briefUrl: "https://example.com/ghost-about",
+        }),
+        successUrl: SUCCESS_URL,
+      });
+      const unpaidCancel = await handleCheckoutReturn(
+        { checkoutId: unpaidStart.checkoutId, status: "cancel" },
+        polar,
+      );
+      assert.equal(unpaidCancel.status, "cancel");
+      assert.equal(unpaidCancel.listing, null);
+      assert.equal(listLiveBoard(openDatabase(dbPath)).length, 0);
+
+      const unpaidAbout = renderToStaticMarkup(
+        createElement(AboutCopy, {
+          occupied: listLiveBoard(openDatabase(dbPath)).length > 0,
+        }),
+      );
+      assert.match(unpaidAbout, /data-occupied="false"/);
+      assert.doesNotMatch(unpaidAbout, /data-about-raise/);
+      assert.doesNotMatch(unpaidAbout, /Polar charges the difference on a raise/);
+      assert.doesNotMatch(unpaidAbout, /Ghost/);
+      assert.equal(
+        unpaidAbout,
+        renderToStaticMarkup(createElement(AboutCopy, { occupied: false })),
+      );
+
+      const paidStart = await polar.createCheckout({
+        amountUsd: 5,
+        listingDraft: draft(),
+        successUrl: SUCCESS_URL,
+      });
+      const placed = await handleCheckoutReturn(
+        { checkoutId: paidStart.checkoutId },
+        polar,
+      );
+      assert.equal(placed.status, "success");
+      assert.equal(placed.payment?.kind, "place");
+      assert.equal(placed.listing?.bidUsd, 5);
+      assert.equal(listLiveBoard(openDatabase(dbPath)).length, 1);
+
+      const occupiedAbout = renderToStaticMarkup(
+        createElement(AboutCopy, {
+          occupied: listLiveBoard(openDatabase(dbPath)).length > 0,
+        }),
+      );
+      assert.match(occupiedAbout, /data-page="about"/);
+      assert.match(occupiedAbout, /data-occupied="true"/);
+      assert.match(occupiedAbout, /data-about-raise=""/);
+      assert.match(
+        occupiedAbout,
+        /Polar charges the difference on a raise — not a new full bid/,
+      );
+      assert.match(
+        occupiedAbout,
+        /Unpaid Polar checkout stays off the wall until Polar reports paid/,
+      );
+      assert.match(occupiedAbout, /Rank is the bid/);
+      assert.doesNotMatch(occupiedAbout, /data-raise-difference/);
+      assert.doesNotMatch(occupiedAbout, /data-raise-charged/);
+      assert.doesNotMatch(occupiedAbout, /data-raise-charge=/);
+      assert.equal(
+        occupiedAbout,
+        renderToStaticMarkup(createElement(AboutCopy, { occupied: true })),
+      );
+    } finally {
+      if (previousWeekNow === undefined) {
+        delete process.env.WEEK_NOW;
+      } else {
+        process.env.WEEK_NOW = previousWeekNow;
+      }
+    }
+  });
 });
 
 test("webhook / fixture completion lists; abandoned webhook does not", async () => {

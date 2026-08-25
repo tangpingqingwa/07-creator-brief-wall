@@ -177,7 +177,7 @@ Empty week: honest empty state. Do not seed fake briefs. Empty plaster already l
 
 ### About (`/about`)
 
-State: no ads, no API keys, no revenue share. Brands pay to be seen by creators. Rank is the bid. Independent; not affiliated with TikTok, YouTube, Instagram, Twitch, or Meta.
+State: no ads, no API keys, no revenue share. Brands pay to be seen by creators. Rank is the bid. Independent; not affiliated with TikTok, YouTube, Instagram, Twitch, or Meta. Occupied `/about` names Polar charges the difference on a raise, not a new full bid. Unpaid Polar checkout stays off the wall.
 
 ### Rules (`/rules`)
 
