@@ -923,13 +923,13 @@ body {
   color: var(--muted);
 }
 
-/* GET /r/:id is still a preview. Leave (POST) is the counted hop. */
+/* Occupied confirm uncounted preview recedes after terms. Do not shout over the prize. */
 .confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-uncounted[data-confirm-uncounted] {
-  margin: 0 0 0.55rem;
-  font-size: 0.92rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: var(--ink);
+  margin: 0.45rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--muted);
 }
 
 .confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-leave {

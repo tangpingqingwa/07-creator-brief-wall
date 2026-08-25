@@ -293,6 +293,10 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover occupied confirm hops staying a later fact after terms"
   grep -q 'occupied confirm $bid stays a later fact after terms and does not shout beside the prize' tests/board.test.ts \
     || fail "board tests must cover occupied confirm \$bid staying a later fact after terms"
+  grep -q 'occupied confirm Terms stay the prize over brand and do not let brand shout' tests/board.test.ts \
+    || fail "board tests must cover occupied confirm Terms staying the prize over brand"
+  grep -q 'occupied confirm uncounted preview recedes after terms and does not shout over the prize' tests/board.test.ts \
+    || fail "board tests must cover occupied confirm uncounted preview receding after terms"
   grep -q 'occupied wall names one Post a brief hop' tests/board.test.ts \
     || fail "board tests must cover the occupied Post a brief hop"
   grep -q 'occupied wall posts a brief after Open brief' tests/board.test.ts \
@@ -620,12 +624,16 @@ PY
     || fail "CSS must recede occupied confirm brand so it cannot shout over Terms"
   grep -qF '.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-terms-copy' src/app/board.css \
     || fail "CSS must keep occupied confirm Terms copy the prize over brand"
+  grep -qF '.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-uncounted[data-confirm-uncounted]' src/app/board.css \
+    || fail "CSS must recede occupied confirm uncounted preview so it cannot shout over Terms"
   grep -Fq 'Occupied confirm hops stay a later fact after terms' SPEC.md \
     || fail "SPEC must keep occupied confirm hops a later fact after terms"
   grep -Fq 'Occupied confirm $bid stays a later fact after terms' SPEC.md \
     || fail "SPEC must keep occupied confirm \$bid a later fact after terms"
   grep -Fq 'Occupied confirm Terms stay the prize over brand' SPEC.md \
     || fail "SPEC must keep occupied confirm Terms the prize over brand"
+  grep -Fq 'Occupied confirm uncounted preview recedes after terms' SPEC.md \
+    || fail "SPEC must recede occupied confirm uncounted preview after terms"
   python3 - src/app/board.css <<'PY' || fail "confirm hops must recede after terms and stay muted, not --bid"
 import re
 import sys
@@ -707,6 +715,43 @@ if "font-weight: 500" not in brand.group(0):
 if "clamp(" in brand.group(0):
     raise SystemExit(1)
 if "color: var(--bid)" in brand.group(0):
+    raise SystemExit(1)
+if "font-weight: 700" not in terms.group(0):
+    raise SystemExit(1)
+if "color: var(--ink)" not in terms.group(0):
+    raise SystemExit(1)
+PY
+  python3 - src/app/board.css <<'PY' || fail "confirm uncounted preview must recede after terms so Terms stay the prize"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+uncounted = re.search(
+    r"\.confirm-sheet\.confirm-before-leave\[data-confirm-before-leave\] \.confirm-uncounted\[data-confirm-uncounted\]\s*\{[^}]*\}",
+    css,
+    re.S,
+)
+terms = re.search(
+    r"\.confirm-sheet\.confirm-before-leave\[data-confirm-before-leave\] \.confirm-terms-copy\s*\{[^}]*\}",
+    css,
+    re.S,
+)
+if uncounted is None or terms is None:
+    raise SystemExit(1)
+uncounted_size = re.search(r"font-size:\s*([\d.]+)rem", uncounted.group(0))
+terms_size = re.search(r"font-size:\s*([\d.]+)rem", terms.group(0))
+if uncounted_size is None or terms_size is None:
+    raise SystemExit(1)
+if float(terms_size.group(1)) <= float(uncounted_size.group(1)):
+    raise SystemExit(1)
+if "color: var(--muted)" not in uncounted.group(0):
+    raise SystemExit(1)
+if "font-weight: 500" not in uncounted.group(0):
+    raise SystemExit(1)
+if "font-weight: 700" in uncounted.group(0):
+    raise SystemExit(1)
+if "color: var(--ink)" in uncounted.group(0):
+    raise SystemExit(1)
+if "color: var(--bid)" in uncounted.group(0):
     raise SystemExit(1)
 if "font-weight: 700" not in terms.group(0):
     raise SystemExit(1)
@@ -2098,6 +2143,10 @@ PY
     || fail "board tests must cover occupied confirm hops staying a later fact after terms"
   grep -q 'occupied confirm $bid stays a later fact after terms and does not shout beside the prize' tests/board.test.ts \
     || fail "board tests must cover occupied confirm \$bid staying a later fact after terms"
+  grep -q 'occupied confirm Terms stay the prize over brand and do not let brand shout' tests/board.test.ts \
+    || fail "board tests must cover occupied confirm Terms staying the prize over brand"
+  grep -q 'occupied confirm uncounted preview recedes after terms and does not shout over the prize' tests/board.test.ts \
+    || fail "board tests must cover occupied confirm uncounted preview receding after terms"
   if grep -nE '[^a-zA-Z_]fetch\(' src/lib/week.ts src/lib/clicks.ts \
     src/lib/confirm-brief.ts src/app/r/\[id\]/route.ts >/dev/null
   then
@@ -3315,7 +3364,7 @@ PY
   if grep -qE 'data-post-after-open-seven|data-open-after-post-six' "${confirm_body}"; then
     fail "GET /r/:id must not stamp *-after-*-N"
   fi
-  python3 - "${confirm_body}" <<'PY' || fail "confirm sheet must put uncounted preview, terms, and URL before the leave hop"
+  python3 - "${confirm_body}" <<'PY' || fail "confirm sheet must put terms before the uncounted preview, then URL before the leave hop"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()
 stamp = html.find('data-confirm-before-leave=""')
@@ -3333,7 +3382,7 @@ if stamp < 0 or uncounted < 0 or copy < 0 or terms < 0 or url < 0 or leave < 0 o
     raise SystemExit(1)
 if bid_later < 0 or hops_class < 0 or hops_later < 0 or hops < 0:
     raise SystemExit(1)
-if not (stamp < uncounted <= copy < terms < url < leave < bid <= bid_later < hops_class <= hops_later < hops):
+if not (stamp < terms < uncounted <= copy < url < leave < bid <= bid_later < hops_class <= hops_later < hops):
     raise SystemExit(1)
 if html.count('data-confirm-before-leave=""') != 1:
     raise SystemExit(1)
