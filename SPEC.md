@@ -185,7 +185,7 @@ Publish §6–§7 in operator language. Include min $5, older-wins-ties, raise =
 
 ### Checkout return
 
-Paid → “You’re on the board” + link home. Canceled → no rank change.
+Paid place → “You’re on the board” + link home. Occupied `/checkout/return` after a raise names Polar charged the difference, not a new full bid. Canceled / unpaid Polar return still changes no rank.
 
 ### Confirm brief (`GET /r/:id`)
 

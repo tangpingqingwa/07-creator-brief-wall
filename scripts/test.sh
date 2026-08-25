@@ -166,6 +166,10 @@ if [[ -f package.json ]]; then
     || fail "occupied checkout raise-pays-difference leftover test did not run"
   grep -q 'unpaid stays off' "${test_log}" \
     || fail "occupied checkout unpaid-stays-off leftover test did not run"
+  grep -q 'occupied /checkout/return after a raise names Polar charged the difference' "${test_log}" \
+    || fail "occupied checkout-return raise-pays-difference leftover test did not run"
+  grep -q 'unpaid cancel stays off' "${test_log}" \
+    || fail "occupied checkout-return unpaid-cancel leftover test did not run"
   rm -f "${test_log}"
 
   echo "== skeleton files =="
@@ -1329,6 +1333,101 @@ PY
     fail "occupied raise-pays-difference CSS must sit after unpaid leftover, not rebuild the wall"
   fi
 
+  echo "== UX: occupied checkout return names Polar raise-pays-difference — unpaid cancel stays off =="
+  grep -q 'data-raise-charged=""' src/app/checkout/return/page.tsx \
+    || fail "raise return must stamp Polar charged the difference"
+  grep -q 'data-raise-charge-usd=""' src/app/checkout/return/page.tsx \
+    || fail "raise return must name the Polar raise charge in dollars"
+  grep -q 'Polar charged' src/app/checkout/return/page.tsx \
+    || fail "raise return must say Polar charged"
+  grep -q 'the difference, not a new full bid' src/app/checkout/return/page.tsx \
+    || fail "raise return must name Polar charged the difference, not a new full bid"
+  grep -q 'A canceled or unpaid Polar return still changes no rank' src/app/checkout/return/page.tsx \
+    || fail "canceled return must still change no rank"
+  grep -q 'No rank change' src/app/checkout/return/page.tsx \
+    || fail "canceled return must say no rank change"
+  grep -q 'You' src/app/checkout/return/page.tsx \
+    || fail "raise return cut must keep paid You're on the board"
+  grep -Fq 'Occupied `/checkout/return` after a raise names Polar charged the difference' SPEC.md \
+    || fail "SPEC must name occupied raise return Polar difference"
+  grep -Fq 'Canceled / unpaid Polar return still changes no rank' SPEC.md \
+    || fail "SPEC must keep unpaid cancel off the wall"
+  grep -q 'Occupied /checkout/return after a raise: Polar charged the difference. Unpaid cancel stays off.' src/app/board.css \
+    || fail "CSS must name occupied raise return Polar difference"
+  grep -qF '.board[data-return="success"][data-raise-charged] .raise-charged[data-raise-charged]' src/app/board.css \
+    || fail "CSS must compose occupied raise return as Polar difference"
+  grep -qF '.board[data-return="cancel"] .unpaid-cancel' src/app/board.css \
+    || fail "CSS must keep unpaid cancel return muted"
+  python3 - src/app/board.css <<'PY' || fail "raise-return CSS must stay muted, not recolor the plaster"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+block = re.search(
+    r"/\* Occupied /checkout/return after a raise: Polar charged the difference\. Unpaid cancel stays off\. \*/(.*?)@media",
+    css,
+    re.S,
+)
+if not block:
+    raise SystemExit(1)
+if "background:" in block.group(1) or "var(--bid-ink)" in block.group(1):
+    raise SystemExit(1)
+if '.board[data-return="success"][data-raise-charged] .raise-charged[data-raise-charged]' not in block.group(1):
+    raise SystemExit(1)
+if '.board[data-return="cancel"] .unpaid-cancel' not in block.group(1):
+    raise SystemExit(1)
+PY
+  grep -q 'occupied /checkout/return after a raise names Polar charged the difference' tests/checkout.test.ts \
+    || fail "checkout tests must cover occupied raise return Polar difference"
+  grep -q 'unpaid cancel stays off' tests/checkout.test.ts \
+    || fail "checkout tests must keep unpaid cancel off the wall"
+  grep -q 'data-raise-difference=""' src/app/outbid-form.tsx \
+    || fail "raise return cut must not restamp occupied checkout copy"
+  grep -q 'only the difference, not a new bid' src/app/outbid-form.tsx \
+    || fail "raise return cut must not restamp occupied checkout copy"
+  grep -q 'data-prize=""' src/lib/board-markup.tsx \
+    || fail "raise return cut must keep occupied Terms as the prize"
+  grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
+    || fail "raise return cut must keep #1 Open the first occupied click"
+  grep -q 'Open brief' src/lib/board-markup.tsx \
+    || fail "raise return cut must keep Open brief"
+  grep -q 'Post a brief' src/lib/board-markup.tsx \
+    || fail "raise return cut must keep Post a brief"
+  grep -q 'Claim #1' src/app/outbid-form.tsx \
+    || fail "raise return cut must keep Claim #1"
+  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
+    || fail "raise return cut must keep empty later-write brief URL"
+  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+    || fail "raise return cut must keep blank plaster"
+  grep -q 'amount-field' src/app/outbid-form.tsx \
+    || fail "raise return cut must keep the dashed amount"
+  grep -q 'className="step"' src/app/outbid-form.tsx \
+    || fail "raise return cut must keep ± steppers"
+  grep -q 'Outbid' src/app/outbid-form.tsx \
+    || fail "raise return cut must keep Outbid"
+  grep -q 'className="plaster"' src/lib/board-markup.tsx \
+    || fail "raise return cut must not rebuild the plaster wall"
+  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
+    || fail "raise return cut must not restamp empty rolling-copy"
+  grep -q 'Same canonical brief URL still inside last 7 days raises' src/app/rules/page.tsx \
+    || fail "raise return cut must not restamp raise-rolling-identity"
+  grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
+    || fail "raise return cut must keep occupied rolling last-7-days"
+  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp|data-raise-after-open|data-post-after-open-N' \
+    src/app/outbid-form.tsx src/app/board.tsx src/lib/board-markup.tsx src/app/board.css src/app/checkout/return/page.tsx
+  then
+    fail "raise return must not add another named hop"
+  fi
+  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx src/app/checkout/return/page.tsx; then
+    fail "raise return must not rebuild the plaster wall into a long form"
+  fi
+  if ! awk '
+    /Occupied checkout: Polar charges the difference on a raise/ { raise=NR }
+    /Occupied \/checkout\/return after a raise: Polar charged the difference/ { ret=NR }
+    END { exit !(raise && ret && raise < ret) }
+  ' src/app/board.css; then
+    fail "occupied raise return CSS must sit after occupied checkout copy, not restamp it"
+  fi
+
   echo "== about, rules, URL hygiene =="
   for f in \
     src/app/about/page.tsx \
@@ -1780,7 +1879,7 @@ PY
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${home_body}"; then
     fail "GET / must not invent follower or reach numbers"
   fi
-  if grep -qE 'data-raise-difference|data-raise-charge|Polar charges only the difference|Polar charges the difference' "${home_body}"; then
+  if grep -qE 'data-raise-difference|data-raise-charge|data-raise-charged|Polar charges only the difference|Polar charges the difference|Polar charged' "${home_body}"; then
     fail "empty Claim #1 paper must not name occupied raise-pays-difference"
   fi
 
@@ -1837,7 +1936,7 @@ PY
     || fail "unpaid leftover must say Polar paid is required"
   grep -q 'An abandoned brief is not Terms as #1' "${unpaid_home}" \
     || fail "unpaid leftover must say an abandoned brief is not Terms as #1"
-  if grep -qE 'data-raise-difference|data-raise-charge|Polar charges only the difference' "${unpaid_home}"; then
+  if grep -qE 'data-raise-difference|data-raise-charge|data-raise-charged|Polar charges only the difference|Polar charged' "${unpaid_home}"; then
     fail "unpaid leftover must not name occupied raise-pays-difference"
   fi
   if grep -q 'Ghost' "${unpaid_home}"; then
@@ -1868,6 +1967,9 @@ PY
     || fail "fixture return must be paid success"
   grep -qi 'on the board' "${return_body}" \
     || fail "fixture return must say you're on the board"
+  if grep -qE 'data-raise-charged|the difference, not a new full bid' "${return_body}"; then
+    fail "first place return must not stamp Polar raise difference"
+  fi
 
   listed_body="$(mktemp)"
   listed_code="$(curl -sS -o "${listed_body}" -w '%{http_code}' "http://127.0.0.1:${port}/")"
@@ -2223,6 +2325,55 @@ PY
   [[ "${raise_return_code}" == "200" ]] || fail "raise return expected 200 got ${raise_return_code}"
   grep -q 'data-return="success"' "${raise_return}" \
     || fail "raise return must be paid success"
+  grep -q 'data-raise-charged=""' "${raise_return}" \
+    || fail "raise return must stamp Polar charged the difference"
+  grep -q 'data-raise-charge-usd=""' "${raise_return}" \
+    || fail "raise return must name the Polar raise charge in dollars"
+  grep -q 'Polar charged' "${raise_return}" \
+    || fail "raise return must say Polar charged"
+  grep -q 'the difference, not a new full bid' "${raise_return}" \
+    || fail "raise return must name Polar charged the difference, not a new full bid"
+  grep -Fq 'listed at $7' "${raise_return}" \
+    || fail "raise return must still name the public bid"
+
+  echo "== canceled raise return still changes no rank =="
+  cancel_headers="$(mktemp)"
+  cancel_code="$(curl -sS -D "${cancel_headers}" -o /dev/null -w '%{http_code}' \
+    -X POST "http://127.0.0.1:${port}/checkout" \
+    -H 'content-type: application/x-www-form-urlencoded' \
+    --data-urlencode 'brand=Acme' \
+    --data-urlencode 'terms=$800 flat, 1 TikTok' \
+    --data-urlencode 'briefUrl=https://example.com/acme' \
+    --data-urlencode 'bidUsd=8')"
+  [[ "${cancel_code}" == "303" ]] || fail "unpaid raise POST /checkout expected 303 got ${cancel_code}"
+  cancel_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${cancel_headers}")"
+  [[ -n "${cancel_location}" ]] || fail "unpaid raise POST /checkout missing Location"
+  if [[ "${cancel_location}" != http* ]]; then
+    cancel_location="http://127.0.0.1:${port}${cancel_location}"
+  fi
+  if [[ "${cancel_location}" == *\?* ]]; then
+    cancel_location="${cancel_location}&status=cancel"
+  else
+    cancel_location="${cancel_location}?status=cancel"
+  fi
+  cancel_return="$(mktemp)"
+  cancel_return_code="$(curl -sS -o "${cancel_return}" -w '%{http_code}' "${cancel_location}")"
+  [[ "${cancel_return_code}" == "200" ]] || fail "canceled raise return expected 200 got ${cancel_return_code}"
+  grep -q 'data-return="cancel"' "${cancel_return}" \
+    || fail "canceled raise return must stay canceled"
+  grep -q 'No rank change' "${cancel_return}" \
+    || fail "canceled raise return must say no rank change"
+  grep -q 'A canceled or unpaid Polar return still changes no rank' "${cancel_return}" \
+    || fail "canceled raise return must stay off the wall"
+  if grep -qE 'data-raise-charged|data-return="success"|the difference, not a new full bid' "${cancel_return}"; then
+    fail "canceled raise return must not claim Polar charged the difference"
+  fi
+  cancel_home="$(mktemp)"
+  curl -sS -o "${cancel_home}" "http://127.0.0.1:${port}/"
+  grep -q 'data-bid="7"' "${cancel_home}" || fail "canceled raise must leave the paid \$7 bid"
+  if grep -q 'data-bid="8"' "${cancel_home}"; then
+    fail "canceled raise must not list an unpaid \$8 bid"
+  fi
 
   raised_body="$(mktemp)"
   raised_code="$(curl -sS -o "${raised_body}" -w '%{http_code}' "http://127.0.0.1:${port}/")"

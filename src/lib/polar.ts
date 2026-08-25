@@ -48,10 +48,22 @@ export type CheckoutStatus = "open" | "paid" | "canceled";
 export type CheckoutRecord = {
   checkoutId: string;
   amountUsd: number;
+  kind: "place" | "raise";
   listingDraft: ListingDraft;
   successUrl: string;
   status: CheckoutStatus;
   listingId?: string;
+};
+
+export type CheckoutReturnPayment = {
+  kind: "place" | "raise";
+  chargeUsd: number;
+};
+
+export type CheckoutReturnResult = {
+  status: "success" | "cancel";
+  listing: Listing | null;
+  payment: CheckoutReturnPayment | null;
 };
 
 export type CreateCheckoutInput = {
@@ -609,12 +621,15 @@ export class FakePolarPort implements PolarPort {
     }
     const payment = this.db
       .prepare(
-        `SELECT amount_usd FROM payments WHERE polar_checkout_id = ?`,
+        `SELECT amount_usd, kind FROM payments WHERE polar_checkout_id = ?`,
       )
-      .get(checkoutId) as { amount_usd: number } | undefined;
+      .get(checkoutId) as
+      | { amount_usd: number; kind: "place" | "raise" }
+      | undefined;
     return {
       checkoutId: row.checkout_id,
       amountUsd: payment?.amount_usd ?? row.bid_usd,
+      kind: payment?.kind ?? "place",
       listingDraft: draftFromRow(row),
       successUrl: "",
       status: row.status,
@@ -733,33 +748,60 @@ export function getPolarPort(db: AppDb = getDb()): PolarPort {
   return new FakePolarPort(db);
 }
 
+function paymentFromCheckout(
+  polar: PolarPort,
+  checkoutId: string,
+): CheckoutReturnPayment | null {
+  const checkout = polar.getCheckout(checkoutId);
+  if (!checkout) {
+    return null;
+  }
+  return { kind: checkout.kind, chargeUsd: checkout.amountUsd };
+}
+
 export async function handleCheckoutReturn(
   params: {
     checkoutId?: string | string[];
     status?: string | string[];
   },
   port?: PolarPort,
-): Promise<{ status: "success" | "cancel"; listing: Listing | null }> {
+): Promise<CheckoutReturnResult> {
   const checkoutId = firstQuery(params.checkoutId);
   const rawStatus = firstQuery(params.status);
   const canceled = rawStatus === "cancel" || rawStatus === "canceled";
 
   if (!checkoutId) {
-    return { status: canceled ? "cancel" : "success", listing: null };
+    return {
+      status: canceled ? "cancel" : "success",
+      listing: null,
+      payment: null,
+    };
   }
 
   const polar = port ?? getPolarPort();
   if (canceled) {
     await polar.abandonCheckout(checkoutId);
-    return { status: "cancel", listing: null };
+    return {
+      status: "cancel",
+      listing: null,
+      payment: paymentFromCheckout(polar, checkoutId),
+    };
   }
 
   if (polar.kind === "live") {
-    return { status: "success", listing: null };
+    return {
+      status: "success",
+      listing: null,
+      payment: paymentFromCheckout(polar, checkoutId),
+    };
   }
 
   const listing = await polar.completeCheckout(checkoutId);
-  return { status: "success", listing };
+  return {
+    status: "success",
+    listing,
+    payment: paymentFromCheckout(polar, checkoutId),
+  };
 }
 
 export function firstQuery(

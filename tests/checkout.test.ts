@@ -267,6 +267,8 @@ test("handleCheckoutReturn pays on success and not on cancel", async () => {
   );
   assert.equal(success.status, "success");
   assert.equal(success.listing?.bidUsd, 5);
+  assert.equal(success.payment?.kind, "place");
+  assert.equal(success.payment?.chargeUsd, 5);
 
   const cancel = await handleCheckoutReturn(
     { checkoutId: canceled.checkoutId, status: "cancel" },
@@ -274,6 +276,7 @@ test("handleCheckoutReturn pays on success and not on cancel", async () => {
   );
   assert.equal(cancel.status, "cancel");
   assert.equal(cancel.listing, null);
+  assert.equal(cancel.payment?.kind, "place");
   assert.equal(
     (db.prepare("SELECT COUNT(*) AS n FROM listings").get() as { n: number }).n,
     1,
@@ -511,6 +514,8 @@ test("/checkout/return markup shows success or cancel", async () => {
   assert.match(successHtml, /data-return="success"/);
   assert.match(successHtml, /on the board/i);
   assert.match(successHtml, /Back to the board/);
+  assert.doesNotMatch(successHtml, /data-raise-charged/);
+  assert.doesNotMatch(successHtml, /the difference, not a new full bid/);
 
   const cancelHtml = renderToStaticMarkup(
     await ReturnPage({
@@ -522,9 +527,123 @@ test("/checkout/return markup shows success or cancel", async () => {
   );
   assert.match(cancelHtml, /data-return="cancel"/);
   assert.match(cancelHtml, /No rank change/);
+  assert.match(
+    cancelHtml,
+    /A canceled or unpaid Polar return still changes no rank/,
+  );
   assert.match(cancelHtml, /does not list/);
   assert.match(cancelHtml, /Polar reports paid/);
   assert.match(cancelHtml, /An abandoned brief is not Terms as #1/);
+  assert.doesNotMatch(cancelHtml, /data-raise-charged/);
+});
+
+test("occupied /checkout/return after a raise names Polar charged the difference — unpaid cancel stays off", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "cbw-raise-return-"));
+  const dbPath = join(dir, "app.sqlite");
+  await withDatabasePath(dbPath, async () => {
+    const polar = new FakePolarPort();
+    const placedStart = await polar.createCheckout({
+      amountUsd: 5,
+      listingDraft: draft(),
+      successUrl: SUCCESS_URL,
+    });
+    const placed = await handleCheckoutReturn(
+      { checkoutId: placedStart.checkoutId },
+      polar,
+    );
+    assert.equal(placed.status, "success");
+    assert.equal(placed.payment?.kind, "place");
+    assert.equal(placed.listing?.bidUsd, 5);
+
+    const { default: ReturnPage } = await import(
+      "../src/app/checkout/return/page"
+    );
+    const placeHtml = renderToStaticMarkup(
+      await ReturnPage({
+        searchParams: Promise.resolve({
+          checkoutId: placedStart.checkoutId,
+        }),
+      }),
+    );
+    assert.match(placeHtml, /data-return="success"/);
+    assert.match(placeHtml, /Acme is listed at \$5/);
+    assert.doesNotMatch(placeHtml, /data-raise-charged/);
+    assert.doesNotMatch(placeHtml, /the difference, not a new full bid/);
+
+    const raiseStart = await polar.createCheckout({
+      amountUsd: 2,
+      listingDraft: draft({ bidUsd: 7 }),
+      successUrl: SUCCESS_URL,
+    });
+    const unpaidCancel = await handleCheckoutReturn(
+      { checkoutId: raiseStart.checkoutId, status: "cancel" },
+      polar,
+    );
+    assert.equal(unpaidCancel.status, "cancel");
+    assert.equal(unpaidCancel.listing, null);
+    assert.equal(unpaidCancel.payment?.kind, "raise");
+    assert.equal(unpaidCancel.payment?.chargeUsd, 2);
+    assert.equal(polar.getCheckout(raiseStart.checkoutId)?.status, "canceled");
+    assert.equal(
+      (openDatabase(dbPath).prepare("SELECT bid_usd FROM listings").get() as {
+        bid_usd: number;
+      }).bid_usd,
+      5,
+    );
+
+    const raiseCancelHtml = renderToStaticMarkup(
+      await ReturnPage({
+        searchParams: Promise.resolve({
+          checkoutId: raiseStart.checkoutId,
+          status: "cancel",
+        }),
+      }),
+    );
+    assert.match(raiseCancelHtml, /data-return="cancel"/);
+    assert.match(raiseCancelHtml, /No rank change/);
+    assert.match(
+      raiseCancelHtml,
+      /A canceled or unpaid Polar return still changes no rank/,
+    );
+    assert.doesNotMatch(raiseCancelHtml, /data-raise-charged/);
+    assert.doesNotMatch(raiseCancelHtml, /on the board/i);
+
+    const paidRaise = await polar.createCheckout({
+      amountUsd: 2,
+      listingDraft: draft({ bidUsd: 7 }),
+      successUrl: SUCCESS_URL,
+    });
+    const raised = await handleCheckoutReturn(
+      { checkoutId: paidRaise.checkoutId },
+      polar,
+    );
+    assert.equal(raised.status, "success");
+    assert.equal(raised.payment?.kind, "raise");
+    assert.equal(raised.payment?.chargeUsd, 2);
+    assert.equal(raised.listing?.bidUsd, 7);
+
+    const raiseHtml = renderToStaticMarkup(
+      await ReturnPage({
+        searchParams: Promise.resolve({
+          checkoutId: paidRaise.checkoutId,
+        }),
+      }),
+    );
+    assert.match(raiseHtml, /data-return="success"/);
+    assert.match(raiseHtml, /data-raise-charged=""/);
+    assert.match(
+      raiseHtml,
+      /Polar charged \$<span data-raise-charge-usd="">2<\/span> — the difference, not a new full bid/,
+    );
+    assert.match(raiseHtml, /Acme is listed at \$7/);
+    assert.doesNotMatch(raiseHtml, /data-return="cancel"/);
+    assert.equal(
+      (openDatabase(dbPath).prepare("SELECT bid_usd FROM listings").get() as {
+        bid_usd: number;
+      }).bid_usd,
+      7,
+    );
+  });
 });
 
 test("same brief URL raise charges new − current; rival pays a full bid", async () => {
