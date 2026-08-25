@@ -3388,11 +3388,13 @@ test("GET confirm sheet puts terms and the brief URL before the leave hop", () =
   const terms = html.indexOf("$800 flat, 1 TikTok");
   const url = html.indexOf("https://briefs.example.com/acme?id=9");
   const leave = html.indexOf('data-leave-brief=""');
-  const bid = html.indexOf('class="confirm-bid">$5');
+  const bid = html.indexOf('class="confirm-bid later-fact"');
   const hops = html.indexOf("3 public hops — not reach");
   assert.ok(uncounted >= 0 && uncountedCopy >= 0 && uncounted <= uncountedCopy);
   assert.ok(terms > uncountedCopy && url > terms && leave > url);
   assert.ok(bid > leave && hops > bid);
+  assert.match(html, /class="confirm-bid later-fact"/);
+  assert.match(html, /data-later-fact="">\$5/);
   assert.match(html, /data-confirm-brief=""/);
   assert.match(html, /data-confirm-before-leave=""/);
   assert.match(html, /class="confirm-sheet confirm-before-leave"/);
@@ -3588,7 +3590,7 @@ test("occupied confirm hops stay a later fact after terms and do not shout besid
   const termsCopy = html.indexOf("$800 flat, 1 TikTok");
   const url = html.indexOf("https://briefs.example.com/acme?id=9");
   const leave = html.indexOf('data-leave-brief=""');
-  const bid = html.indexOf('class="confirm-bid">$5');
+  const bid = html.indexOf('class="confirm-bid later-fact"');
   const hopsClass = html.indexOf('class="confirm-clicks later-fact"');
   const hopsLater = html.indexOf('data-later-fact=""', hopsClass);
   const hops = html.indexOf("3 public hops — not reach");
@@ -3599,7 +3601,7 @@ test("occupied confirm hops stay a later fact after terms and do not shout besid
   assert.match(html, /data-confirm-before-leave=""/);
   assert.match(html, /Leave to the brief/);
   assert.equal((html.match(/class="confirm-clicks later-fact"/g) ?? []).length, 1);
-  assert.equal((html.match(/data-later-fact=""/g) ?? []).length, 1);
+  assert.equal((html.match(/data-later-fact=""/g) ?? []).length, 2);
   assert.doesNotMatch(html, /data-post-after-open-seven|data-open-after-post-six/);
   assert.doesNotMatch(html, FORBIDDEN);
 
@@ -3636,6 +3638,177 @@ test("occupied confirm hops stay a later fact after terms and do not shout besid
     assert.match(confirm, /class="confirm-clicks later-fact"/);
     assert.match(confirm, /data-later-fact=""/);
     assert.match(confirm, /3 public hops — not reach/);
+    assert.doesNotMatch(confirm, /Ghost Co|Abandoned Polar checkout/);
+    assert.equal(getPublicListing(db, "lst_paid_row").clicks, 3);
+  } finally {
+    db.close();
+  }
+});
+
+test("occupied confirm $bid stays a later fact after terms and does not shout beside the prize", () => {
+  const css = readFileSync(join(process.cwd(), "src", "app", "board.css"), "utf8");
+  const termsSize = css.match(/\.confirm-terms\s*\{[^}]*font-size:\s*([\d.]+)rem/);
+  const bidSize = css.match(
+    /\.confirm-sheet\.confirm-before-leave\[data-confirm-before-leave\] \.confirm-bid\.later-fact\[data-later-fact\]\s*\{[^}]*font-size:\s*([\d.]+)rem/,
+  );
+  const bidBlock = css.match(
+    /\.confirm-sheet\.confirm-before-leave\[data-confirm-before-leave\] \.confirm-bid\.later-fact\[data-later-fact\]\s*\{[^}]*\}/,
+  );
+  assert.ok(termsSize);
+  assert.ok(bidSize);
+  assert.ok(bidBlock);
+  assert.ok(Number(termsSize[1]) > Number(bidSize[1]));
+  assert.match(bidBlock[0], /flex-basis:\s*100%/);
+  assert.match(bidBlock[0], /color:\s*var\(--muted\)/);
+  assert.match(bidBlock[0], /font-weight:\s*500/);
+  assert.doesNotMatch(bidBlock[0], /color:\s*var\(--bid\)/);
+  assert.doesNotMatch(
+    css,
+    /\.confirm-sheet\.confirm-before-leave\[data-confirm-before-leave\] \.confirm-bid\.later-fact\[data-later-fact\]\s*\{[^}]*color:\s*var\(--bid\)/,
+  );
+
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.match(empty, /Claim #1 for/);
+  assert.match(empty, /Then the brief URL/);
+  assert.match(empty, /data-empty-claim-first=""/);
+  assert.match(
+    empty,
+    /Unpaid checkout stays off the board until Polar reports paid/,
+  );
+  assert.doesNotMatch(empty, /confirm-bid/);
+  assert.doesNotMatch(empty, /class="confirm-bid later-fact"/);
+  assert.doesNotMatch(empty, /data-later-fact/);
+  assert.doesNotMatch(empty, /later-fact/);
+  assert.doesNotMatch(empty, /data-confirm-before-leave/);
+  assert.doesNotMatch(empty, /Open brief/);
+  assert.doesNotMatch(empty, FORBIDDEN);
+
+  const unpaid = listing({
+    id: "lst_ghost",
+    brand: "Ghost Co",
+    terms: "Abandoned Polar checkout.",
+    bidUsd: 50,
+    clicks: 9,
+    createdAt: "",
+  });
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        unpaid,
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          clicks: 4,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+        listing({
+          id: "lst_two",
+          brand: "Two Co",
+          terms: "later rank",
+          bidUsd: 5,
+          clicks: 11,
+          createdAt: "2026-08-18T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const leadStart = occupied.indexOf('data-id="lst_lead"');
+  const lead = occupied.slice(leadStart, occupied.indexOf("</li>", leadStart));
+  const terms = lead.indexOf('data-prize=""');
+  const hop = lead.indexOf('data-open-brief=""');
+  const firstClick = lead.indexOf('data-first-click="open"');
+  const leadBid = lead.indexOf('class="bid later-fact"');
+  assert.ok(terms >= 0 && hop > terms && firstClick > terms);
+  assert.ok(leadBid > terms);
+  assert.match(lead, /class="terms prize-before-price"/);
+  assert.match(lead, /data-first-click="open"/);
+  assert.match(lead, /href="\/r\/lst_lead"/);
+  assert.doesNotMatch(occupied, /Ghost Co|Abandoned Polar checkout/);
+  assert.doesNotMatch(occupied, /data-id="lst_ghost"/);
+  assert.doesNotMatch(occupied, /class="confirm-bid later-fact"/);
+  assert.doesNotMatch(occupied, /data-post-after-open-seven/);
+  assert.doesNotMatch(occupied, /data-open-after-post-six/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+
+  const html = confirmBriefHtml(
+    listing({
+      id: "lst_acme",
+      brand: "Acme",
+      terms: "$800 flat, 1 TikTok",
+      briefUrl: "https://briefs.example.com/acme?id=9",
+      bidUsd: 5,
+      clicks: 3,
+      createdAt: "2026-08-17T00:00:00.000Z",
+    }),
+  );
+  const termsCopy = html.indexOf("$800 flat, 1 TikTok");
+  const url = html.indexOf("https://briefs.example.com/acme?id=9");
+  const leave = html.indexOf('data-leave-brief=""');
+  const bidClass = html.indexOf('class="confirm-bid later-fact"');
+  const bidLater = html.indexOf('data-later-fact=""', bidClass);
+  const bid = html.indexOf('data-later-fact="">$5', bidClass);
+  const hopsClass = html.indexOf('class="confirm-clicks later-fact"');
+  const hopsLater = html.indexOf('data-later-fact=""', hopsClass);
+  const hops = html.indexOf("3 public hops — not reach");
+  assert.ok(termsCopy >= 0 && url > termsCopy && leave > url);
+  assert.ok(
+    bidClass > leave &&
+      bidLater >= bidClass &&
+      bid >= bidClass &&
+      hopsClass > bid &&
+      hopsLater >= hopsClass &&
+      hops > hopsLater,
+  );
+  assert.match(html, /class="confirm-bid later-fact"/);
+  assert.match(html, /class="confirm-clicks later-fact"/);
+  assert.match(html, /data-later-fact=""/);
+  assert.match(html, /data-confirm-before-leave=""/);
+  assert.match(html, /Leave to the brief/);
+  assert.equal((html.match(/class="confirm-bid later-fact"/g) ?? []).length, 1);
+  assert.equal((html.match(/class="confirm-clicks later-fact"/g) ?? []).length, 1);
+  assert.equal((html.match(/data-later-fact=""/g) ?? []).length, 2);
+  assert.doesNotMatch(html, /data-post-after-open-seven|data-open-after-post-six/);
+  assert.doesNotMatch(html, FORBIDDEN);
+
+  const db = openDatabase(":memory:");
+  try {
+    insertFixtureListing(db, {
+      id: "lst_ghost_row",
+      weekId: WEEK,
+      brand: "Ghost Co",
+      terms: "Abandoned Polar checkout.",
+      briefUrl: "https://example.com/ghost",
+      bidUsd: 50,
+      clicks: 9,
+      createdAt: "",
+    });
+    insertFixtureListing(db, {
+      id: "lst_paid_row",
+      weekId: WEEK,
+      brand: "Acme",
+      terms: "$800 flat, 1 TikTok",
+      briefUrl: "https://example.com/acme",
+      bidUsd: 5,
+      clicks: 3,
+      createdAt: "2026-08-17T00:00:00.000Z",
+    });
+    assert.throws(
+      () => getPublicListing(db, "lst_ghost_row"),
+      (error: unknown) =>
+        error instanceof ClickError && error.code === "listing_not_found",
+    );
+    const paid = getPublicListing(db, "lst_paid_row");
+    assert.equal(paid.clicks, 3);
+    const confirm = confirmBriefHtml(paid);
+    assert.match(confirm, /class="confirm-bid later-fact"/);
+    assert.match(confirm, /data-later-fact=""/);
+    assert.match(confirm, /data-later-fact="">\$5/);
+    assert.match(confirm, /class="confirm-clicks later-fact"/);
     assert.doesNotMatch(confirm, /Ghost Co|Abandoned Polar checkout/);
     assert.equal(getPublicListing(db, "lst_paid_row").clicks, 3);
   } finally {
