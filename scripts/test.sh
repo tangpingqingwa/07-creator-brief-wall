@@ -291,6 +291,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover GET confirm-before-leave"
   grep -q 'occupied confirm hops stay a later fact after terms and do not shout beside the prize' tests/board.test.ts \
     || fail "board tests must cover occupied confirm hops staying a later fact after terms"
+  grep -q 'occupied confirm $bid stays a later fact after terms and does not shout beside the prize' tests/board.test.ts \
+    || fail "board tests must cover occupied confirm \$bid staying a later fact after terms"
   grep -q 'occupied wall names one Post a brief hop' tests/board.test.ts \
     || fail "board tests must cover the occupied Post a brief hop"
   grep -q 'occupied wall posts a brief after Open brief' tests/board.test.ts \
@@ -599,10 +601,16 @@ PY
     || fail "CSS must concentrate leave on the confirm-before-leave sheet"
   grep -q 'confirm-clicks later-fact' src/lib/confirm-brief.ts \
     || fail "occupied confirm hops must use the later-fact class"
+  grep -q 'confirm-bid later-fact' src/lib/confirm-brief.ts \
+    || fail "occupied confirm \$bid must use the later-fact class"
   grep -qF '.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-clicks.later-fact[data-later-fact]' src/app/board.css \
     || fail "CSS must mute occupied confirm hops so they cannot shout beside terms"
+  grep -qF '.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-bid.later-fact[data-later-fact]' src/app/board.css \
+    || fail "CSS must mute occupied confirm \$bid so it cannot shout beside terms"
   grep -Fq 'Occupied confirm hops stay a later fact after terms' SPEC.md \
     || fail "SPEC must keep occupied confirm hops a later fact after terms"
+  grep -Fq 'Occupied confirm $bid stays a later fact after terms' SPEC.md \
+    || fail "SPEC must keep occupied confirm \$bid a later fact after terms"
   python3 - src/app/board.css <<'PY' || fail "confirm hops must recede after terms and stay muted, not --bid"
 import re
 import sys
@@ -627,6 +635,32 @@ if "color: var(--muted)" not in hops.group(0):
 if "font-weight: 500" not in hops.group(0):
     raise SystemExit(1)
 if "color: var(--bid)" in hops.group(0):
+    raise SystemExit(1)
+PY
+  python3 - src/app/board.css <<'PY' || fail "confirm \$bid must recede after terms and stay muted, not --bid"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+terms = re.search(r"\.confirm-terms\s*\{[^}]*font-size:\s*([\d.]+)rem", css)
+bid = re.search(
+    r"\.confirm-sheet\.confirm-before-leave\[data-confirm-before-leave\] \.confirm-bid\.later-fact\[data-later-fact\]\s*\{[^}]*\}",
+    css,
+    re.S,
+)
+if terms is None or bid is None:
+    raise SystemExit(1)
+size = re.search(r"font-size:\s*([\d.]+)rem", bid.group(0))
+if size is None:
+    raise SystemExit(1)
+if float(terms.group(1)) <= float(size.group(1)):
+    raise SystemExit(1)
+if "flex-basis: 100%" not in bid.group(0):
+    raise SystemExit(1)
+if "color: var(--muted)" not in bid.group(0):
+    raise SystemExit(1)
+if "font-weight: 500" not in bid.group(0):
+    raise SystemExit(1)
+if "color: var(--bid)" in bid.group(0):
     raise SystemExit(1)
 PY
   if grep -nE 'data-post-after-open-seven|data-open-after-post-six-stamp' \
@@ -1977,6 +2011,8 @@ PY
     || fail "confirm sheet must not dress clicks as reach"
   grep -q 'confirm-clicks later-fact' src/lib/confirm-brief.ts \
     || fail "confirm hops must use the later-fact class"
+  grep -q 'confirm-bid later-fact' src/lib/confirm-brief.ts \
+    || fail "confirm \$bid must use the later-fact class"
   grep -q 'data-later-fact' src/lib/confirm-brief.ts \
     || fail "confirm hops must stamp later-fact after terms"
   grep -q 'getPublicListing' src/app/r/\[id\]/route.ts \
@@ -2010,6 +2046,8 @@ PY
     || fail "board tests must cover GET confirm-before-leave"
   grep -q 'occupied confirm hops stay a later fact after terms and do not shout beside the prize' tests/board.test.ts \
     || fail "board tests must cover occupied confirm hops staying a later fact after terms"
+  grep -q 'occupied confirm $bid stays a later fact after terms and does not shout beside the prize' tests/board.test.ts \
+    || fail "board tests must cover occupied confirm \$bid staying a later fact after terms"
   if grep -nE '[^a-zA-Z_]fetch\(' src/lib/week.ts src/lib/clicks.ts \
     src/lib/confirm-brief.ts src/app/r/\[id\]/route.ts >/dev/null
   then
@@ -3206,6 +3244,8 @@ PY
     || fail "confirm sheet must not dress clicks as reach"
   grep -q 'class="confirm-clicks later-fact"' "${confirm_body}" \
     || fail "GET /r/:id must keep occupied confirm hops a later fact after terms"
+  grep -q 'class="confirm-bid later-fact"' "${confirm_body}" \
+    || fail "GET /r/:id must keep occupied confirm \$bid a later fact after terms"
   grep -q 'data-later-fact=""' "${confirm_body}" \
     || fail "GET /r/:id must stamp confirm hops as a later fact"
   grep -q 'data-clicks="0"' "${confirm_body}" \
@@ -3225,23 +3265,26 @@ copy = html.find("Opening this flyer has not counted a hop")
 terms = html.find("stripped tracking")
 url = html.find("https://example.com/clean")
 leave = html.find('data-leave-brief=""')
-bid = html.find('class="confirm-bid">$5')
+bid = html.find('class="confirm-bid later-fact"')
+bid_later = html.find('data-later-fact=""', bid)
 hops_class = html.find('class="confirm-clicks later-fact"')
 hops_later = html.find('data-later-fact=""', hops_class)
 hops = html.find("public hops — not reach")
 if stamp < 0 or uncounted < 0 or copy < 0 or terms < 0 or url < 0 or leave < 0 or bid < 0:
     raise SystemExit(1)
-if hops_class < 0 or hops_later < 0 or hops < 0:
+if bid_later < 0 or hops_class < 0 or hops_later < 0 or hops < 0:
     raise SystemExit(1)
-if not (stamp < uncounted <= copy < terms < url < leave < bid < hops_class <= hops_later < hops):
+if not (stamp < uncounted <= copy < terms < url < leave < bid <= bid_later < hops_class <= hops_later < hops):
     raise SystemExit(1)
 if html.count('data-confirm-before-leave=""') != 1:
     raise SystemExit(1)
 if html.count('data-leave-brief=""') != 1:
     raise SystemExit(1)
+if html.count('class="confirm-bid later-fact"') != 1:
+    raise SystemExit(1)
 if html.count('class="confirm-clicks later-fact"') != 1:
     raise SystemExit(1)
-if html.count('data-later-fact=""') != 1:
+if html.count('data-later-fact=""') != 2:
     raise SystemExit(1)
 PY
 

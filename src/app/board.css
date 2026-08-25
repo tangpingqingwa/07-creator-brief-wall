@@ -950,6 +950,14 @@ body {
   color: var(--muted);
 }
 
+/* Occupied confirm $bid stays a later fact after terms. Do not shout beside the prize. */
+.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-bid.later-fact[data-later-fact] {
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
 .confirm-brand {
   margin: 0;
   font-size: clamp(1.8rem, 4vw, 2.4rem);
