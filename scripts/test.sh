@@ -176,6 +176,10 @@ if [[ -f package.json ]]; then
     || fail "occupied /about unpaid Polar checkout leftover test did not run"
   grep -q 'occupied /rules names Polar raise-pays-difference' "${test_log}" \
     || fail "occupied /rules raise-pays-difference leftover test did not run"
+  grep -q 'occupied raise-too-small names Polar still charges only the difference' "${test_log}" \
+    || fail "occupied raise-too-small leftover test did not run"
+  grep -q 'unpaid Polar checkout stays off' "${test_log}" \
+    || fail "occupied raise-too-small unpaid Polar checkout leftover test did not run"
   rm -f "${test_log}"
 
   echo "== skeleton files =="
@@ -1585,7 +1589,7 @@ import re
 import sys
 css = open(sys.argv[1], encoding="utf-8").read()
 block = re.search(
-    r"/\* Occupied /rules: Polar charges the difference on a raise\. Unpaid stays off\. \*/(.*?)@media",
+    r"/\* Occupied /rules: Polar charges the difference on a raise\. Unpaid stays off\. \*/(.*?)(?:/\* Occupied raise-too-small:|@media)",
     css,
     re.S,
 )
@@ -1664,12 +1668,152 @@ PY
     fail "occupied /rules CSS must sit after occupied /about, not restamp it"
   fi
 
+  echo "== UX: occupied raise-too-small names Polar still charges only the difference — unpaid Polar checkout stays off =="
+  grep -q 'export function RaiseTooSmallCopy' src/lib/raise-too-small-copy.tsx \
+    || fail "occupied raise-too-small must compose RaiseTooSmallCopy"
+  grep -q 'export default async function RaiseTooSmallPage' src/app/checkout/raise-too-small/page.tsx \
+    || fail "occupied raise-too-small must keep the raise-too-small page"
+  grep -q 'await connection()' src/app/checkout/raise-too-small/page.tsx \
+    || fail "occupied raise-too-small must re-render occupancy on each request"
+  grep -q 'data-raise-too-small=""' src/lib/raise-too-small-copy.tsx \
+    || fail "occupied raise-too-small must stamp Polar still-charges-difference"
+  grep -q 'Polar still charges only the difference' src/lib/raise-too-small-copy.tsx \
+    || fail "occupied raise-too-small must name Polar still charges only the difference"
+  grep -q 'not a new full bid' src/lib/raise-too-small-copy.tsx \
+    || fail "occupied raise-too-small must name Polar raise as not a new full bid"
+  grep -q 'Unpaid Polar checkout stays off the wall' src/lib/raise-too-small-copy.tsx \
+    || fail "occupied raise-too-small must keep unpaid Polar checkout off the wall"
+  grep -q 'RAISE_TOO_SMALL_COPY' src/lib/rank.ts \
+    || fail "raise-too-small must share occupied copy from rank"
+  grep -q 'Polar still charges only the difference' src/lib/rank.ts \
+    || fail "raise-too-small rank error must name Polar still charges only the difference"
+  grep -q 'prefersHtmlError' src/app/api/checkout/route.ts \
+    || fail "form raise-too-small must bounce to HTML, not Polar"
+  grep -q '/checkout/raise-too-small' src/app/api/checkout/route.ts \
+    || fail "form raise-too-small must land on occupied raise-too-small"
+  grep -q 'listLiveBoard' src/app/checkout/raise-too-small/page.tsx \
+    || fail "occupied raise-too-small must read live paid listings"
+  if awk '/occupied \? \(/,/Back to the board/' src/lib/raise-too-small-copy.tsx | grep -q 'data-raise-difference'; then
+    fail "occupied raise-too-small must not restamp occupied checkout copy"
+  fi
+  if awk '/occupied \? \(/,/Back to the board/' src/lib/raise-too-small-copy.tsx | grep -q 'data-raise-charged'; then
+    fail "occupied raise-too-small must not restamp occupied checkout return"
+  fi
+  if awk '/occupied \? \(/,/Back to the board/' src/lib/raise-too-small-copy.tsx | grep -q 'data-about-raise'; then
+    fail "occupied raise-too-small must not restamp occupied /about"
+  fi
+  if awk '/occupied \? \(/,/Back to the board/' src/lib/raise-too-small-copy.tsx | grep -q 'data-rules-raise'; then
+    fail "occupied raise-too-small must not restamp occupied /rules"
+  fi
+  grep -Fq 'Occupied raise-too-small names Polar still charges only the difference' SPEC.md \
+    || fail "SPEC must name occupied raise-too-small Polar still-charges-difference"
+  grep -Fq 'Unpaid Polar checkout stays off the wall' SPEC.md \
+    || fail "SPEC must keep unpaid Polar checkout off the wall on occupied raise-too-small"
+  grep -q 'Occupied raise-too-small: Polar still charges only the difference. Unpaid stays off.' src/app/board.css \
+    || fail "CSS must name occupied raise-too-small Polar still-charges-difference"
+  grep -qF '.board[data-page="raise-too-small"][data-occupied="true"] .raise-too-small[data-raise-too-small]' src/app/board.css \
+    || fail "CSS must compose occupied raise-too-small Polar still-charges-difference"
+  grep -qF '.board[data-page="raise-too-small"][data-occupied="false"] .raise-too-small[data-raise-too-small]' src/app/board.css \
+    || fail "empty raise-too-small CSS must keep occupied Polar still-charges-difference off"
+  python3 - src/app/board.css <<'PY' || fail "occupied raise-too-small CSS must stay muted, not recolor the plaster"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+block = re.search(
+    r"/\* Occupied raise-too-small: Polar still charges only the difference\. Unpaid stays off\. \*/(.*?)@media",
+    css,
+    re.S,
+)
+if not block:
+    raise SystemExit(1)
+if "background:" in block.group(1) or "var(--bid-ink)" in block.group(1):
+    raise SystemExit(1)
+if '.board[data-page="raise-too-small"][data-occupied="true"] .raise-too-small[data-raise-too-small]' not in block.group(1):
+    raise SystemExit(1)
+if '.board[data-page="raise-too-small"][data-occupied="false"] .raise-too-small[data-raise-too-small]' not in block.group(1):
+    raise SystemExit(1)
+if '.board[data-page="rules"][data-occupied="true"] .rules-raise[data-rules-raise]' in block.group(1):
+    raise SystemExit(1)
+PY
+  grep -q 'occupied raise-too-small names Polar still charges only the difference' tests/urls.test.ts \
+    || fail "url tests must cover occupied raise-too-small Polar still-charges-difference"
+  grep -q 'occupied raise-too-small names Polar still charges only the difference' tests/checkout.test.ts \
+    || fail "checkout tests must cover occupied raise-too-small Polar still-charges-difference after pay"
+  grep -q 'occupied raise-too-small names Polar still charges only the difference' tests/rank.test.ts \
+    || fail "rank tests must cover occupied raise-too-small Polar still-charges-difference"
+  grep -q 'unpaid Polar checkout stays off' tests/checkout.test.ts \
+    || fail "checkout tests must keep unpaid Polar checkout off occupied raise-too-small"
+  grep -q 'data-raise-difference=""' src/app/outbid-form.tsx \
+    || fail "occupied raise-too-small cut must not restamp occupied checkout copy"
+  grep -q 'only the difference, not a new bid' src/app/outbid-form.tsx \
+    || fail "occupied raise-too-small cut must not restamp occupied checkout copy"
+  grep -q 'data-raise-charged=""' src/app/checkout/return/page.tsx \
+    || fail "occupied raise-too-small cut must not restamp occupied checkout return"
+  grep -q 'the difference, not a new full bid' src/app/checkout/return/page.tsx \
+    || fail "occupied raise-too-small cut must not restamp occupied checkout return"
+  grep -q 'data-about-raise=""' src/lib/about-copy.tsx \
+    || fail "occupied raise-too-small cut must not restamp occupied /about"
+  grep -q 'Polar charges the difference on a raise' src/lib/about-copy.tsx \
+    || fail "occupied raise-too-small cut must not restamp occupied /about"
+  grep -q 'data-rules-raise=""' src/lib/rules-copy.tsx \
+    || fail "occupied raise-too-small cut must not restamp occupied /rules"
+  grep -q 'Polar charges the difference on a raise' src/lib/rules-copy.tsx \
+    || fail "occupied raise-too-small cut must not restamp occupied /rules"
+  grep -q 'data-prize=""' src/lib/board-markup.tsx \
+    || fail "occupied raise-too-small cut must keep occupied Terms as the prize"
+  grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
+    || fail "occupied raise-too-small cut must keep #1 Open the first occupied click"
+  grep -q 'Open brief' src/lib/board-markup.tsx \
+    || fail "occupied raise-too-small cut must keep Open brief"
+  grep -q 'Post a brief' src/lib/board-markup.tsx \
+    || fail "occupied raise-too-small cut must keep Post a brief"
+  grep -q 'Claim #1' src/app/outbid-form.tsx \
+    || fail "occupied raise-too-small cut must keep Claim #1"
+  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
+    || fail "occupied raise-too-small cut must keep empty later-write brief URL"
+  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+    || fail "occupied raise-too-small cut must keep blank plaster"
+  grep -q 'amount-field' src/app/outbid-form.tsx \
+    || fail "occupied raise-too-small cut must keep the dashed amount"
+  grep -q 'className="step"' src/app/outbid-form.tsx \
+    || fail "occupied raise-too-small cut must keep ± steppers"
+  grep -q 'Outbid' src/app/outbid-form.tsx \
+    || fail "occupied raise-too-small cut must keep Outbid"
+  grep -q 'className="plaster"' src/lib/board-markup.tsx \
+    || fail "occupied raise-too-small cut must not rebuild the plaster wall"
+  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
+    || fail "occupied raise-too-small cut must not restamp empty rolling-copy"
+  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
+    || fail "occupied raise-too-small cut must not restamp raise-rolling-identity"
+  grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
+    || fail "occupied raise-too-small cut must keep occupied rolling last-7-days"
+  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp|data-raise-after-open|data-post-after-open-N' \
+    src/app/outbid-form.tsx src/app/board.tsx src/lib/board-markup.tsx src/app/board.css src/app/checkout/raise-too-small/page.tsx src/lib/raise-too-small-copy.tsx
+  then
+    fail "occupied raise-too-small must not add another named hop"
+  fi
+  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx src/app/checkout/raise-too-small/page.tsx src/lib/raise-too-small-copy.tsx; then
+    fail "occupied raise-too-small must not rebuild the plaster wall into a long form"
+  fi
+  if ! awk '
+    /Occupied checkout: Polar charges the difference on a raise/ { raise=NR }
+    /Occupied \/checkout\/return after a raise: Polar charged the difference/ { ret=NR }
+    /Occupied \/about: Polar charges the difference on a raise/ { about=NR }
+    /Occupied \/rules: Polar charges the difference on a raise/ { rules=NR }
+    /Occupied raise-too-small: Polar still charges only the difference/ { tooSmall=NR }
+    END { exit !(raise && ret && about && rules && tooSmall && raise < ret && ret < about && about < rules && rules < tooSmall) }
+  ' src/app/board.css; then
+    fail "occupied raise-too-small CSS must sit after occupied /rules, not restamp it"
+  fi
+
   echo "== about, rules, URL hygiene =="
   for f in \
     src/app/about/page.tsx \
     src/lib/about-copy.tsx \
     src/app/rules/page.tsx \
     src/lib/rules-copy.tsx \
+    src/app/checkout/raise-too-small/page.tsx \
+    src/lib/raise-too-small-copy.tsx \
     src/lib/urls.ts \
     tests/urls.test.ts
   do
@@ -2117,7 +2261,7 @@ PY
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${home_body}"; then
     fail "GET / must not invent follower or reach numbers"
   fi
-  if grep -qE 'data-raise-difference|data-raise-charge|data-raise-charged|Polar charges only the difference|Polar charges the difference|Polar charged' "${home_body}"; then
+  if grep -qE 'data-raise-difference|data-raise-charge|data-raise-charged|data-raise-too-small|Polar charges only the difference|Polar charges the difference|Polar charged|Polar still charges only the difference' "${home_body}"; then
     fail "empty Claim #1 paper must not name occupied raise-pays-difference"
   fi
 
@@ -2160,6 +2304,19 @@ PY
     fail "empty GET /rules must not stamp occupied Polar raise-pays-difference"
   fi
 
+  too_small_empty="$(mktemp)"
+  too_small_empty_code="$(curl -sS -o "${too_small_empty}" -w '%{http_code}' "http://127.0.0.1:${port}/checkout/raise-too-small")"
+  [[ "${too_small_empty_code}" == "200" ]] || fail "GET /checkout/raise-too-small expected 200 got ${too_small_empty_code}"
+  grep -q 'data-page="raise-too-small"' "${too_small_empty}" \
+    || fail "empty GET /checkout/raise-too-small missing raise-too-small page"
+  grep -q 'data-occupied="false"' "${too_small_empty}" \
+    || fail "empty GET /checkout/raise-too-small must stay unoccupied"
+  grep -q 'No rank change' "${too_small_empty}" \
+    || fail "empty GET /checkout/raise-too-small must keep unpaid off the wall"
+  if grep -qE 'data-raise-too-small|Polar still charges only the difference' "${too_small_empty}"; then
+    fail "empty GET /checkout/raise-too-small must not stamp occupied Polar still-charges-difference"
+  fi
+
   echo "== fixture \$5 appears on the board after completion =="
   unpaid_body="$(mktemp)"
   unpaid_code="$(curl -sS -o "${unpaid_body}" -w '%{http_code}' \
@@ -2184,7 +2341,7 @@ PY
     || fail "unpaid leftover must say Polar paid is required"
   grep -q 'An abandoned brief is not Terms as #1' "${unpaid_home}" \
     || fail "unpaid leftover must say an abandoned brief is not Terms as #1"
-  if grep -qE 'data-raise-difference|data-raise-charge|data-raise-charged|Polar charges only the difference|Polar charged' "${unpaid_home}"; then
+  if grep -qE 'data-raise-difference|data-raise-charge|data-raise-charged|data-raise-too-small|Polar charges only the difference|Polar charged|Polar still charges only the difference' "${unpaid_home}"; then
     fail "unpaid leftover must not name occupied raise-pays-difference"
   fi
   unpaid_about="$(mktemp)"
@@ -2204,6 +2361,15 @@ PY
     || fail "unpaid Polar checkout must stay off occupied /rules"
   if grep -qE 'data-rules-raise|Polar charges the difference on a raise' "${unpaid_rules}"; then
     fail "unpaid Polar checkout must not occupy /rules raise-pays-difference"
+  fi
+  unpaid_too_small="$(mktemp)"
+  curl -sS -o "${unpaid_too_small}" "http://127.0.0.1:${port}/checkout/raise-too-small"
+  grep -q 'data-page="raise-too-small"' "${unpaid_too_small}" \
+    || fail "unpaid leftover must still serve /checkout/raise-too-small"
+  grep -q 'data-occupied="false"' "${unpaid_too_small}" \
+    || fail "unpaid Polar checkout must stay off occupied raise-too-small"
+  if grep -qE 'data-raise-too-small|Polar still charges only the difference' "${unpaid_too_small}"; then
+    fail "unpaid Polar checkout must not occupy raise-too-small Polar still-charges-difference"
   fi
   if grep -q 'Ghost' "${unpaid_home}"; then
     fail "unpaid checkout leaked Ghost onto the board"
@@ -2608,17 +2774,61 @@ PY
   fi
 
   echo "== same brief URL raise pays the difference only =="
+  same_bid_headers="$(mktemp)"
   same_bid_body="$(mktemp)"
-  same_bid_code="$(curl -sS -o "${same_bid_body}" -w '%{http_code}' \
+  same_bid_code="$(curl -sS -D "${same_bid_headers}" -o "${same_bid_body}" -w '%{http_code}' \
     -X POST "http://127.0.0.1:${port}/checkout" \
     -H 'content-type: application/x-www-form-urlencoded' \
     --data-urlencode 'brand=Acme' \
     --data-urlencode 'terms=$800 flat, 1 TikTok' \
     --data-urlencode 'briefUrl=https://example.com/acme' \
     --data-urlencode 'bidUsd=5')"
-  [[ "${same_bid_code}" == "400" ]] || fail "same-or-lower raise expected 400 got ${same_bid_code}"
-  grep -q 'raise_too_small' "${same_bid_body}" \
-    || fail "same-or-lower raise must report raise_too_small"
+  [[ "${same_bid_code}" == "303" ]] || fail "same-or-lower raise expected 303 got ${same_bid_code}"
+  same_bid_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${same_bid_headers}")"
+  [[ -n "${same_bid_location}" ]] || fail "same-or-lower raise missing Location"
+  if [[ "${same_bid_location}" != *"/checkout/raise-too-small"* ]]; then
+    fail "same-or-lower raise must land on /checkout/raise-too-small, not Polar"
+  fi
+  too_small_page="$(mktemp)"
+  too_small_page_code="$(curl -sS -o "${too_small_page}" -w '%{http_code}' "http://127.0.0.1:${port}/checkout/raise-too-small")"
+  [[ "${too_small_page_code}" == "200" ]] || fail "occupied raise-too-small expected 200 got ${too_small_page_code}"
+  grep -q 'data-page="raise-too-small"' "${too_small_page}" \
+    || fail "occupied raise-too-small missing page"
+  grep -q 'data-occupied="true"' "${too_small_page}" \
+    || fail "occupied raise-too-small must see the paid wall"
+  grep -q 'data-raise-too-small=""' "${too_small_page}" \
+    || fail "occupied raise-too-small must stamp Polar still-charges-difference"
+  grep -q 'Polar still charges only the difference' "${too_small_page}" \
+    || fail "occupied raise-too-small must name Polar still charges only the difference"
+  grep -q 'not a new full bid' "${too_small_page}" \
+    || fail "occupied raise-too-small must name Polar raise as not a new full bid"
+  grep -q 'Unpaid Polar checkout stays off the wall' "${too_small_page}" \
+    || fail "occupied raise-too-small must keep unpaid Polar checkout off the wall"
+  grep -q 'at least $1 above the current bid' "${too_small_page}" \
+    || fail "occupied raise-too-small must still require $1 above the current bid"
+  if grep -qE 'data-raise-difference|data-raise-charged|data-about-raise|data-rules-raise' "${too_small_page}"; then
+    fail "occupied raise-too-small must not restamp checkout / about / rules Polar copy"
+  fi
+  same_bid_json="$(mktemp)"
+  same_bid_json_code="$(curl -sS -o "${same_bid_json}" -w '%{http_code}' \
+    -X POST "http://127.0.0.1:${port}/checkout" \
+    -H 'accept: application/json' \
+    -H 'content-type: application/json' \
+    --data '{"brand":"Acme","terms":"$800 flat, 1 TikTok","briefUrl":"https://example.com/acme","bidUsd":5}')"
+  [[ "${same_bid_json_code}" == "400" ]] || fail "JSON same-or-lower raise expected 400 got ${same_bid_json_code}"
+  grep -q 'raise_too_small' "${same_bid_json}" \
+    || fail "JSON same-or-lower raise must report raise_too_small"
+  grep -q 'Polar still charges only the difference' "${same_bid_json}" \
+    || fail "JSON same-or-lower raise must name Polar still charges only the difference"
+  listed_after_too_small="$(mktemp)"
+  curl -sS -o "${listed_after_too_small}" "http://127.0.0.1:${port}/"
+  grep -q 'data-occupied="true"' "${listed_after_too_small}" \
+    || fail "raise-too-small must leave the paid flyer on the wall"
+  if grep -qE 'data-raise-too-small|Raise is too small' "${listed_after_too_small}"; then
+    fail "occupied Claim #1 must not restamp raise-too-small onto the plaster wall"
+  fi
+  grep -q '\$5' "${listed_after_too_small}" \
+    || fail "raise-too-small must not change the current bid"
 
   raise_headers="$(mktemp)"
   raise_code="$(curl -sS -D "${raise_headers}" -o /dev/null -w '%{http_code}' \

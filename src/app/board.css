@@ -1072,6 +1072,15 @@ body {
   display: none;
 }
 
+/* Occupied raise-too-small: Polar still charges only the difference. Unpaid stays off. */
+.board[data-page="raise-too-small"][data-occupied="true"] .raise-too-small[data-raise-too-small] {
+  color: var(--muted);
+}
+
+.board[data-page="raise-too-small"][data-occupied="false"] .raise-too-small[data-raise-too-small] {
+  display: none;
+}
+
 @media (max-width: 820px) {
   .mast,
   .wall-stage,

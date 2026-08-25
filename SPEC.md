@@ -187,6 +187,10 @@ Publish §6–§7 in operator language. Include min $5, older-wins-ties, raise =
 
 Paid place → “You’re on the board” + link home. Occupied `/checkout/return` after a raise names Polar charged the difference, not a new full bid. Canceled / unpaid Polar return still changes no rank.
 
+### Raise too small (`/checkout/raise-too-small`)
+
+Occupied raise-too-small names Polar still charges only the difference, not a new full bid. Unpaid Polar checkout stays off the wall. A raise that is not at least $1 above the current bid never starts Polar checkout.
+
 ### Confirm brief (`GET /r/:id`)
 
 A first-time creator who opens a flyer sees the terms and the full brief URL before leaving. Rank and public hops sit after that confirm. Leave is `POST /r/:id` (“Leave to the brief”). A GET does not count as a click. Opening the flyer (`GET /r/:id`) stays 200 and does not increment `clicks`; the hop is counted only on the confirmed leave.
@@ -205,7 +209,7 @@ On the occupied wall, a first-time buyer who came to post hops **Post a brief** 
 | Bid &gt; $50,000 | 400 |
 | Missing brand / terms / brief URL | 400 |
 | Chat, NSFW, shortener, non-https | 400, listing rejected |
-| Raise without paying the difference | no rank change |
+| Raise without paying the difference | 400 `raise_too_small`; no rank change. Occupied raise-too-small names Polar still charges only the difference, not a new full bid. Unpaid Polar checkout stays off the wall. |
 | Equal bid vs existing #1 from a different URL | lists below the older row |
 | Polar / fixture payment not completed | no listing |
 | Polar live misconfigured | checkout 503; smoke may be `BLOCKED-SECRET` |

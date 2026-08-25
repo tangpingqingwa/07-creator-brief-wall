@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { test } from "node:test";
 import { AboutCopy } from "../src/lib/about-copy";
+import { RaiseTooSmallCopy } from "../src/lib/raise-too-small-copy";
 import { RulesCopy } from "../src/lib/rules-copy";
 import { CheckoutError, parseCheckoutInput } from "../src/lib/polar";
 import {
@@ -281,5 +282,46 @@ test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkou
   assert.doesNotMatch(occupied, /data-raise-charged/);
   assert.doesNotMatch(occupied, /data-raise-charge=/);
   assert.doesNotMatch(occupied, /data-about-raise/);
+  assert.doesNotMatch(occupied, /[0-9][0-9,]*\s*(followers|subscribers)/i);
+});
+
+test("occupied raise-too-small names Polar still charges only the difference — unpaid Polar checkout stays off", () => {
+  const empty = renderToStaticMarkup(
+    createElement(RaiseTooSmallCopy, { occupied: false }),
+  );
+  assert.match(empty, /data-page="raise-too-small"/);
+  assert.match(empty, /data-occupied="false"/);
+  assert.match(empty, /No rank change/);
+  assert.match(
+    empty,
+    /Unpaid Polar checkout stays off the wall until Polar reports paid/,
+  );
+  assert.doesNotMatch(empty, /data-raise-too-small/);
+  assert.doesNotMatch(empty, /Polar still charges only the difference/);
+  assert.doesNotMatch(empty, /not a new full bid/);
+  assert.doesNotMatch(empty, /data-raise-difference/);
+  assert.doesNotMatch(empty, /data-raise-charged/);
+  assert.doesNotMatch(empty, /data-about-raise/);
+  assert.doesNotMatch(empty, /data-rules-raise/);
+
+  const occupied = renderToStaticMarkup(
+    createElement(RaiseTooSmallCopy, { occupied: true }),
+  );
+  assert.match(occupied, /data-page="raise-too-small"/);
+  assert.match(occupied, /data-occupied="true"/);
+  assert.match(occupied, /data-raise-too-small=""/);
+  assert.match(occupied, /Raise is too small/);
+  assert.match(occupied, /Polar still charges only the difference/);
+  assert.match(occupied, /not a new full bid/);
+  assert.match(
+    occupied,
+    /Unpaid Polar checkout stays off the wall/,
+  );
+  assert.match(occupied, /at least \$1 above the current bid/);
+  assert.doesNotMatch(occupied, /data-raise-difference/);
+  assert.doesNotMatch(occupied, /data-raise-charged/);
+  assert.doesNotMatch(occupied, /data-raise-charge=/);
+  assert.doesNotMatch(occupied, /data-about-raise/);
+  assert.doesNotMatch(occupied, /data-rules-raise/);
   assert.doesNotMatch(occupied, /[0-9][0-9,]*\s*(followers|subscribers)/i);
 });

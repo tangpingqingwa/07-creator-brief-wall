@@ -24,7 +24,11 @@ import {
 import { Board } from "../src/app/board";
 import { AboutCopy } from "../src/lib/about-copy";
 import { RulesCopy } from "../src/lib/rules-copy";
-import { listingFromRow, rankListings } from "../src/lib/rank";
+import {
+  RAISE_TOO_SMALL_COPY,
+  listingFromRow,
+  rankListings,
+} from "../src/lib/rank";
 import { findLiveListingByBrief, listLiveBoard, utcWeekId } from "../src/lib/week";
 
 const WEEK = "2026-W34";
@@ -403,6 +407,13 @@ test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkou
       }
     }
   });
+});
+
+test("occupied raise-too-small names Polar still charges only the difference — unpaid Polar checkout stays off", () => {
+  assert.match(RAISE_TOO_SMALL_COPY, /Polar still charges only the difference/);
+  assert.match(RAISE_TOO_SMALL_COPY, /not a new full bid/);
+  assert.match(RAISE_TOO_SMALL_COPY, /Unpaid Polar checkout stays off the wall/);
+  assert.match(RAISE_TOO_SMALL_COPY, /at least \$1 above the current bid/);
 });
 
 test("webhook / fixture completion lists; abandoned webhook does not", async () => {
@@ -1081,9 +1092,36 @@ test("POST /checkout raise of the same brief URL charges the difference", async 
         }),
       }),
     );
-    assert.equal(tooSmall.status, 400);
-    const tooSmallBody = (await tooSmall.json()) as { code: string };
+    assert.equal(tooSmall.status, 303);
+    assert.match(
+      tooSmall.headers.get("location") ?? "",
+      /\/checkout\/raise-too-small$/,
+    );
+
+    const tooSmallJson = await POST(
+      new Request("http://127.0.0.1/checkout", {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          brand: "Route Co",
+          terms: "$800 flat, 1 TikTok",
+          briefUrl: "https://example.com/route-raise",
+          bidUsd: 5,
+        }),
+      }),
+    );
+    assert.equal(tooSmallJson.status, 400);
+    const tooSmallBody = (await tooSmallJson.json()) as {
+      code: string;
+      error: string;
+    };
     assert.equal(tooSmallBody.code, "raise_too_small");
+    assert.equal(tooSmallBody.error, RAISE_TOO_SMALL_COPY);
+    assert.match(tooSmallBody.error, /Polar still charges only the difference/);
+    assert.match(tooSmallBody.error, /not a new full bid/);
 
     const response = await POST(
       new Request("http://127.0.0.1/checkout", {

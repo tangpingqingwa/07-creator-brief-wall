@@ -184,6 +184,10 @@ export function place(bidUsd: number): PlaceResult {
   return { ok: true, bidUsd };
 }
 
+/** Occupied raise-too-small: Polar still charges only the difference. Unpaid stays off. */
+export const RAISE_TOO_SMALL_COPY =
+  "New bid must be at least $1 above the current bid. Polar still charges only the difference, not a new full bid. Unpaid Polar checkout stays off the wall.";
+
 export function raise(
   listing: Pick<Listing, "bidUsd">,
   newBid: number,
@@ -194,7 +198,7 @@ export function raise(
   if (newBid < listing.bidUsd + 1) {
     return {
       ok: false,
-      error: "New bid must be at least $1 above the current bid",
+      error: RAISE_TOO_SMALL_COPY,
     };
   }
   if (newBid > MAX_BID_USD) {
