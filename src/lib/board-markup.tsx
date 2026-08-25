@@ -76,6 +76,19 @@ function OpenBriefHop({ listing }: { listing: RankedListing }) {
   );
 }
 
+function OccupiedLeadLaterFacts({ listing }: { listing: RankedListing }) {
+  return (
+    <p className="later-facts" data-later-facts="">
+      <span className="bid later-fact" data-later-fact="">
+        ${listing.bidUsd}
+      </span>
+      <span className="clicks later-fact" data-clicks={listing.clicks} data-later-fact="">
+        {listing.clicks} clicks
+      </span>
+    </p>
+  );
+}
+
 function OccupiedLeadFlyer({ listing }: { listing: RankedListing }) {
   if (!isPolarPaidListing(listing)) {
     return null;
@@ -104,12 +117,7 @@ function OccupiedLeadFlyer({ listing }: { listing: RankedListing }) {
         <span className="terms-copy">{listing.terms}</span>
       </p>
       {lead ? hop : null}
-      <span className="bid later-fact" data-later-fact="">
-        ${listing.bidUsd}
-      </span>
-      <span className="clicks later-fact" data-clicks={listing.clicks} data-later-fact="">
-        {listing.clicks} clicks
-      </span>
+      <OccupiedLeadLaterFacts listing={listing} />
       <span className="brief-url-text">{listing.briefUrl}</span>
     </li>
   );

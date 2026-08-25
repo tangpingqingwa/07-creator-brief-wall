@@ -233,6 +233,8 @@ body {
 .wall-stage.wall-empty[data-occupied="false"] .prize-before-price,
 .wall-stage.wall-empty[data-occupied="false"] [data-later-fact],
 .wall-stage.wall-empty[data-occupied="false"] .later-fact,
+.wall-stage.wall-empty[data-occupied="false"] [data-later-facts],
+.wall-stage.wall-empty[data-occupied="false"] .later-facts,
 .wall-stage.wall-empty[data-occupied="false"] [data-rolling-week],
 .wall-stage.wall-empty[data-occupied="false"] .week-window {
   display: none;
@@ -453,6 +455,12 @@ body {
 }
 
 .wall-occupied .card-lead {
+  /* Terms, then Open. $bid and clicks recede as later facts — not prize columns. */
+  grid-template-areas:
+    "rank brand brand"
+    "terms terms terms"
+    "url url url"
+    "facts facts facts";
   transform: rotate(-0.2deg) scale(1.02);
   outline: 2px solid var(--bid);
   outline-offset: -6px;
@@ -563,6 +571,24 @@ body {
 .wall-occupied .card-lead .clicks.later-fact[data-later-fact] {
   font-weight: 500;
   color: var(--muted);
+}
+
+/* Occupied #1 $bid and clicks recede as later facts after Terms. Do not shout beside the prize. */
+.wall-occupied .card-lead .later-facts[data-later-facts] {
+  grid-area: facts;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.08rem;
+  margin: 0.45rem 0 0;
+  padding: 0.4rem 0 0;
+  border-top: 1px dashed var(--line);
+}
+
+.wall-occupied .card-lead .later-facts[data-later-facts] .bid.later-fact[data-later-fact],
+.wall-occupied .card-lead .later-facts[data-later-facts] .clicks.later-fact[data-later-fact] {
+  justify-self: start;
+  align-self: start;
 }
 
 /* Open brief is the hop after Terms, not a second $ prize. */

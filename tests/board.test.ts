@@ -1906,6 +1906,8 @@ test("empty plaster still leads with Claim #1", () => {
   assert.doesNotMatch(empty, /prize-before-price/);
   assert.doesNotMatch(empty, /data-later-fact/);
   assert.doesNotMatch(empty, /later-fact/);
+  assert.doesNotMatch(empty, /data-later-facts/);
+  assert.doesNotMatch(empty, /later-facts/);
   assert.doesNotMatch(empty, /data-later-open/);
   assert.doesNotMatch(empty, /later-open/);
   assert.doesNotMatch(empty, /cards-later/);
@@ -2028,6 +2030,8 @@ test("empty plaster stays Claim #1 with no Terms / Open leak", () => {
   assert.doesNotMatch(empty, /after Terms/);
   assert.doesNotMatch(empty, /data-later-fact/);
   assert.doesNotMatch(empty, /later-fact/);
+  assert.doesNotMatch(empty, /data-later-facts/);
+  assert.doesNotMatch(empty, /later-facts/);
   assert.doesNotMatch(empty, /data-later-open/);
   assert.doesNotMatch(empty, /later-open/);
   assert.doesNotMatch(empty, /cards-later/);
@@ -2388,18 +2392,29 @@ test("one flyer names Terms as the prize before $bid", () => {
   const hop = card.indexOf('data-open-brief=""');
   const after = card.indexOf('class="open-after-note">after Terms');
   const open = card.indexOf('class="open-label">Open brief');
+  const pack = card.indexOf('data-later-facts=""');
   const later = card.indexOf('data-later-fact=""');
   const bid = card.indexOf('class="bid later-fact"');
   const clicks = card.indexOf("3 clicks");
   assert.ok(brand >= 0 && termsMark > brand);
   assert.ok(termsLabel > termsMark && termsCopy > termsLabel);
-  assert.ok(hop > termsCopy && after > hop && open > after && bid > open && later >= bid && clicks > later);
+  assert.ok(
+    hop > termsCopy &&
+      after > hop &&
+      open > after &&
+      pack > open &&
+      bid > pack &&
+      later >= bid &&
+      clicks > later,
+  );
   assert.match(card, /data-terms=""/);
   assert.match(card, /class="terms-label">Terms/);
   assert.match(card, /\$800 flat, 1 TikTok/);
   assert.match(card, /Open brief/);
   assert.match(card, /after Terms/);
   assert.match(card, /data-open-after-terms=""/);
+  assert.match(card, /class="later-facts"/);
+  assert.match(card, /data-later-facts=""/);
   assert.match(card, /class="bid later-fact"/);
   assert.match(card, /data-later-fact=""/);
   assert.match(card, /\$5/);
@@ -2431,6 +2446,8 @@ test("occupied #1 Terms reads first and larger than $bid and clicks", () => {
   assert.doesNotMatch(empty, /prize-before-price/);
   assert.doesNotMatch(empty, /data-later-fact/);
   assert.doesNotMatch(empty, /later-fact/);
+  assert.doesNotMatch(empty, /data-later-facts/);
+  assert.doesNotMatch(empty, /later-facts/);
   assert.doesNotMatch(empty, /data-later-open/);
   assert.doesNotMatch(empty, /later-open/);
   assert.doesNotMatch(empty, /data-terms=/);
@@ -2466,14 +2483,17 @@ test("occupied #1 Terms reads first and larger than $bid and clicks", () => {
   const prizeStamp = lead.indexOf('data-prize-before-price=""');
   const termsCopy = lead.indexOf('class="terms-copy">already #1');
   const hop = lead.indexOf('data-open-brief=""');
+  const pack = lead.indexOf('data-later-facts=""');
   const later = lead.indexOf('data-later-fact=""');
   const bid = lead.indexOf('class="bid later-fact"');
   const clicks = lead.indexOf("0 clicks");
   assert.ok(prize >= 0 && prizeStamp >= 0 && termsCopy > prizeStamp);
-  assert.ok(hop > termsCopy && bid > hop && later >= bid && clicks > later);
+  assert.ok(hop > termsCopy && pack > hop && bid > pack && later >= bid && clicks > later);
   assert.match(lead, /class="terms prize-before-price"/);
   assert.match(lead, /data-prize=""/);
   assert.match(lead, /data-prize-before-price=""/);
+  assert.match(lead, /class="later-facts"/);
+  assert.match(lead, /data-later-facts=""/);
   assert.match(lead, /class="bid later-fact"/);
   assert.match(lead, /data-later-fact=""/);
   assert.match(lead, /href="\/r\/lst_lead"/);
@@ -2488,12 +2508,14 @@ test("occupied #1 Terms reads first and larger than $bid and clicks", () => {
   assert.doesNotMatch(two, /data-prize=/);
   assert.doesNotMatch(two, /prize-before-price/);
   assert.doesNotMatch(two, /data-later-fact/);
+  assert.doesNotMatch(two, /data-later-facts/);
   assert.doesNotMatch(two, /class="bid later-fact"/);
   assert.doesNotMatch(lead, /data-later-open/);
   assert.doesNotMatch(lead, /later-open/);
   assert.equal((occupied.match(/data-prize=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-prize-before-price=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/prize-before-price/g) ?? []).length, 2);
+  assert.equal((occupied.match(/data-later-facts=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-later-fact=""/g) ?? []).length, 2);
   assert.equal((occupied.match(/class="bid later-fact"/g) ?? []).length, 1);
   assert.equal((occupied.match(/class="clicks later-fact"/g) ?? []).length, 1);
@@ -2533,6 +2555,8 @@ test("occupied #1 $bid stays a later fact and does not shout beside Terms", () =
   );
   assert.doesNotMatch(empty, /data-later-fact/);
   assert.doesNotMatch(empty, /later-fact/);
+  assert.doesNotMatch(empty, /data-later-facts/);
+  assert.doesNotMatch(empty, /later-facts/);
   assert.doesNotMatch(empty, /data-later-open/);
   assert.doesNotMatch(empty, /later-open/);
   assert.doesNotMatch(empty, /data-prize=/);
@@ -2568,13 +2592,15 @@ test("occupied #1 $bid stays a later fact and does not shout beside Terms", () =
   const two = occupied.slice(twoStart, occupied.indexOf("</li>", twoStart));
   const terms = lead.indexOf('data-prize=""');
   const hop = lead.indexOf('data-open-brief=""');
+  const pack = lead.indexOf('data-later-facts=""');
   const later = lead.indexOf('data-later-fact=""');
   const bidClass = lead.indexOf('class="bid later-fact"');
   const bid = lead.indexOf("$7");
   const clicks = lead.indexOf("0 clicks");
   assert.ok(terms >= 0 && hop > terms);
-  assert.ok(bidClass > hop && later >= bidClass && bid > later && clicks > bid);
+  assert.ok(pack > hop && bidClass > pack && later >= bidClass && bid > later && clicks > bid);
   assert.match(lead, /class="terms prize-before-price"/);
+  assert.match(lead, /class="later-facts"/);
   assert.match(lead, /class="bid later-fact"/);
   assert.match(lead, /data-later-fact=""/);
   assert.match(lead, /href="\/r\/lst_lead"/);
@@ -2585,10 +2611,12 @@ test("occupied #1 $bid stays a later fact and does not shout beside Terms", () =
   assert.match(two, /data-later-flyer=""/);
   assert.doesNotMatch(two, /class="terms-label">Terms/);
   assert.doesNotMatch(two, /data-later-fact/);
+  assert.doesNotMatch(two, /data-later-facts/);
   assert.doesNotMatch(two, /class="bid later-fact"/);
   assert.doesNotMatch(two, /data-prize=/);
   assert.doesNotMatch(lead, /data-later-open/);
   assert.doesNotMatch(lead, /later-open/);
+  assert.equal((occupied.match(/data-later-facts=""/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-later-fact=""/g) ?? []).length, 2);
   assert.equal((occupied.match(/class="bid later-fact"/g) ?? []).length, 1);
   assert.equal((occupied.match(/class="clicks later-fact"/g) ?? []).length, 1);
@@ -2615,6 +2643,8 @@ test("occupied #1 clicks stay a later fact after Terms and do not shout beside T
   assert.ok(Number(prizeSize[1]) > Number(bidSize[1]));
   assert.ok(Number(prizeSize[1]) > Number(clickSize[1]));
   assert.ok(Number(clickSize[1]) <= Number(bidSize[1]));
+  assert.match(css, /\.card-lead \.later-facts\[data-later-facts\]/);
+  assert.match(css, /\.card-lead \{\n[^}]*"facts facts facts"/);
   assert.match(css, /\.card-lead \.clicks\.later-fact\[data-later-fact\]/);
   assert.match(
     css,
@@ -2628,12 +2658,26 @@ test("occupied #1 clicks stay a later fact after Terms and do not shout beside T
     css,
     /\.card-lead \.clicks\.later-fact\[data-later-fact\]\s*\{[^}]*color:\s*var\(--bid\)/,
   );
+  assert.match(
+    css,
+    /\.card-lead \.later-facts\[data-later-facts\]\s*\{[^}]*border-top:\s*1px dashed var\(--line\)/,
+  );
+  assert.doesNotMatch(
+    css,
+    /\.card-lead \.later-facts\[data-later-facts\]\s*\{[^}]*background:/,
+  );
+  assert.doesNotMatch(
+    css,
+    /\.card-lead \.later-facts\[data-later-facts\]\s*\{[^}]*var\(--bid-ink\)/,
+  );
 
   const empty = renderToStaticMarkup(
     createElement(Board, { listings: [], weekId: WEEK }),
   );
   assert.doesNotMatch(empty, /data-later-fact/);
   assert.doesNotMatch(empty, /later-fact/);
+  assert.doesNotMatch(empty, /data-later-facts/);
+  assert.doesNotMatch(empty, /later-facts/);
   assert.doesNotMatch(empty, /class="clicks later-fact"/);
   assert.doesNotMatch(empty, /data-later-open/);
   assert.doesNotMatch(empty, /later-open/);
@@ -2689,15 +2733,20 @@ test("occupied #1 clicks stay a later fact after Terms and do not shout beside T
   const termsCopy = lead.indexOf('class="terms-copy">already #1');
   const hop = lead.indexOf('data-open-brief=""');
   const firstClick = lead.indexOf('data-first-click="open"');
+  const pack = lead.indexOf('class="later-facts"');
+  const packStamp = lead.indexOf('data-later-facts=""');
   const bidClass = lead.indexOf('class="bid later-fact"');
   const bidLater = lead.indexOf('data-later-fact=""');
   const clicksClass = lead.indexOf('class="clicks later-fact"');
   const clicksLater = lead.indexOf('data-later-fact=""', clicksClass);
   const clicks = lead.indexOf("4 clicks");
   assert.ok(terms >= 0 && hop > terms && firstClick > termsCopy);
-  assert.ok(bidClass > hop && bidLater >= bidClass);
+  assert.ok(pack > hop && packStamp >= pack);
+  assert.ok(bidClass > packStamp && bidLater >= bidClass);
   assert.ok(clicksClass > bidClass && clicksLater >= clicksClass && clicks > clicksLater);
   assert.match(lead, /class="terms prize-before-price"/);
+  assert.match(lead, /class="later-facts"/);
+  assert.match(lead, /data-later-facts=""/);
   assert.match(lead, /class="bid later-fact"/);
   assert.match(lead, /class="clicks later-fact"/);
   assert.match(lead, /data-later-fact=""/);
@@ -2712,6 +2761,8 @@ test("occupied #1 clicks stay a later fact after Terms and do not shout beside T
   assert.match(two, /data-later-flyer=""/);
   assert.doesNotMatch(two, /class="terms-label">Terms/);
   assert.doesNotMatch(two, /data-later-fact/);
+  assert.doesNotMatch(two, /data-later-facts/);
+  assert.doesNotMatch(two, /class="later-facts"/);
   assert.doesNotMatch(two, /class="bid later-fact"/);
   assert.doesNotMatch(two, /class="clicks later-fact"/);
   assert.doesNotMatch(two, /data-prize=/);
@@ -2720,6 +2771,8 @@ test("occupied #1 clicks stay a later fact after Terms and do not shout beside T
   assert.doesNotMatch(occupied, /Ghost Co|Abandoned Polar checkout/);
   assert.doesNotMatch(occupied, /data-id="lst_ghost"/);
   assert.doesNotMatch(occupied, /9 clicks/);
+  assert.equal((occupied.match(/data-later-facts=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/class="later-facts"/g) ?? []).length, 1);
   assert.equal((occupied.match(/data-later-fact=""/g) ?? []).length, 2);
   assert.equal((occupied.match(/class="bid later-fact"/g) ?? []).length, 1);
   assert.equal((occupied.match(/class="clicks later-fact"/g) ?? []).length, 1);
@@ -2913,6 +2966,10 @@ test("occupied Terms stay the prize and later Open stays after #1 Open", () => {
   assert.match(
     css,
     /\.wall-occupied \.card \{\n[^}]*grid-template-areas:[\s\S]*"url url url"[\s\S]*"bid bid clicks"/,
+  );
+  assert.match(
+    css,
+    /\.wall-occupied \.card-lead \{\n[^}]*grid-template-areas:[\s\S]*"url url url"[\s\S]*"facts facts facts"/,
   );
   assert.doesNotMatch(css, /\.wall-occupied \.cards-later \.wall-occupied \.card/);
   assert.match(markup, /\{lead \? hop : null\}/);
