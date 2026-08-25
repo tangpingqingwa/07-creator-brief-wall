@@ -13,6 +13,7 @@ import {
   LivePolarPort,
   POLAR_API_BASE,
   applyPaidListing,
+  findListingByBrief,
   getPolarPort,
   handleCheckoutReturn,
   isPolarLive,
@@ -22,7 +23,7 @@ import {
 } from "../src/lib/polar";
 import { Board } from "../src/app/board";
 import { listingFromRow, rankListings } from "../src/lib/rank";
-import { listLiveBoard } from "../src/lib/week";
+import { findLiveListingByBrief, listLiveBoard, utcWeekId } from "../src/lib/week";
 
 const WEEK = "2026-W34";
 const SUCCESS_URL = "http://127.0.0.1:3000/checkout/return";
@@ -607,6 +608,81 @@ test("same brief URL raise charges new − current; rival pays a full bid", asyn
     { amount_usd: 5, kind: "place", status: "completed" },
     { amount_usd: 2, kind: "raise", status: "completed" },
   ]);
+});
+
+test("same brief still inside last-7-days raises after the UTC week label rolls", async () => {
+  const db = openDatabase(":memory:");
+  const polar = new FakePolarPort(db);
+  const previousWeekNow = process.env.WEEK_NOW;
+  const url = "https://example.com/sunday-raise";
+  try {
+    process.env.WEEK_NOW = "2026-08-16T12:00:00.000Z";
+    const first = await polar.createCheckout({
+      amountUsd: 5,
+      listingDraft: draft({ weekId: "2026-W33", briefUrl: url }),
+      successUrl: SUCCESS_URL,
+    });
+    const placed = await polar.completeCheckout(first.checkoutId);
+    assert.ok(placed);
+    assert.equal(placed.weekId, "2026-W33");
+    assert.equal(placed.createdAt, "2026-08-16T12:00:00.000Z");
+
+    process.env.WEEK_NOW = "2026-08-17T00:00:00.000Z";
+    assert.equal(utcWeekId(), "2026-W34");
+    assert.equal(findListingByBrief(db, "2026-W34", url), undefined);
+    const live = findLiveListingByBrief(db, url);
+    assert.equal(live?.id, placed.id);
+    assert.equal(live?.weekId, "2026-W33");
+    assert.equal(listLiveBoard(db).length, 1);
+
+    const raiseQuote = planCheckout(
+      db,
+      draft({ weekId: "2026-W34", briefUrl: url, bidUsd: 7 }),
+    );
+    assert.deepEqual(raiseQuote, {
+      ok: true,
+      kind: "raise",
+      bidUsd: 7,
+      chargeUsd: 2,
+      currentBidUsd: 5,
+    });
+
+    const raisedStart = await polar.createCheckout({
+      amountUsd: 2,
+      listingDraft: draft({
+        weekId: "2026-W34",
+        brand: "Sunday Raised",
+        briefUrl: url,
+        bidUsd: 7,
+      }),
+      successUrl: SUCCESS_URL,
+    });
+    const raised = await polar.completeCheckout(raisedStart.checkoutId);
+    assert.ok(raised);
+    assert.equal(raised.id, placed.id);
+    assert.equal(raised.weekId, "2026-W33");
+    assert.equal(raised.bidUsd, 7);
+    assert.equal(raised.createdAt, placed.createdAt);
+
+    process.env.WEEK_NOW = "2026-08-23T12:00:01.000Z";
+    assert.equal(findLiveListingByBrief(db, url), undefined);
+    const agedQuote = planCheckout(
+      db,
+      draft({ weekId: "2026-W34", briefUrl: url, bidUsd: 5 }),
+    );
+    assert.deepEqual(agedQuote, {
+      ok: true,
+      kind: "place",
+      bidUsd: 5,
+      chargeUsd: 5,
+    });
+  } finally {
+    if (previousWeekNow === undefined) {
+      delete process.env.WEEK_NOW;
+    } else {
+      process.env.WEEK_NOW = previousWeekNow;
+    }
+  }
 });
 
 test("unpaid raise does not change rank", async () => {

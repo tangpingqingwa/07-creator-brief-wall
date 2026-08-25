@@ -4,7 +4,7 @@ import React from "react";
 export const metadata: Metadata = {
   title: "Rules · Creator Brief Wall",
   description:
-    "Min $5. Rank is the bid. Older wins ties. Raise pays the difference. Weekly UTC reset. No chat or NSFW.",
+    "Min $5. Rank is the bid. Older wins ties. Raise pays the difference. Rolling last 7 days. No chat or NSFW.",
 };
 
 export default function RulesPage() {
@@ -59,7 +59,8 @@ export default function RulesPage() {
           <tr>
             <th>Raise</th>
             <td>
-              Same canonical brief URL in the same UTC week raises.{" "}
+              Same canonical brief URL still inside last 7 days raises.{" "}
+              <code>weekId</code> stays an audit label — not raise identity.{" "}
               <strong>Raise pays difference</strong> only (
               <code>new − current</code>). New amount must be a whole dollar ≥
               current + $1.

@@ -188,3 +188,13 @@ test("rules state min $5, rank=bid, older wins, raise pays difference", () => {
   assert.match(html, /utm_\*/);
   assert.match(html, /bit\.ly/);
 });
+
+test("occupied /rules raise identity is last-7-days, not the UTC week label", () => {
+  const html = renderToStaticMarkup(createElement(RulesPage));
+  assert.match(html, /Same canonical brief URL still inside last 7 days raises/);
+  assert.match(html, /weekId<\/code> stays an audit label — not raise identity/);
+  assert.doesNotMatch(html, /same UTC week raises/i);
+  assert.doesNotMatch(html, /same weekId/i);
+  assert.match(html, /Raise pays difference/);
+  assert.match(html, /Rolling last 7 days\. Not Monday 00:00 UTC/);
+});

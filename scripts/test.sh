@@ -1117,12 +1117,108 @@ PY
     || fail "checkout tests must cover same-URL raise"
   grep -q 'raise_too_small' tests/checkout.test.ts \
     || fail "checkout tests must reject a same-or-lower raise"
+  grep -q 'same brief still inside last-7-days raises after the UTC week label rolls' tests/checkout.test.ts \
+    || fail "checkout tests must raise a Sunday pay across Monday weekId"
   if grep -nE 'fetch\(|polar\.sh|api\.polar' src/app/api/checkout/route.ts \
     src/app/api/webhooks/polar/route.ts >/dev/null
   then
     fail "raise checkout must stay offline in routes"
   fi
   [[ -z "${POLAR_LIVE:-}" ]] || fail "POLAR_LIVE must stay unset in test.sh"
+
+  echo "== UX: occupied raise identity is last-7-days — not the UTC week label =="
+  grep -q 'Same canonical brief URL still inside last 7 days raises' src/app/rules/page.tsx \
+    || fail "occupied /rules must name last-7-days raise identity"
+  grep -q 'weekId</code> stays an audit label — not raise identity' src/app/rules/page.tsx \
+    || fail "occupied /rules must keep weekId as an audit label"
+  if grep -qi 'same UTC week raises' src/app/rules/page.tsx; then
+    fail "occupied /rules must not tax raise identity as the UTC week"
+  fi
+  if grep -qi 'in the same weekId' src/app/rules/page.tsx SPEC.md; then
+    fail "raise identity must not key on weekId"
+  fi
+  grep -Fq 'Identity for raise: same **canonical brief URL** still inside the rolling last 7 days' SPEC.md \
+    || fail "SPEC must name last-7-days raise identity"
+  grep -Fq '`weekId` stays a Polar/audit label — not raise identity' SPEC.md \
+    || fail "SPEC must keep weekId as an audit label, not raise identity"
+  grep -Fq 'submit the same canonical brief URL again while that listing is still inside last 7 days' SPEC.md \
+    || fail "SPEC §6.5 must raise inside last 7 days, not weekId"
+  grep -Fq 'Raise identity is the same canonical brief URL still inside that window — not `weekId`' BUILD.md \
+    || fail "BUILD must keep raise identity off weekId"
+  grep -q 'Same brief still inside last 7 days raises' src/lib/rank.ts \
+    || fail "rank.ts must name last-7-days raise identity"
+  grep -q 'weekId is not the raise key' src/lib/rank.ts \
+    || fail "rank.ts must keep weekId off raise identity"
+  if grep -q 'Same week + brief URL raises' src/lib/rank.ts; then
+    fail "rank.ts must not key raise identity on the UTC week"
+  fi
+  grep -A 12 'export function planCheckout' src/lib/polar.ts | grep -q 'findLiveListingByBrief' \
+    || fail "planCheckout must look up the rolling live listing"
+  if grep -A 12 'export function planCheckout' src/lib/polar.ts | grep -q 'findListingByBrief'; then
+    fail "planCheckout must not key raise identity on weekId"
+  fi
+  grep -A 20 'function applyPaidRaise' src/lib/polar.ts | grep -q 'findLiveListingByBrief' \
+    || fail "applyPaidRaise must look up the rolling live listing"
+  if grep -A 20 'function applyPaidRaise' src/lib/polar.ts | grep -q 'findListingByBrief'; then
+    fail "applyPaidRaise must not key raise identity on weekId"
+  fi
+  grep -Fq 'Raise identity is `findLiveListingByBrief`' src/lib/polar.ts \
+    || fail "weekId listing lookup must stay an audit helper, not raise identity"
+  grep -Fq 'Raise identity: same canonical brief URL still inside last 7 days. Not weekId.' src/lib/week.ts \
+    || fail "findLiveListingByBrief must be raise identity, not weekId"
+  grep -q 'occupied /rules raise identity is last-7-days, not the UTC week label' tests/urls.test.ts \
+    || fail "rules tests must cover last-7-days raise identity"
+  grep -q 'same brief still inside last-7-days raises after the UTC week label rolls' tests/checkout.test.ts \
+    || fail "checkout tests must cover Sunday pay Monday raise"
+  grep -q 'Raise pays difference' src/app/rules/page.tsx \
+    || fail "raise-identity cut must keep raise pays difference"
+  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/app/rules/page.tsx \
+    || fail "raise-identity cut must keep occupied rolling last-7-days"
+  grep -q 'data-prize=""' src/lib/board-markup.tsx \
+    || fail "raise-identity cut must keep occupied Terms as the prize"
+  grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
+    || fail "raise-identity cut must keep #1 Open the first occupied click"
+  grep -q 'Open brief' src/lib/board-markup.tsx \
+    || fail "raise-identity cut must keep Open brief"
+  grep -q 'Post a brief' src/lib/board-markup.tsx \
+    || fail "raise-identity cut must keep Post a brief"
+  grep -q 'Claim #1' src/app/outbid-form.tsx \
+    || fail "raise-identity cut must keep Claim #1"
+  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
+    || fail "raise-identity cut must keep empty later-write brief URL"
+  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+    || fail "raise-identity cut must keep blank plaster"
+  grep -q 'amount-field' src/app/outbid-form.tsx \
+    || fail "raise-identity cut must keep the dashed amount"
+  grep -q 'className="step"' src/app/outbid-form.tsx \
+    || fail "raise-identity cut must keep ± steppers"
+  grep -q 'Outbid' src/app/outbid-form.tsx \
+    || fail "raise-identity cut must keep Outbid"
+  grep -q 'className="plaster"' src/lib/board-markup.tsx \
+    || fail "raise-identity cut must not rebuild the plaster wall"
+  grep -q 'Unpaid checkout stays off the board until Polar reports paid' src/app/outbid-form.tsx \
+    || fail "raise-identity cut must keep unpaid off the board"
+  grep -q 'data-empty-week="true"' src/lib/board-markup.tsx \
+    || fail "raise-identity cut must keep honest empty plaster"
+  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/lib/board-markup.tsx \
+    || fail "raise-identity cut must keep empty rolling-copy"
+  grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
+    || fail "raise-identity cut must keep occupied rolling last-7-days"
+  if grep -qE 'data-post-after-open-seven|data-open-after-post-six-stamp' src/app/board.tsx src/app/board.css src/app/outbid-form.tsx src/lib/board-markup.tsx src/app/rules/page.tsx; then
+    fail "raise identity must not add another numbered hop stamp"
+  fi
+  if grep -Eqi '24h lock|lock on #1' src/app/rules/page.tsx src/lib/rank.ts src/lib/polar.ts src/lib/week.ts; then
+    fail "raise identity is not a 24h lock on #1"
+  fi
+  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx src/app/rules/page.tsx; then
+    fail "raise identity must not rebuild the plaster wall into a long form"
+  fi
+  python3 - src/app/board.css <<'PY' || fail "raise identity must not recolor the plaster"
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+if "raise-identity" in css or "raise-rolling" in css:
+    raise SystemExit(1)
+PY
 
   echo "== about, rules, URL hygiene =="
   for f in \
@@ -1158,6 +1254,8 @@ PY
     || fail "rules must state older wins ties"
   grep -q 'Raise pays difference' src/app/rules/page.tsx \
     || fail "rules must state raise pays difference"
+  grep -q 'Same canonical brief URL still inside last 7 days raises' src/app/rules/page.tsx \
+    || fail "rules must name last-7-days raise identity"
   grep -q 'Monday 00:00' src/app/rules/page.tsx \
     || fail "rules must state weekly UTC reset"
   grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/app/rules/page.tsx \
@@ -1595,6 +1693,13 @@ PY
   grep -qi 'difference' "${rules_body}" || fail "GET /rules must say raise pays difference"
   grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' "${rules_body}" \
     || fail "GET /rules must name the rolling last-7-days window"
+  grep -q 'Same canonical brief URL still inside last 7 days raises' "${rules_body}" \
+    || fail "GET /rules must name last-7-days raise identity"
+  grep -q 'weekId</code> stays an audit label' "${rules_body}" \
+    || fail "GET /rules must keep weekId as an audit label"
+  if grep -qi 'same UTC week raises' "${rules_body}"; then
+    fail "GET /rules must not tax raise identity as the UTC week"
+  fi
 
   echo "== fixture \$5 appears on the board after completion =="
   unpaid_body="$(mktemp)"
