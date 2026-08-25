@@ -192,8 +192,8 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
         <p className="empty" data-empty-week="true">
           This week’s board is empty. The plaster is blank.
         </p>
-        <p className="empty-hint">
-          No seeded briefs. Rank is the bid. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
+        <p className="empty-hint" data-empty-window="">
+          No seeded briefs. Rank is the bid. Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
         </p>
       </section>
     );
@@ -232,11 +232,14 @@ export function BoardChrome({
       >
         {children}
       </div>
-      <p className={occupied ? "rules-note week-window" : "rules-note"}>
+      <p
+        className={occupied ? "rules-note week-window" : "rules-note empty-window"}
+        data-empty-window={occupied ? undefined : ""}
+      >
         Rank is the bid. Minimum $5.{" "}
         {occupied
           ? "Rolling last 7 days. Not Monday 00:00 UTC."
-          : "The board resets Monday 00:00 UTC."}{" "}
+          : "Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC."}{" "}
         <a href="/about">About</a> · <a href="/rules">Rules</a>
       </p>
     </main>

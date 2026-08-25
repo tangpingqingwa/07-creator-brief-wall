@@ -839,7 +839,8 @@ PY
     /cards-later \.card\.later-flyer\[data-later-flyer\] \{/ { later=NR }
     /wall-occupied \.cards-lead\[data-rolling-week\]/ { rolling=NR }
     /Empty plaster: Brief URL is a later write after Claim #1 \/ Outbid/ { empty=NR }
-    END { exit !(prize && open && pack && later && rolling && empty && prize < open && open < pack && pack < later && later < rolling && rolling < empty) }
+    /Empty plaster: fair window is rolling last 7 days/ { emptyroll=NR }
+    END { exit !(prize && open && pack && later && rolling && empty && emptyroll && prize < open && open < pack && pack < later && later < rolling && rolling < empty && empty < emptyroll) }
   ' src/app/board.css; then
     fail "later-rank CSS must sit after occupied prize / Open and before empty later-write"
   fi
@@ -945,8 +946,9 @@ PY
     /wall-occupied \.card-lead \.terms\.prize-before-price \.terms-copy/ { prize=NR }
     /wall-occupied \.card \.brief-url\[data-first-click="open"\]/ { open=NR }
     /Empty plaster: Brief URL is a later write after Claim #1 \/ Outbid/ { empty=NR }
+    /Empty plaster: fair window is rolling last 7 days/ { emptyroll=NR }
     /Unpaid \/ abandoned Polar checkout never paints Terms as #1/ { unpaid=NR }
-    END { exit !(prize && open && empty && unpaid && prize < open && open < empty && empty < unpaid) }
+    END { exit !(prize && open && empty && emptyroll && unpaid && prize < open && open < empty && empty < emptyroll && emptyroll < unpaid) }
   ' src/app/board.css; then
     fail "unpaid leftover CSS must sit after occupied prize / Open / empty later-write"
   fi
@@ -956,6 +958,95 @@ PY
   then
     fail "board UI must not render follower or reach fields"
   fi
+
+  echo "== UX: empty wall copy is a rolling last-7-days window — not Monday 00:00 UTC =="
+  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/lib/board-markup.tsx \
+    || fail "empty plaster must name the rolling last-7-days window"
+  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
+    || fail "empty Claim #1 paper must name the rolling last-7-days window"
+  grep -q 'data-empty-window' src/lib/board-markup.tsx \
+    || fail "empty rules note must stamp the empty rolling window"
+  grep -q 'data-empty-window' src/app/outbid-form.tsx \
+    || fail "empty Claim #1 paper must stamp the empty rolling window"
+  grep -q 'empty-window' src/lib/board-markup.tsx \
+    || fail "empty rules note must compose empty-window, not occupied week-window"
+  if grep -qF 'The board resets Monday 00:00 UTC' src/lib/board-markup.tsx src/app/outbid-form.tsx; then
+    fail "empty plaster must not expire the wall at Monday 00:00 UTC"
+  fi
+  if awk '/function EmptyClaimFirstWrite/,/export function OutbidForm/' src/app/outbid-form.tsx | grep -q 'data-rolling-week'; then
+    fail "empty plaster must not stamp occupied rolling-week chrome"
+  fi
+  if awk '/occupied \?/,/About/' src/lib/board-markup.tsx | grep -q 'className={occupied ? "rules-note week-window" : "rules-note"}'; then
+    fail "empty rules note must not reuse occupied week-window chrome"
+  fi
+  grep -q 'Empty plaster: fair window is rolling last 7 days' src/app/board.css \
+    || fail "empty CSS must name the rolling last-7-days fair window"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] .empty-hint[data-empty-window]' src/app/board.css \
+    || fail "empty CSS must compose the fair window on Claim #1 paper"
+  grep -qF '.rules-note.empty-window[data-empty-window]' src/app/board.css \
+    || fail "empty CSS must keep the fair window on the empty rules note"
+  grep -qF '.wall-occupied .empty-hint[data-empty-window]' src/app/board.css \
+    || fail "occupied CSS must keep empty-window copy off occupied flyers"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] [data-rolling-week]' src/app/board.css \
+    || fail "empty plaster CSS must keep occupied rolling-week stamps off Claim #1"
+  grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
+    || fail "empty-window cut must keep occupied rolling last-7-days"
+  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/lib/board-markup.tsx \
+    || fail "empty-window cut must keep occupied rolling copy"
+  grep -q 'data-prize=""' src/lib/board-markup.tsx \
+    || fail "empty-window cut must keep occupied Terms as the prize"
+  grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
+    || fail "empty-window cut must keep #1 Open the first occupied click"
+  grep -q 'Open brief' src/lib/board-markup.tsx \
+    || fail "empty-window cut must keep Open brief"
+  grep -q 'Post a brief' src/lib/board-markup.tsx \
+    || fail "empty-window cut must keep Post a brief"
+  grep -q 'Claim #1' src/app/outbid-form.tsx \
+    || fail "empty-window cut must keep Claim #1"
+  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
+    || fail "empty-window cut must keep empty later-write brief URL"
+  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+    || fail "empty-window cut must keep blank plaster"
+  grep -q 'amount-field' src/app/outbid-form.tsx \
+    || fail "empty-window cut must keep the dashed amount"
+  grep -q 'className="step"' src/app/outbid-form.tsx \
+    || fail "empty-window cut must keep ± steppers"
+  grep -q 'Outbid' src/app/outbid-form.tsx \
+    || fail "empty-window cut must keep Outbid"
+  grep -q 'className="plaster"' src/lib/board-markup.tsx \
+    || fail "empty-window cut must not rebuild the plaster wall"
+  grep -q 'Unpaid checkout stays off the board until Polar reports paid' src/app/outbid-form.tsx \
+    || fail "empty-window cut must keep unpaid off the board"
+  grep -q 'empty wall copy is a rolling last-7-days window' tests/board.test.ts \
+    || fail "board tests must cover empty rolling last-7-days copy"
+  grep -q 'Empty `/` names a fair window' SPEC.md \
+    || fail "SPEC must name empty / as a rolling last-7-days window"
+  grep -q 'Do not print “The board resets Monday 00:00 UTC”' SPEC.md \
+    || fail "SPEC must forbid Monday 00:00 UTC empty copy"
+  if grep -qE 'data-post-after-open-seven|data-open-after-post-six-stamp' src/app/board.tsx src/app/board.css src/app/outbid-form.tsx src/lib/board-markup.tsx; then
+    fail "empty rolling copy must not add another numbered hop stamp"
+  fi
+  if grep -Eqi '24h lock|lock on #1' src/lib/board-markup.tsx src/app/outbid-form.tsx src/app/board.css; then
+    fail "rolling week is not a 24h lock on #1"
+  fi
+  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx; then
+    fail "empty rolling copy must not rebuild the plaster wall into a long form"
+  fi
+  python3 - src/app/board.css <<'PY' || fail "empty window CSS must not recolor the plaster"
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+start = css.find("Empty plaster: fair window is rolling last 7 days")
+end = css.find("Unpaid / abandoned Polar checkout never paints Terms as #1")
+if start < 0 or end < 0 or start >= end:
+    raise SystemExit(1)
+block = css[start:end]
+if "background:" in block or "var(--bid-ink)" in block:
+    raise SystemExit(1)
+if ".empty-hint[data-empty-window]" not in block:
+    raise SystemExit(1)
+if ".rules-note.empty-window[data-empty-window]" not in block:
+    raise SystemExit(1)
+PY
 
   echo "== Polar checkout + fixture =="
   for f in \
@@ -1373,8 +1464,20 @@ PY
   if grep -q 'data-rolling-week' "${home_body}"; then
     fail "empty plaster has no flyer; do not stamp the rolling week window"
   fi
-  if grep -qi 'Rolling last 7 days' "${home_body}"; then
-    fail "empty plaster must not name the occupied rolling week window"
+  if grep -qF 'The board resets Monday 00:00 UTC' "${home_body}"; then
+    fail "empty GET / must not expire the wall at Monday 00:00 UTC"
+  fi
+  if grep -qF 'Rolling last 7 days. Not Monday 00:00 UTC.' "${home_body}"; then
+    fail "empty plaster must not reuse occupied rolling-week chrome copy"
+  fi
+  grep -qF 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' "${home_body}" \
+    || fail "empty GET / must name the rolling last-7-days window"
+  grep -q 'data-empty-window=""' "${home_body}" \
+    || fail "empty GET / must stamp the empty rolling window"
+  grep -q 'class="rules-note empty-window"' "${home_body}" \
+    || fail "empty GET / must compose empty-window, not occupied week-window"
+  if grep -q 'class="rules-note week-window"' "${home_body}"; then
+    fail "empty plaster must not stamp occupied week-window chrome"
   fi
   if grep -q 'data-later-open=""' "${home_body}"; then
     fail "empty plaster has no flyer; do not stamp later-rank Open"
@@ -1406,6 +1509,7 @@ html = open(sys.argv[1], encoding="utf-8").read()
 claim = html.find('id="claim"')
 stamp = html.find('data-empty-claim-first=""')
 plaster = html.find('data-empty-week="true"')
+window = html.find('data-empty-window=""')
 first = html.find('data-first-click="claim"')
 outbid = html.find(">Outbid<")
 later = html.find('data-later-write=""')
@@ -1416,9 +1520,9 @@ terms = html.find('name="terms"')
 url = html.find('name="briefUrl"')
 if claim < 0 or stamp < 0 or plaster < 0 or not (claim <= stamp < plaster):
     raise SystemExit(1)
-if first < 0 or outbid < 0 or later < 0 or label < 0 or identity < 0:
+if first < 0 or outbid < 0 or later < 0 or label < 0 or identity < 0 or window < 0:
     raise SystemExit(1)
-if not (claim <= stamp < plaster < first < outbid < identity <= later < label < brand < terms < url):
+if not (claim <= stamp < plaster < window < first < outbid < identity <= later < label < brand < terms < url):
     raise SystemExit(1)
 if html.count('data-empty-claim-first=""') != 1:
     raise SystemExit(1)
@@ -1430,6 +1534,8 @@ if html.count('data-later-write=""') != 1:
     raise SystemExit(1)
 if html.count('data-brief-identity=""') != 1:
     raise SystemExit(1)
+if html.count('data-empty-window=""') < 1:
+    raise SystemExit(1)
 if 'class="wall-stage wall-empty"' not in html:
     raise SystemExit(1)
 if 'class="plaster"' in html or 'class="flyers"' in html:
@@ -1438,7 +1544,17 @@ if "data-post-brief" in html or "data-open-brief" in html or "data-prize" in htm
     raise SystemExit(1)
 if "prize-before-price" in html or "data-later-fact" in html or "later-fact" in html:
     raise SystemExit(1)
-if "data-rolling-week" in html or "Rolling last 7 days" in html:
+if "data-rolling-week" in html:
+    raise SystemExit(1)
+if "The board resets Monday 00:00 UTC" in html:
+    raise SystemExit(1)
+if "Rolling last 7 days. Not Monday 00:00 UTC." in html:
+    raise SystemExit(1)
+if "Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC." not in html:
+    raise SystemExit(1)
+if 'class="rules-note week-window"' in html:
+    raise SystemExit(1)
+if 'class="rules-note empty-window"' not in html:
     raise SystemExit(1)
 if 'data-later-open=""' in html or 'class="brief-url later-open"' in html or "cards-later" in html:
     raise SystemExit(1)
@@ -1728,6 +1844,17 @@ PY
     || fail "occupied wall must stamp the rolling last-7-days window"
   grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' "${listed_body}" \
     || fail "occupied wall must name the rolling last-7-days window"
+  grep -q 'class="rules-note week-window"' "${listed_body}" \
+    || fail "occupied wall must keep week-window chrome"
+  if grep -q 'data-empty-window=""' "${listed_body}"; then
+    fail "occupied wall must not stamp empty-window copy"
+  fi
+  if grep -q 'class="rules-note empty-window"' "${listed_body}"; then
+    fail "occupied wall must not compose empty-window chrome"
+  fi
+  if grep -qF 'Live window is rolling last 7 days from paid placement' "${listed_body}"; then
+    fail "occupied wall must not reuse empty rolling copy"
+  fi
   python3 - "${listed_body}" <<'PY' || fail "Open brief must win the first click; Post a brief follows after the flyers"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()

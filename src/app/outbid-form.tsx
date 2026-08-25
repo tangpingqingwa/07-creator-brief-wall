@@ -149,8 +149,8 @@ export function OutbidForm({
           <p className="empty" data-empty-week="true">
             This week’s board is empty. The plaster is blank.
           </p>
-          <p className="empty-hint">
-            No seeded briefs. Rank is the bid. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
+          <p className="empty-hint" data-empty-window="">
+            No seeded briefs. Rank is the bid. Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
           </p>
         </>
       )}
