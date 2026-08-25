@@ -1,5 +1,8 @@
 import React from "react";
-import { handleCheckoutReturn } from "../../../lib/polar";
+import {
+  handleCheckoutReturn,
+  type CheckoutReturnResult,
+} from "../../../lib/polar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +14,14 @@ type ReturnPageProps = {
   }>;
 };
 
+function raiseWasPaid(result: CheckoutReturnResult): boolean {
+  return (
+    result.status === "success" &&
+    result.payment?.kind === "raise" &&
+    result.listing != null
+  );
+}
+
 export default async function CheckoutReturnPage({
   searchParams,
 }: ReturnPageProps) {
@@ -21,9 +32,25 @@ export default async function CheckoutReturnPage({
     return (
       <main className="board" data-return="cancel">
         <h1>Checkout canceled</h1>
+        <p className="unpaid-cancel">
+          No rank change. A canceled or unpaid Polar return still changes no rank. An unpaid checkout does not list. Rank updates only after Polar reports paid. An abandoned brief is not Terms as #1.
+        </p>
         <p>
-          No rank change. An unpaid checkout does not list. Rank updates only
-          after Polar reports paid. An abandoned brief is not Terms as #1.
+          <a href="/">Back to the board</a>
+        </p>
+      </main>
+    );
+  }
+
+  if (raiseWasPaid(result) && result.listing && result.payment) {
+    return (
+      <main className="board" data-return="success" data-raise-charged="">
+        <h1>You&apos;re on the board</h1>
+        <p className="raise-charged" data-raise-charged="">
+          Polar charged $
+          <span data-raise-charge-usd="">{result.payment.chargeUsd}</span>
+          {" — the difference, not a new full bid. "}
+          {`${result.listing.brand} is listed at $${result.listing.bidUsd}.`}
         </p>
         <p>
           <a href="/">Back to the board</a>
