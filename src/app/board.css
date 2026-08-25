@@ -803,6 +803,22 @@ body {
 
 /* End empty-plaster later-write. Occupied Outbid stays on the claim rail. */
 
+/* Empty plaster: fair window is rolling last 7 days — not Monday 00:00 UTC. */
+.wall-stage.wall-empty[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] .empty-hint[data-empty-window] {
+  display: block;
+  color: var(--muted);
+}
+
+.rules-note.empty-window[data-empty-window] {
+  display: block;
+  color: var(--muted);
+}
+
+.wall-occupied .empty-hint[data-empty-window],
+.wall-occupied .empty-window[data-empty-window] {
+  display: none;
+}
+
 /* Unpaid / abandoned Polar checkout never paints Terms as #1. */
 .wall-occupied .card:not([data-polar-paid]),
 .wall-stage.wall-empty[data-occupied="false"] .card:not([data-polar-paid]) {

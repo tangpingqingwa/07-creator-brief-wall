@@ -3460,7 +3460,15 @@ test("occupied week window is rolling last-7-days — not Monday 00:00 UTC", () 
   assert.match(empty, /data-first-click="claim"/);
   assert.match(empty, /Then the brief URL/);
   assert.doesNotMatch(empty, /data-rolling-week/);
-  assert.doesNotMatch(empty, /Rolling last 7 days/);
+  assert.doesNotMatch(empty, /The board resets Monday 00:00 UTC/);
+  assert.doesNotMatch(empty, /Rolling last 7 days\. Not Monday 00:00 UTC\./);
+  assert.match(
+    empty,
+    /Live window is rolling last 7 days from paid placement\. Not Monday 00:00 UTC\./,
+  );
+  assert.match(empty, /data-empty-window=""/);
+  assert.match(empty, /class="rules-note empty-window"/);
+  assert.doesNotMatch(empty, /class="rules-note week-window"/);
   assert.doesNotMatch(empty, /data-open-brief/);
   assert.doesNotMatch(empty, /data-prize=/);
   assert.doesNotMatch(empty, /Post a brief/);
@@ -3519,6 +3527,88 @@ test("occupied week window is rolling last-7-days — not Monday 00:00 UTC", () 
     /\.wall-stage\.wall-empty\[data-occupied="false"\] \[data-rolling-week\]/,
   );
   assert.doesNotMatch(css, /background:\s*var\(--bid-ink\)/);
+});
+
+test("empty wall copy is a rolling last-7-days window — not Monday 00:00 UTC", () => {
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  const claimAt = empty.indexOf("Claim #1 for");
+  const outbidAt = empty.indexOf(">Outbid<");
+  const laterAt = empty.indexOf("Then the brief URL");
+  const windowAt = empty.indexOf('data-empty-window=""');
+  const plasterAt = empty.indexOf('data-empty-week="true"');
+  assert.ok(claimAt >= 0 && plasterAt > claimAt && windowAt > plasterAt);
+  assert.ok(outbidAt > windowAt && laterAt > outbidAt);
+  assert.match(empty, /data-occupied="false"/);
+  assert.match(empty, /data-first-click="claim"/);
+  assert.match(empty, /Then the brief URL/);
+  assert.match(empty, /Blank plaster/);
+  assert.match(empty, /data-empty-window=""/);
+  assert.match(empty, /class="rules-note empty-window"/);
+  assert.match(
+    empty,
+    /Live window is rolling last 7 days from paid placement\. Not Monday 00:00 UTC\./,
+  );
+  assert.doesNotMatch(empty, /The board resets Monday 00:00 UTC/);
+  assert.doesNotMatch(empty, /Rolling last 7 days\. Not Monday 00:00 UTC\./);
+  assert.doesNotMatch(empty, /data-rolling-week/);
+  assert.doesNotMatch(empty, /class="rules-note week-window"/);
+  assert.doesNotMatch(empty, /data-open-brief/);
+  assert.doesNotMatch(empty, /data-prize=/);
+  assert.doesNotMatch(empty, /Post a brief/);
+  assert.doesNotMatch(empty, /Open brief/);
+  assert.doesNotMatch(empty, /24h lock/);
+  assert.doesNotMatch(empty, /data-post-after-open-seven/);
+  assert.doesNotMatch(empty, /data-unpaid-off/);
+  assert.doesNotMatch(empty, FORBIDDEN);
+  assert.match(formSource, /data-empty-window=""/);
+  assert.match(
+    formSource,
+    /Live window is rolling last 7 days from paid placement/,
+  );
+  assert.doesNotMatch(formSource, /The board resets Monday 00:00 UTC/);
+  assert.doesNotMatch(formSource, /data-rolling-week/);
+  assert.match(
+    cssSource,
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.paste-rail\.empty-claim-first\[data-empty-claim-first\] \.empty-hint\[data-empty-window\]/,
+  );
+  assert.match(cssSource, /\.rules-note\.empty-window\[data-empty-window\]/);
+  assert.match(
+    cssSource,
+    /\.wall-occupied \.empty-hint\[data-empty-window\]/,
+  );
+  assert.doesNotMatch(cssSource, /background:\s*var\(--bid-ink\)/);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-16T12:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const prizeAt = occupied.indexOf('data-prize=""');
+  const firstClickAt = occupied.indexOf('data-first-click="open"');
+  const rollingAt = occupied.indexOf('data-rolling-week=""');
+  assert.ok(prizeAt >= 0 && firstClickAt > prizeAt);
+  assert.ok(rollingAt >= 0 && firstClickAt > rollingAt);
+  assert.match(occupied, /class="terms-label">Terms/);
+  assert.match(occupied, /data-first-click="open"/);
+  assert.match(occupied, /Rolling last 7 days\. Not Monday 00:00 UTC\./);
+  assert.match(occupied, /class="rules-note week-window"/);
+  assert.doesNotMatch(occupied, /data-empty-window/);
+  assert.doesNotMatch(occupied, /class="rules-note empty-window"/);
+  assert.doesNotMatch(occupied, /The board resets Monday 00:00 UTC/);
+  assert.doesNotMatch(occupied, /Live window is rolling last 7 days from paid placement/);
+  assert.doesNotMatch(occupied, /24h lock/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
 });
 
 test("unpaid stays off the plaster wall — No Terms until Polar reports paid", () => {
@@ -3634,6 +3724,11 @@ test("unpaid stays off the plaster wall — No Terms until Polar reports paid", 
   assert.match(leftover, /Blank plaster/);
   assert.match(leftover, /Unpaid checkout stays off the board until Polar reports paid/);
   assert.match(leftover, /An abandoned brief is not Terms as #1/);
+  assert.match(
+    leftover,
+    /Live window is rolling last 7 days from paid placement\. Not Monday 00:00 UTC\./,
+  );
+  assert.doesNotMatch(leftover, /The board resets Monday 00:00 UTC/);
   assert.match(leftover, />Outbid</);
   const leftoverClaim = leftover.indexOf("Claim #1 for");
   const leftoverOutbid = leftover.indexOf(">Outbid<");
