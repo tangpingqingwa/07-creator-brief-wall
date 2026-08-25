@@ -119,7 +119,7 @@ export function rankListings(listings: readonly Listing[]): RankedListing[] {
   return ordered.map((listing, index) => ({ ...listing, rank: index + 1 }));
 }
 
-/** Same week + brief URL raises. A new URL always pays a full bid. */
+/** Same brief still inside last 7 days raises. A new URL always pays a full bid. weekId is not the raise key. */
 export function quoteCheckout(
   existing: Pick<Listing, "bidUsd"> | undefined,
   newBid: number,

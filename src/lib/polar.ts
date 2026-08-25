@@ -226,6 +226,10 @@ function draftFromRow(row: DraftRow): ListingDraft {
 const LISTING_SELECT = `SELECT id, week_id, brand, terms, brief_url, platforms, bid_usd, clicks, created_at, updated_at
          FROM listings`;
 
+/**
+ * Audit lookup by Polar `weekId` label.
+ * Raise identity is `findLiveListingByBrief` (last 7 days), not this weekId.
+ */
 export function findListingByBrief(
   db: AppDb,
   weekId: string,
@@ -247,7 +251,7 @@ export function getListingById(
   return row ? listingFromRow(row) : undefined;
 }
 
-/** Same canonical brief URL still live in the rolling week is a raise. */
+/** Same canonical brief URL still inside last 7 days is a raise. weekId is not the raise key. */
 export function planCheckout(
   db: AppDb,
   draft: ListingDraft,

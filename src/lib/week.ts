@@ -176,7 +176,7 @@ export function listLiveBoard(
   );
 }
 
-/** Same canonical brief URL still live in the rolling window is a raise. */
+/** Raise identity: same canonical brief URL still inside last 7 days. Not weekId. */
 export function findLiveListingByBrief(
   db: AppDb,
   briefUrl: string,

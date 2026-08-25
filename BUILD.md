@@ -84,7 +84,7 @@ raise(listing, newBid):
   if another listing has bid >= newBid and is older, this row still sorts below it
 ```
 
-Week key: ISO week in UTC (`weekId`) is a Polar/audit label. Live rank is a rolling last-7-days filter on paid `createdAt`, not Monday 00:00 UTC. Reset is that query filter, not a delete, plus a documented operator/test clock.
+Week key: ISO week in UTC (`weekId`) is a Polar/audit label. Live rank is a rolling last-7-days filter on paid `createdAt`, not Monday 00:00 UTC. Reset is that query filter, not a delete, plus a documented operator/test clock. Raise identity is the same canonical brief URL still inside that window — not `weekId`.
 
 ---
 
@@ -96,7 +96,7 @@ Week key: ISO week in UTC (`weekId`) is a Polar/audit label. Live rank is a roll
 | `urls.test.ts` | strips `utm_*` / `fbclid`; rejects telegram/discord; rejects NSFW; rejects `bit.ly` |
 | `week.test.ts` | Monday 00:00 UTC rolls `weekId` label; live board is rolling last 7 days; aged rows absent |
 | `board.test.ts` | card has brand, terms, $, clicks; HTML has **no** follower/subscriber/CPM fields |
-| `checkout.test.ts` | FakePolarPort; unpaid session does not list; webhook/fixture completion lists |
+| `checkout.test.ts` | FakePolarPort; unpaid session does not list; webhook/fixture completion lists; same brief still in last 7 days raises after `weekId` rolls |
 | `scripts/test.sh` | contract files + (once app exists) `tsc` + `node:test`. Never Polar live. |
 
 ---
@@ -128,7 +128,7 @@ Each heading below is a fleet unit. Do not start PR N+1 in the same change as PR
 
 ### PR 4: Raise-bid + difference
 
-- **Description:** Same canonical brief URL raises; charge is **new − current**; cannot steal #1 by paying only the incumbent’s difference. New bid must be ≥ current + $1, and ≥ top + $1 to become #1.
+- **Description:** Same canonical brief URL still inside last 7 days raises; `weekId` is not the raise key. Charge is **new − current**; cannot steal #1 by paying only the incumbent’s difference. New bid must be ≥ current + $1, and ≥ top + $1 to become #1.
 - **Files:** `src/lib/rank.ts`, checkout raise path, `tests/rank.test.ts`
 - **Dependencies:** PR 3
 - **Acceptance:** SPEC §6 items 5–6.

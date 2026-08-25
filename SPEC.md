@@ -111,7 +111,7 @@ type Listing = {
 
 `terms` is the brand’s own payout/terms **summary** (e.g. “$800 flat + product, 1 TikTok, no competitor mentions”). The site does not calculate or guarantee the payout.
 
-Identity for raise: same **canonical brief URL** in the same `weekId`. Brand name may be edited on raise; the URL key does not change.
+Identity for raise: same **canonical brief URL** still inside the rolling last 7 days from first paid placement. Brand name may be edited on raise; the URL key does not change. `weekId` stays a Polar/audit label — not raise identity. A brand who paid Sunday still raises on Monday if that placement is inside last 7 days. After the window ends, the same URL is a new place (full bid), not a raise.
 
 ---
 
@@ -123,7 +123,7 @@ Copied from outbid.lol, with this vertical’s minimum and weekly reset.
 2. Bids are **whole US dollars**. Minimum **$5**. Maximum **$50,000**. Step **$1**.
 3. Paying less than #1 still lists at the rank that bid can take.
 4. **Equal bids:** the **older** listing (earlier `createdAt` at that amount, then earlier first payment) keeps the higher rank.
-5. **Raise:** submit the same canonical brief URL again. The new bid must be an integer **at least $1 above the listing’s current bid**. To take #1 from someone else, the new bid must be **at least $1 above the current top bid**. The payer pays only the **difference**. Someone else cannot steal that rank by paying only that difference — they must pay a full bid **strictly greater** than the current top.
+5. **Raise:** submit the same canonical brief URL again while that listing is still inside last 7 days. `weekId` is not the raise key. The new bid must be an integer **at least $1 above the listing’s current bid**. To take #1 from someone else, the new bid must be **at least $1 above the current top bid**. The payer pays only the **difference**. Someone else cannot steal that rank by paying only that difference — they must pay a full bid **strictly greater** than the current top.
 6. A completed Polar payment (or fixture payment in tests) is what claims the rank. Unpaid checkout sessions do nothing.
 7. **Weekly reset:** rolling last 7 days from first paid placement (`createdAt`). Every listing ages off the live board seven days later. Clicks and bids do not carry over. The window starts empty when nothing paid remains inside it. Optional read-only archive of aged rows is allowed; it must not affect live rank. Monday 00:00 UTC is the ISO `weekId` Polar/audit label, **not** the public expiry. A brand outside that civil midnight does not lose the plaster on a timezone tax. Not a 24h lock on #1.
 
