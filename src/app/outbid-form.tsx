@@ -74,6 +74,42 @@ function EmptyClaimFirstWrite() {
   );
 }
 
+function OccupiedCheckoutCopy({
+  floor,
+  amount,
+  topBidUsd,
+  takesLead,
+}: {
+  floor: number;
+  amount: number;
+  topBidUsd: number;
+  takesLead: boolean;
+}) {
+  const raiseChargeUsd = takesLead ? amount - topBidUsd : 0;
+  return (
+    <p className="claim-note" data-raise-difference="">
+      {takesLead
+        ? `Need $${floor} to take #1. $${amount} is the public bid — this flyer is first. `
+        : `Need $${floor} to take #1. $${amount} still lists, below the top. New spots start at $${MIN_BID_USD}. `}
+      {takesLead ? (
+        <span
+          className="raise-charge"
+          data-raise-charge=""
+          data-current-usd={topBidUsd}
+        >
+          Polar charges $<span data-raise-charge-usd="">{raiseChargeUsd}</span>{" "}
+          to raise — only the difference, not a new bid.{" "}
+        </span>
+      ) : (
+        <span className="raise-charge" data-raise-charge="">
+          Polar charges the difference on a raise — not a new full bid.{" "}
+        </span>
+      )}
+      New brief: Polar charges that full amount. Same brief URL already on the wall: Polar charges only the difference. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
+    </p>
+  );
+}
+
 export function OutbidForm({
   defaultAmount = MIN_BID_USD,
   topBidUsd,
@@ -137,13 +173,18 @@ export function OutbidForm({
           </button>
         </span>
       </h2>
-      <p className="claim-note">
-        {occupied
-          ? takesLead
-            ? `Need $${floor} to take #1. Pay $${amount} and this flyer is first. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.`
-            : `Need $${floor} to take #1. $${amount} still lists, below the top. New spots start at $${MIN_BID_USD}. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.`
-          : `Blank plaster. $${MIN_BID_USD} pastes the first flyer at #1. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.`}
-      </p>
+      {occupied && topBidUsd !== undefined ? (
+        <OccupiedCheckoutCopy
+          floor={floor}
+          amount={amount}
+          topBidUsd={topBidUsd}
+          takesLead={takesLead}
+        />
+      ) : (
+        <p className="claim-note">
+          Blank plaster. ${MIN_BID_USD} pastes the first flyer at #1. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
+        </p>
+      )}
       {occupied ? null : (
         <>
           <p className="empty" data-empty-week="true">

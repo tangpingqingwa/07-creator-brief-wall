@@ -162,6 +162,10 @@ if [[ -f package.json ]]; then
     || fail "unpaid stays off the plaster wall leftover test did not run"
   grep -q 'No Terms until Polar reports paid' "${test_log}" \
     || fail "unpaid-off Polar paid leftover test did not run"
+  grep -q 'occupied checkout copy names Polar raise-pays-difference' "${test_log}" \
+    || fail "occupied checkout raise-pays-difference leftover test did not run"
+  grep -q 'unpaid stays off' "${test_log}" \
+    || fail "occupied checkout unpaid-stays-off leftover test did not run"
   rm -f "${test_log}"
 
   echo "== skeleton files =="
@@ -1220,6 +1224,111 @@ if "raise-identity" in css or "raise-rolling" in css:
     raise SystemExit(1)
 PY
 
+  echo "== UX: occupied checkout copy names Polar raise-pays-difference — unpaid stays off =="
+  grep -q 'function OccupiedCheckoutCopy' src/app/outbid-form.tsx \
+    || fail "occupied claim must compose OccupiedCheckoutCopy"
+  grep -q 'data-raise-difference=""' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must stamp raise-pays-difference"
+  grep -q 'data-raise-charge=""' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must stamp Polar raise charge"
+  grep -q 'data-raise-charge-usd=""' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must name the Polar raise charge in dollars"
+  grep -qF 'Polar charges $' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must say Polar charges"
+  grep -q 'only the difference, not a new bid' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must name Polar raise-pays-difference"
+  grep -q 'Polar charges the difference on a raise' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must name raise-pays-difference below #1"
+  grep -q 'New brief: Polar charges that full amount' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must name a new brief as a full Polar charge"
+  grep -q 'Same brief URL already on the wall: Polar charges only the difference' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must name same-URL raise as Polar difference"
+  grep -q 'Unpaid checkout stays off the board until Polar reports paid' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must keep unpaid Polar checkout off the wall"
+  grep -q 'An abandoned brief is not Terms as #1' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must keep abandoned briefs off Terms as #1"
+  if awk '/function EmptyClaimFirstWrite/,/function OccupiedCheckoutCopy/' src/app/outbid-form.tsx | grep -q 'data-raise-difference'; then
+    fail "empty Claim #1 write must not stamp occupied raise-pays-difference"
+  fi
+  if awk '/Blank plaster/,/empty-hint/' src/app/outbid-form.tsx | grep -q 'Polar charges only the difference'; then
+    fail "empty Claim #1 paper must not name occupied raise-pays-difference"
+  fi
+  grep -Fq 'On occupied plaster, checkout copy names Polar charges the difference on a raise' SPEC.md \
+    || fail "SPEC must name occupied Polar raise-pays-difference checkout copy"
+  grep -Fq 'Same brief URL already on the wall: Polar charges only the difference' SPEC.md \
+    || fail "SPEC must name same-URL raise as Polar difference"
+  grep -q 'Occupied checkout: Polar charges the difference on a raise. Unpaid stays off.' src/app/board.css \
+    || fail "CSS must name occupied Polar raise-pays-difference checkout copy"
+  grep -qF '.wall-occupied .paste-rail .claim-note[data-raise-difference]' src/app/board.css \
+    || fail "CSS must compose occupied raise-pays-difference on the claim rail"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .claim-note[data-raise-difference]' src/app/board.css \
+    || fail "empty plaster CSS must keep occupied raise-pays-difference off Claim #1"
+  python3 - src/app/board.css <<'PY' || fail "raise-pays-difference CSS must stay muted, not recolor the plaster"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+block = re.search(
+    r"/\* Occupied checkout: Polar charges the difference on a raise\. Unpaid stays off\. \*/(.*?)\.wall-occupied \.card \.open-label",
+    css,
+    re.S,
+)
+if not block:
+    raise SystemExit(1)
+if "background:" in block.group(1) or "var(--bid-ink)" in block.group(1):
+    raise SystemExit(1)
+if ".wall-occupied .paste-rail .claim-note[data-raise-difference]" not in block.group(1):
+    raise SystemExit(1)
+PY
+  grep -q 'occupied checkout copy names Polar raise-pays-difference' tests/board.test.ts \
+    || fail "board tests must cover occupied Polar raise-pays-difference checkout copy"
+  grep -q 'occupied checkout copy names Polar raise-pays-difference' tests/checkout.test.ts \
+    || fail "checkout tests must cover occupied Polar raise-pays-difference copy after pay"
+  grep -q 'data-prize=""' src/lib/board-markup.tsx \
+    || fail "raise-pays-difference cut must keep occupied Terms as the prize"
+  grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
+    || fail "raise-pays-difference cut must keep #1 Open the first occupied click"
+  grep -q 'Open brief' src/lib/board-markup.tsx \
+    || fail "raise-pays-difference cut must keep Open brief"
+  grep -q 'Post a brief' src/lib/board-markup.tsx \
+    || fail "raise-pays-difference cut must keep Post a brief"
+  grep -q 'Claim #1' src/app/outbid-form.tsx \
+    || fail "raise-pays-difference cut must keep Claim #1"
+  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
+    || fail "raise-pays-difference cut must keep empty later-write brief URL"
+  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+    || fail "raise-pays-difference cut must keep blank plaster"
+  grep -q 'amount-field' src/app/outbid-form.tsx \
+    || fail "raise-pays-difference cut must keep the dashed amount"
+  grep -q 'className="step"' src/app/outbid-form.tsx \
+    || fail "raise-pays-difference cut must keep ± steppers"
+  grep -q 'Outbid' src/app/outbid-form.tsx \
+    || fail "raise-pays-difference cut must keep Outbid"
+  grep -q 'className="plaster"' src/lib/board-markup.tsx \
+    || fail "raise-pays-difference cut must not rebuild the plaster wall"
+  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
+    || fail "raise-pays-difference cut must not restamp empty rolling-copy"
+  grep -q 'Same canonical brief URL still inside last 7 days raises' src/app/rules/page.tsx \
+    || fail "raise-pays-difference cut must not restamp raise-rolling-identity"
+  grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
+    || fail "raise-pays-difference cut must keep occupied rolling last-7-days"
+  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp|data-raise-after-open' \
+    src/app/outbid-form.tsx src/app/board.tsx src/lib/board-markup.tsx src/app/board.css
+  then
+    fail "raise-pays-difference must not add another named hop"
+  fi
+  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx; then
+    fail "raise-pays-difference must not rebuild the plaster wall into a long form"
+  fi
+  if ! awk '
+    /wall-occupied \.card-lead \.terms\.prize-before-price \.terms-copy/ { prize=NR }
+    /wall-occupied \.card \.brief-url\[data-first-click="open"\]/ { open=NR }
+    /Unpaid \/ abandoned Polar checkout never paints Terms as #1/ { unpaid=NR }
+    /Occupied checkout: Polar charges the difference on a raise/ { raise=NR }
+    END { exit !(prize && open && unpaid && raise && prize < open && open < unpaid && unpaid < raise) }
+  ' src/app/board.css; then
+    fail "occupied raise-pays-difference CSS must sit after unpaid leftover, not rebuild the wall"
+  fi
+
   echo "== about, rules, URL hygiene =="
   for f in \
     src/app/about/page.tsx \
@@ -1671,6 +1780,9 @@ PY
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${home_body}"; then
     fail "GET / must not invent follower or reach numbers"
   fi
+  if grep -qE 'data-raise-difference|data-raise-charge|Polar charges only the difference|Polar charges the difference' "${home_body}"; then
+    fail "empty Claim #1 paper must not name occupied raise-pays-difference"
+  fi
 
   echo "== GET /about and /rules =="
   about_body="$(mktemp)"
@@ -1725,6 +1837,9 @@ PY
     || fail "unpaid leftover must say Polar paid is required"
   grep -q 'An abandoned brief is not Terms as #1' "${unpaid_home}" \
     || fail "unpaid leftover must say an abandoned brief is not Terms as #1"
+  if grep -qE 'data-raise-difference|data-raise-charge|Polar charges only the difference' "${unpaid_home}"; then
+    fail "unpaid leftover must not name occupied raise-pays-difference"
+  fi
   if grep -q 'Ghost' "${unpaid_home}"; then
     fail "unpaid checkout leaked Ghost onto the board"
   fi
@@ -1766,6 +1881,21 @@ PY
     || fail "occupied claim must show the current top bid"
   grep -q 'Need \$6 to take #1' "${listed_body}" \
     || fail "occupied claim must say \$6 takes #1"
+  grep -q 'data-raise-difference=""' "${listed_body}" \
+    || fail "occupied checkout copy must stamp Polar raise-pays-difference"
+  grep -q 'data-raise-charge=""' "${listed_body}" \
+    || fail "occupied checkout copy must stamp Polar raise charge"
+  grep -q 'Polar charges' "${listed_body}" \
+    || fail "occupied checkout copy must name Polar charges"
+  grep -q 'only the difference, not a new bid' "${listed_body}" \
+    || fail "occupied checkout copy must name Polar raise-pays-difference"
+  grep -q 'Same brief URL already on the wall: Polar charges only the difference' "${listed_body}" \
+    || fail "occupied checkout copy must name same-URL raise as Polar difference"
+  grep -q 'Unpaid checkout stays off the board until Polar reports paid' "${listed_body}" \
+    || fail "occupied checkout copy must keep unpaid Polar checkout off the wall"
+  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp' "${listed_body}"; then
+    fail "occupied checkout copy must not add another named hop"
+  fi
   grep -q 'data-occupied="true"' "${listed_body}" \
     || fail "paid board must mark the wall occupied"
   grep -q 'wall-occupied' "${listed_body}" \

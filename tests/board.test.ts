@@ -3871,3 +3871,140 @@ test("unpaid stays off the plaster wall — No Terms until Polar reports paid", 
     db.close();
   }
 });
+
+test("occupied checkout copy names Polar raise-pays-difference — unpaid stays off", () => {
+  assert.match(formSource, /data-raise-difference=""/);
+  assert.match(formSource, /Polar charges \$/);
+  assert.match(formSource, /data-raise-charge-usd=""/);
+  assert.match(formSource, /only the difference, not a new bid/);
+  assert.match(formSource, /Polar charges the difference on a raise/);
+  assert.match(formSource, /New brief: Polar charges that full amount/);
+  assert.match(
+    formSource,
+    /Same brief URL already on the wall: Polar charges only the difference/,
+  );
+  assert.match(
+    formSource,
+    /Unpaid checkout stays off the board until Polar reports paid/,
+  );
+  assert.match(formSource, /An abandoned brief is not Terms as #1/);
+  assert.match(formSource, /Claim #1 for/);
+  assert.match(formSource, /Then the brief URL/);
+  assert.match(formSource, /className="amount-field"/);
+  assert.match(formSource, /className="step"/);
+  assert.match(formSource, /Outbid/);
+  assert.doesNotMatch(
+    formSource,
+    /data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp|data-raise-after-open/,
+  );
+
+  const markup = readFileSync(
+    join(process.cwd(), "src", "lib", "board-markup.tsx"),
+    "utf8",
+  );
+  assert.match(markup, /data-prize=/);
+  assert.match(markup, /data-first-click="open"/);
+  assert.match(markup, /Open brief/);
+  assert.match(markup, /Post a brief/);
+  assert.match(markup, /Live window is rolling last 7 days from paid placement/);
+  assert.doesNotMatch(markup, /data-raise-difference|data-raise-charge/);
+
+  const raiseCss = cssSource.match(
+    /\/\* Occupied checkout: Polar charges the difference on a raise\. Unpaid stays off\. \*\/([\s\S]*?)\.wall-occupied \.card \.open-label/,
+  );
+  assert.ok(raiseCss);
+  assert.match(
+    raiseCss[1],
+    /\.wall-occupied \.paste-rail \.claim-note\[data-raise-difference\]/,
+  );
+  assert.match(
+    raiseCss[1],
+    /\.wall-stage\.wall-empty\[data-occupied="false"\] \.claim-note\[data-raise-difference\]/,
+  );
+  assert.doesNotMatch(raiseCss[1], /background:|var\(--bid-ink\)/);
+
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.match(empty, /Claim #1 for/);
+  assert.match(empty, /data-first-click="claim"/);
+  assert.match(empty, /Then the brief URL/);
+  assert.match(empty, /Blank plaster/);
+  assert.match(
+    empty,
+    /Live window is rolling last 7 days from paid placement\. Not Monday 00:00 UTC\./,
+  );
+  assert.doesNotMatch(empty, /data-raise-difference/);
+  assert.doesNotMatch(empty, /data-raise-charge/);
+  assert.doesNotMatch(empty, /Polar charges the difference/);
+  assert.doesNotMatch(empty, /Polar charges only the difference/);
+  assert.doesNotMatch(empty, /Open brief|Post a brief|data-prize=/);
+  const emptyClaim = empty.indexOf("Claim #1 for");
+  const emptyOutbid = empty.indexOf(">Outbid<");
+  const emptyLater = empty.indexOf("Then the brief URL");
+  assert.ok(emptyClaim >= 0 && emptyOutbid > emptyClaim);
+  assert.ok(emptyLater > emptyOutbid);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      weekId: WEEK,
+      listings: rankListings([
+        listing({
+          id: "lst_lead",
+          brand: "Lead Co",
+          terms: "already #1",
+          bidUsd: 7,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+        listing({
+          id: "lst_later",
+          brand: "Later Co",
+          terms: "later rank",
+          bidUsd: 5,
+          createdAt: "2026-08-18T00:00:00.000Z",
+        }),
+      ]),
+    }),
+  );
+  const prizeAt = occupied.indexOf('data-prize=""');
+  const firstClickAt = occupied.indexOf('data-first-click="open"');
+  const raiseAt = occupied.indexOf('data-raise-difference=""');
+  const laterOpenAt = occupied.indexOf('data-later-open=""');
+  const postAt = occupied.indexOf('data-post-brief=""');
+  const claimAt = occupied.indexOf('id="claim"');
+  assert.ok(prizeAt >= 0 && firstClickAt > prizeAt);
+  assert.ok(laterOpenAt > firstClickAt && postAt > laterOpenAt);
+  assert.ok(raiseAt > postAt && claimAt <= raiseAt);
+  assert.match(occupied, /data-occupied="true"/);
+  assert.match(occupied, /class="terms-label">Terms/);
+  assert.match(occupied, /already #1/);
+  assert.match(occupied, /data-first-click="open"/);
+  assert.match(occupied, /Need \$8 to take #1/);
+  assert.match(occupied, /\$8 is the public bid — this flyer is first/);
+  assert.match(
+    occupied,
+    /Polar charges \$<span data-raise-charge-usd="">1<\/span> to raise — only the difference, not a new bid/,
+  );
+  assert.match(occupied, /data-current-usd="7"/);
+  assert.match(occupied, /New brief: Polar charges that full amount/);
+  assert.match(
+    occupied,
+    /Same brief URL already on the wall: Polar charges only the difference/,
+  );
+  assert.match(
+    occupied,
+    /Unpaid checkout stays off the board until Polar reports paid/,
+  );
+  assert.match(occupied, /An abandoned brief is not Terms as #1/);
+  assert.match(occupied, /Rolling last 7 days\. Not Monday 00:00 UTC\./);
+  assert.doesNotMatch(occupied, /data-empty-claim-first/);
+  assert.doesNotMatch(occupied, /Then the brief URL/);
+  assert.doesNotMatch(occupied, /data-unpaid-off/);
+  assert.doesNotMatch(occupied, /data-post-after-open-seven/);
+  assert.doesNotMatch(occupied, /The board resets Monday 00:00 UTC/);
+  assert.equal((occupied.match(/data-raise-difference=""/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-first-click="open"/g) ?? []).length, 1);
+  assert.equal((occupied.match(/data-prize=""/g) ?? []).length, 1);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+});
+
