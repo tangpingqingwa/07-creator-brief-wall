@@ -937,10 +937,17 @@ body {
 }
 
 .confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-facts,
-.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-bid,
-.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-clicks {
+.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-bid {
   font-size: 0.78rem;
   font-weight: 400;
+}
+
+/* Occupied confirm hops stay a later fact after terms. Do not shout beside the prize. */
+.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-clicks.later-fact[data-later-fact] {
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .confirm-brand {
