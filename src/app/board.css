@@ -556,7 +556,13 @@ body {
 }
 
 .wall-occupied .card-lead .clicks {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
+}
+
+/* #1 clicks stay a later fact. Do not shout beside Terms. */
+.wall-occupied .card-lead .clicks.later-fact[data-later-fact] {
+  font-weight: 500;
+  color: var(--muted);
 }
 
 /* Open brief is the hop after Terms, not a second $ prize. */
