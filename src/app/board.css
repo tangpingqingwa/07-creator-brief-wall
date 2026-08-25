@@ -1054,6 +1054,15 @@ body {
   color: var(--muted);
 }
 
+/* Occupied /about: Polar charges the difference on a raise. Unpaid stays off. */
+.board[data-page="about"][data-occupied="true"] .about-raise[data-about-raise] {
+  color: var(--muted);
+}
+
+.board[data-page="about"][data-occupied="false"] .about-raise[data-about-raise] {
+  display: none;
+}
+
 @media (max-width: 820px) {
   .mast,
   .wall-stage,

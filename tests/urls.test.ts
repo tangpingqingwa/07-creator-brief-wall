@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { test } from "node:test";
-import AboutPage from "../src/app/about/page";
+import { AboutCopy } from "../src/lib/about-copy";
 import RulesPage from "../src/app/rules/page";
 import { CheckoutError, parseCheckoutInput } from "../src/lib/polar";
 import {
@@ -118,8 +118,11 @@ test("outbound brief URL never adds tracking", () => {
 });
 
 test("about states independence and no ads / API keys / revenue share", () => {
-  const html = renderToStaticMarkup(createElement(AboutPage));
+  const html = renderToStaticMarkup(
+    createElement(AboutCopy, { occupied: false }),
+  );
   assert.match(html, /data-page="about"/);
+  assert.match(html, /data-occupied="false"/);
   assert.match(html, /no ads/i);
   assert.match(html, /no API keys/i);
   assert.match(html, /no revenue share/i);
@@ -133,7 +136,44 @@ test("about states independence and no ads / API keys / revenue share", () => {
   assert.match(html, /Meta/);
   assert.match(html, /creator-brief-wall/);
   assert.match(html, /outbid\.lol/);
+  assert.doesNotMatch(html, /data-about-raise/);
+  assert.doesNotMatch(html, /Polar charges the difference on a raise/);
   assert.doesNotMatch(html, /[0-9][0-9,]*\s*(followers|subscribers)/i);
+});
+
+test("occupied /about names Polar raise-pays-difference — unpaid Polar checkout stays off", () => {
+  const empty = renderToStaticMarkup(
+    createElement(AboutCopy, { occupied: false }),
+  );
+  assert.match(empty, /data-page="about"/);
+  assert.match(empty, /data-occupied="false"/);
+  assert.match(empty, /Abandoned checkout does not invent a brief/);
+  assert.doesNotMatch(empty, /data-about-raise/);
+  assert.doesNotMatch(empty, /Polar charges the difference on a raise/);
+  assert.doesNotMatch(empty, /not a new full bid/);
+  assert.doesNotMatch(empty, /data-raise-difference/);
+  assert.doesNotMatch(empty, /data-raise-charged/);
+
+  const occupied = renderToStaticMarkup(
+    createElement(AboutCopy, { occupied: true }),
+  );
+  assert.match(occupied, /data-page="about"/);
+  assert.match(occupied, /data-occupied="true"/);
+  assert.match(occupied, /data-about-raise=""/);
+  assert.match(
+    occupied,
+    /Polar charges the difference on a raise — not a new full bid/,
+  );
+  assert.match(
+    occupied,
+    /Unpaid Polar checkout stays off the wall until Polar reports paid/,
+  );
+  assert.match(occupied, /Rank is the bid/);
+  assert.match(occupied, /no ads/i);
+  assert.doesNotMatch(occupied, /data-raise-difference/);
+  assert.doesNotMatch(occupied, /data-raise-charged/);
+  assert.doesNotMatch(occupied, /data-raise-charge=/);
+  assert.doesNotMatch(occupied, /[0-9][0-9,]*\s*(followers|subscribers)/i);
 });
 
 test("checkout stores the stripped URL and rejects chat / NSFW / shortener / http", () => {
