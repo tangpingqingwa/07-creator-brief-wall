@@ -825,6 +825,23 @@ body {
   display: none;
 }
 
+/* Occupied checkout: Polar charges the difference on a raise. Unpaid stays off. */
+.wall-occupied .paste-rail .claim-note[data-raise-difference] {
+  color: var(--muted);
+}
+
+.wall-occupied .paste-rail .claim-note[data-raise-difference] .raise-charge {
+  display: block;
+  margin: 0.35rem 0 0.25rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.wall-stage.wall-empty[data-occupied="false"] .claim-note[data-raise-difference],
+.wall-stage.wall-empty[data-occupied="false"] .raise-charge[data-raise-charge] {
+  display: none;
+}
+
 .wall-occupied .card .open-label {
   border-bottom: 1px solid currentColor;
   text-underline-offset: 0.18em;

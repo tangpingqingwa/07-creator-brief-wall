@@ -122,6 +122,26 @@ test("FakePolarPort $5 appears on the board after completion", async () => {
   assert.equal(ranked[0]?.rank, 1);
   assert.equal(ranked[0]?.bidUsd, 5);
   assert.equal(ranked[0]?.brand, "Acme");
+
+  const occupiedHtml = renderToStaticMarkup(
+    createElement(Board, { listings: ranked, weekId: WEEK }),
+  );
+  assert.match(occupiedHtml, /data-raise-difference=""/);
+  assert.match(
+    occupiedHtml,
+    /Polar charges \$<span data-raise-charge-usd="">1<\/span> to raise — only the difference, not a new bid/,
+  );
+  assert.match(
+    occupiedHtml,
+    /Same brief URL already on the wall: Polar charges only the difference/,
+  );
+  assert.match(
+    occupiedHtml,
+    /Unpaid checkout stays off the board until Polar reports paid/,
+  );
+  assert.match(occupiedHtml, /data-first-click="open"/);
+  assert.match(occupiedHtml, /class="terms-label">Terms/);
+  // occupied checkout copy names Polar raise-pays-difference — unpaid stays off
 });
 
 test("unpaid Polar checkout stays off the plaster until Polar reports paid", async () => {
@@ -153,6 +173,8 @@ test("unpaid Polar checkout stays off the plaster until Polar reports paid", asy
       /Unpaid checkout stays off the board until Polar reports paid/,
     );
     assert.match(leftoverHtml, /An abandoned brief is not Terms as #1/);
+    assert.doesNotMatch(leftoverHtml, /data-raise-difference/);
+    assert.doesNotMatch(leftoverHtml, /Polar charges only the difference/);
     assert.doesNotMatch(leftoverHtml, /Ghost|Abandoned Polar checkout/);
     assert.doesNotMatch(leftoverHtml, /data-prize=/);
     assert.doesNotMatch(leftoverHtml, /Open brief/);
