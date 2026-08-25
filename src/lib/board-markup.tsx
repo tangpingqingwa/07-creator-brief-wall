@@ -107,7 +107,7 @@ function OccupiedLeadFlyer({ listing }: { listing: RankedListing }) {
       <span className="bid later-fact" data-later-fact="">
         ${listing.bidUsd}
       </span>
-      <span className="clicks" data-clicks={listing.clicks}>
+      <span className="clicks later-fact" data-clicks={listing.clicks} data-later-fact="">
         {listing.clicks} clicks
       </span>
       <span className="brief-url-text">{listing.briefUrl}</span>

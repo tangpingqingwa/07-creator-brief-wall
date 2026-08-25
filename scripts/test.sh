@@ -275,6 +275,8 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover #1 Terms larger than \$bid"
   grep -q 'occupied #1 $bid stays a later fact and does not shout beside Terms' tests/board.test.ts \
     || fail "board tests must cover #1 \$bid staying a later fact"
+  grep -q 'occupied #1 clicks stay a later fact after Terms and do not shout beside Terms' tests/board.test.ts \
+    || fail "board tests must cover #1 clicks staying a later fact after Terms"
   grep -q 'occupied later-rank Open stays quieter so #1 Open is the first click' tests/board.test.ts \
     || fail "board tests must cover quieter later-rank Open brief"
   grep -q 'occupied later flyers stay quieter than #1 Terms — prize stays first' tests/board.test.ts \
@@ -443,6 +445,12 @@ if [[ -f package.json ]]; then
     || fail "CSS must keep #1 \$bid a later fact beside Terms"
   grep -qF 'wall-occupied .card-lead .bid.later-fact[data-later-fact]' src/app/board.css \
     || fail "CSS must mute #1 \$bid so it cannot shout beside Terms"
+  grep -q 'clicks later-fact' src/lib/board-markup.tsx \
+    || fail "occupied #1 clicks must use the later-fact class"
+  grep -qF 'wall-occupied .card-lead .clicks.later-fact[data-later-fact]' src/app/board.css \
+    || fail "CSS must mute #1 clicks so they cannot shout beside Terms"
+  grep -Fq 'Occupied #1 clicks stay a later fact after Terms' SPEC.md \
+    || fail "SPEC must keep occupied #1 clicks a later fact after Terms"
   grep -q 'function OpenBriefHop' src/lib/board-markup.tsx \
     || fail "occupied Open must compose OpenBriefHop, not stamp a mute class"
   grep -q '{lead ? hop : null}' src/lib/board-markup.tsx \
@@ -502,6 +510,17 @@ if "color: var(--muted)" not in re.search(
 if "color: var(--bid)" in re.search(
     r"\.wall-occupied \.card-lead \.bid\.later-fact\[data-later-fact\]\s*\{[^}]*\}", css, re.S
 ).group(0):
+    raise SystemExit(1)
+clicks_later = re.search(
+    r"\.wall-occupied \.card-lead \.clicks\.later-fact\[data-later-fact\]\s*\{[^}]*\}", css, re.S
+)
+if clicks_later is None:
+    raise SystemExit(1)
+if "color: var(--muted)" not in clicks_later.group(0):
+    raise SystemExit(1)
+if "color: var(--bid)" in clicks_later.group(0):
+    raise SystemExit(1)
+if "font-weight: 500" not in clicks_later.group(0):
     raise SystemExit(1)
 later_open = size(r"\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*font-size:\s*([\d.]+)rem")
 base_open = size(r"\.wall-occupied \.card \.brief-url \{\n[^}]*font-size:\s*([\d.]+)rem")
@@ -2541,6 +2560,8 @@ PY
     || fail "paid #1 flyer must stamp prize before price"
   grep -q 'class="bid later-fact"' "${listed_body}" \
     || fail "paid #1 flyer must keep \$bid a later fact"
+  grep -q 'class="clicks later-fact"' "${listed_body}" \
+    || fail "paid #1 flyer must keep clicks a later fact after Terms"
   grep -q 'data-later-fact=""' "${listed_body}" \
     || fail "paid #1 flyer must stamp \$bid as a later fact"
   if grep -q 'data-later-open=""' "${listed_body}"; then
@@ -2579,10 +2600,12 @@ open_five = card.find('data-open-after-post-five-stamp=""')
 later = card.find('data-later-fact=""')
 bid_class = card.find('class="bid later-fact"')
 bid = card.find('class="bid later-fact"')
-if terms < 0 or prize < 0 or prize_stamp < 0 or prize_class < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or open_four < 0 or open_five < 0 or later < 0 or bid_class < 0 or bid < 0:
+clicks_class = card.find('class="clicks later-fact"')
+clicks_later = card.find('data-later-fact=""', clicks_class)
+if terms < 0 or prize < 0 or prize_stamp < 0 or prize_class < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or open_four < 0 or open_five < 0 or later < 0 or bid_class < 0 or bid < 0 or clicks_class < 0 or clicks_later < 0:
     raise SystemExit(1)
 open_label = card.find('class="open-label">Open brief')
-if not (prize_class <= terms <= prize <= prize_stamp < label < copy < hop <= after < note < open_label < bid_class <= later):
+if not (prize_class <= terms <= prize <= prize_stamp < label < copy < hop <= after < note < open_label < bid_class <= later < clicks_class <= clicks_later):
     raise SystemExit(1)
 if not (hop <= first <= open_stamp < first_read <= open_two < open_three < open_four < open_five < open_label):
     raise SystemExit(1)
@@ -2616,9 +2639,11 @@ if html.count('data-prize-before-price=""') != 1:
     raise SystemExit(1)
 if html.count('class="terms prize-before-price"') != 1:
     raise SystemExit(1)
-if html.count('data-later-fact=""') != 1:
+if html.count('data-later-fact=""') != 2:
     raise SystemExit(1)
 if html.count('class="bid later-fact"') != 1:
+    raise SystemExit(1)
+if html.count('class="clicks later-fact"') != 1:
     raise SystemExit(1)
 if 'data-later-open=""' in card or 'class="brief-url later-open"' in card:
     raise SystemExit(1)
@@ -2972,13 +2997,17 @@ if 'data-prize=""' not in rival.group(0) or 'prize-before-price' not in rival.gr
     raise SystemExit(1)
 if 'data-later-fact=""' not in rival.group(0) or 'class="bid later-fact"' not in rival.group(0):
     raise SystemExit(1)
+if 'class="clicks later-fact"' not in rival.group(0):
+    raise SystemExit(1)
 if 'data-prize' in acme.group(0) or 'prize-before-price' in acme.group(0):
     raise SystemExit(1)
 if 'data-later-fact' in acme.group(0) or 'later-fact' in acme.group(0):
     raise SystemExit(1)
 if html.count('data-prize=""') != 1 or html.count('data-prize-before-price=""') != 1:
     raise SystemExit(1)
-if html.count('data-later-fact=""') != 1 or html.count('class="bid later-fact"') != 1:
+if html.count('data-later-fact=""') != 2 or html.count('class="bid later-fact"') != 1:
+    raise SystemExit(1)
+if html.count('class="clicks later-fact"') != 1:
     raise SystemExit(1)
 if 'data-later-open=""' not in acme.group(0) or 'class="brief-url later-open"' not in acme.group(0):
     raise SystemExit(1)
@@ -3015,12 +3044,13 @@ if html.find('data-later-pack=""') >= html.find('aria-label="Later briefs this w
 rival_terms = rival.group(0).find('data-terms=""')
 rival_open = rival.group(0).find('class="open-label">Open brief')
 rival_bid = rival.group(0).find('class="bid later-fact"')
+rival_clicks = rival.group(0).find('class="clicks later-fact"')
 acme_terms = acme.group(0).find('data-terms=""')
 acme_bid = acme.group(0).find('class="bid">')
 acme_open = acme.group(0).find('data-later-open=""')
-if rival_terms < 0 or rival_open < 0 or rival_bid < 0 or acme_terms < 0 or acme_bid < 0 or acme_open < 0:
+if rival_terms < 0 or rival_open < 0 or rival_bid < 0 or rival_clicks < 0 or acme_terms < 0 or acme_bid < 0 or acme_open < 0:
     raise SystemExit(1)
-if not (rival_terms < rival_open < rival_bid):
+if not (rival_terms < rival_open < rival_bid < rival_clicks):
     raise SystemExit(1)
 if not (acme_terms < acme_bid < acme_open):
     raise SystemExit(1)
