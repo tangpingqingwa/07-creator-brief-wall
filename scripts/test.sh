@@ -603,14 +603,29 @@ PY
     || fail "occupied confirm hops must use the later-fact class"
   grep -q 'confirm-bid later-fact' src/lib/confirm-brief.ts \
     || fail "occupied confirm \$bid must use the later-fact class"
+  grep -q 'confirm-terms-label' src/lib/confirm-brief.ts \
+    || fail "occupied confirm Terms must stay a labeled prize"
+  grep -q 'confirm-terms-copy' src/lib/confirm-brief.ts \
+    || fail "occupied confirm Terms copy must stay the prize over brand"
+  grep -q '<h1 class="confirm-terms"' src/lib/confirm-brief.ts \
+    || fail "occupied confirm Terms must be the heading prize"
+  if grep -q '<h1 class="confirm-brand">' src/lib/confirm-brief.ts; then
+    fail "occupied confirm brand must not shout as the heading over Terms"
+  fi
   grep -qF '.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-clicks.later-fact[data-later-fact]' src/app/board.css \
     || fail "CSS must mute occupied confirm hops so they cannot shout beside terms"
   grep -qF '.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-bid.later-fact[data-later-fact]' src/app/board.css \
     || fail "CSS must mute occupied confirm \$bid so it cannot shout beside terms"
+  grep -qF '.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-brand' src/app/board.css \
+    || fail "CSS must recede occupied confirm brand so it cannot shout over Terms"
+  grep -qF '.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-terms-copy' src/app/board.css \
+    || fail "CSS must keep occupied confirm Terms copy the prize over brand"
   grep -Fq 'Occupied confirm hops stay a later fact after terms' SPEC.md \
     || fail "SPEC must keep occupied confirm hops a later fact after terms"
   grep -Fq 'Occupied confirm $bid stays a later fact after terms' SPEC.md \
     || fail "SPEC must keep occupied confirm \$bid a later fact after terms"
+  grep -Fq 'Occupied confirm Terms stay the prize over brand' SPEC.md \
+    || fail "SPEC must keep occupied confirm Terms the prize over brand"
   python3 - src/app/board.css <<'PY' || fail "confirm hops must recede after terms and stay muted, not --bid"
 import re
 import sys
@@ -661,6 +676,41 @@ if "color: var(--muted)" not in bid.group(0):
 if "font-weight: 500" not in bid.group(0):
     raise SystemExit(1)
 if "color: var(--bid)" in bid.group(0):
+    raise SystemExit(1)
+PY
+  python3 - src/app/board.css <<'PY' || fail "confirm brand must recede so Terms stay the prize, not a shout"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+brand = re.search(
+    r"\.confirm-sheet\.confirm-before-leave\[data-confirm-before-leave\] \.confirm-brand\s*\{[^}]*\}",
+    css,
+    re.S,
+)
+terms = re.search(
+    r"\.confirm-sheet\.confirm-before-leave\[data-confirm-before-leave\] \.confirm-terms-copy\s*\{[^}]*\}",
+    css,
+    re.S,
+)
+if brand is None or terms is None:
+    raise SystemExit(1)
+brand_size = re.search(r"font-size:\s*([\d.]+)rem", brand.group(0))
+terms_size = re.search(r"font-size:\s*([\d.]+)rem", terms.group(0))
+if brand_size is None or terms_size is None:
+    raise SystemExit(1)
+if float(terms_size.group(1)) <= float(brand_size.group(1)):
+    raise SystemExit(1)
+if "color: var(--muted)" not in brand.group(0):
+    raise SystemExit(1)
+if "font-weight: 500" not in brand.group(0):
+    raise SystemExit(1)
+if "clamp(" in brand.group(0):
+    raise SystemExit(1)
+if "color: var(--bid)" in brand.group(0):
+    raise SystemExit(1)
+if "font-weight: 700" not in terms.group(0):
+    raise SystemExit(1)
+if "color: var(--ink)" not in terms.group(0):
     raise SystemExit(1)
 PY
   if grep -nE 'data-post-after-open-seven|data-open-after-post-six-stamp' \
@@ -3246,6 +3296,15 @@ PY
     || fail "GET /r/:id must keep occupied confirm hops a later fact after terms"
   grep -q 'class="confirm-bid later-fact"' "${confirm_body}" \
     || fail "GET /r/:id must keep occupied confirm \$bid a later fact after terms"
+  grep -q 'class="confirm-terms-label">Terms' "${confirm_body}" \
+    || fail "GET /r/:id must label occupied confirm Terms as the prize"
+  grep -q 'class="confirm-terms-copy"' "${confirm_body}" \
+    || fail "GET /r/:id must keep occupied confirm Terms copy the prize over brand"
+  grep -q '<h1 class="confirm-terms"' "${confirm_body}" \
+    || fail "GET /r/:id must make occupied confirm Terms the heading prize"
+  if grep -q '<h1 class="confirm-brand">' "${confirm_body}"; then
+    fail "GET /r/:id must not let brand shout as the heading over Terms"
+  fi
   grep -q 'data-later-fact=""' "${confirm_body}" \
     || fail "GET /r/:id must stamp confirm hops as a later fact"
   grep -q 'data-clicks="0"' "${confirm_body}" \
@@ -3285,6 +3344,16 @@ if html.count('class="confirm-bid later-fact"') != 1:
 if html.count('class="confirm-clicks later-fact"') != 1:
     raise SystemExit(1)
 if html.count('data-later-fact=""') != 2:
+    raise SystemExit(1)
+if '<h1 class="confirm-brand">' in html:
+    raise SystemExit(1)
+if '<h1 class="confirm-terms"' not in html:
+    raise SystemExit(1)
+if 'class="confirm-terms-label">Terms' not in html:
+    raise SystemExit(1)
+if 'class="confirm-terms-copy"' not in html:
+    raise SystemExit(1)
+if html.count('data-prize=""') != 1:
     raise SystemExit(1)
 PY
 
