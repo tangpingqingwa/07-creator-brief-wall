@@ -10,12 +10,14 @@ export function RaiseTooSmallCopy({ occupied }: { occupied: boolean }) {
       <h1>{occupied ? "Raise is too small" : "No rank change"}</h1>
       {occupied ? (
         <p className="raise-too-small" data-raise-too-small="">
-          New bid must be at least $1 above the current bid. Polar still charges only the difference, not a new full bid. Unpaid Polar checkout stays off the wall.
+          The new bid must be at least $1 above the current bid. The original
+          payer is charged only the difference, and the wall changes only after
+          payment is confirmed.
         </p>
       ) : (
         <p>
-          Unpaid Polar checkout stays off the wall until Polar reports paid. An
-          abandoned brief is not Terms as #1.
+          An incomplete or abandoned checkout stays off the wall and never
+          becomes #1.
         </p>
       )}
       <p>

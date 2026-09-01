@@ -9,8 +9,8 @@ export function RulesCopy({ occupied }: { occupied: boolean }) {
     >
       <h1>Rules</h1>
       <p>
-        These rules are the product. A bidder can predict rank from this page
-        alone. Rank is the bid.
+        The wall follows the published rules below. There are no hidden ranking
+        factors: rank is the bid.
       </p>
 
       <h2>Ranking</h2>
@@ -19,8 +19,9 @@ export function RulesCopy({ occupied }: { occupied: boolean }) {
           <tr>
             <th>Rank is the bid</th>
             <td>
-              Sort by <code>bidUsd</code> descending. Nothing else — not clicks,
-              not recency except ties, not “quality,” not follower counts.
+              Briefs are ordered by bid from highest to lowest. Clicks,
+              recency, editorial preference, and follower counts do not affect
+              rank.
             </td>
           </tr>
           <tr>
@@ -48,19 +49,15 @@ export function RulesCopy({ occupied }: { occupied: boolean }) {
           </tr>
           <tr>
             <th>Equal bids</th>
-            <td>
-              <strong>Older wins ties.</strong> Compare <code>createdAt</code>{" "}
-              ascending (earlier first payment), then listing id.
-            </td>
+            <td>The brief placed first keeps the higher rank.</td>
           </tr>
           <tr>
             <th>Raise</th>
             <td>
-              Same canonical brief URL still inside last 7 days raises.{" "}
-              <code>weekId</code> stays an audit label — not raise identity.{" "}
-              <strong>Raise pays difference</strong> only (
-              <code>new − current</code>). New amount must be a whole dollar ≥
-              current + $1.
+              The same cleaned brief link may raise while its placement is
+              active. The original payer is charged only the{" "}
+              <strong>difference</strong>, and the new total must be at least
+              $1 higher.
             </td>
           </tr>
           <tr>
@@ -75,20 +72,20 @@ export function RulesCopy({ occupied }: { occupied: boolean }) {
           <tr>
             <th>Payment claims rank</th>
             <td>
-              A completed Polar payment claims the rank. Unpaid checkout stays
-              off the board until Polar reports paid. An abandoned brief is not
-              Terms as #1. We do not invent a paid brief.
+              Rank changes only after payment is confirmed. An incomplete or
+              abandoned checkout never appears on the wall.
             </td>
           </tr>
         </tbody>
       </table>
       {occupied ? (
         <p className="rules-raise" data-rules-raise="">
-          Polar charges the difference on a raise — not a new full bid. Unpaid Polar checkout stays off the wall until Polar reports paid.
+          A raise charges the original payer only the difference. The new rank
+          appears after payment is confirmed.
         </p>
       ) : null}
 
-      <h2>Weekly UTC reset</h2>
+      <h2>Rolling seven-day window</h2>
       <table>
         <tbody>
           <tr>
@@ -101,19 +98,8 @@ export function RulesCopy({ occupied }: { occupied: boolean }) {
           <tr>
             <th>Boundary</th>
             <td>
-              <strong>Rolling last 7 days. Not Monday 00:00 UTC.</strong> A brand
-              outside civil midnight does not lose the plaster on a timezone
-              tax. <code>weekId</code> stays an ISO week label (
-              <code>YYYY-Www</code>, Monday 00:00:00.000 UTC) for Polar/audit.
-            </td>
-          </tr>
-          <tr>
-            <th>
-              <code>weekId</code>
-            </th>
-            <td>
-              ISO week in UTC, <code>YYYY-Www</code> (e.g. <code>2026-W34</code>
-              ). Label only — not the live expiry.
+              Each placement keeps its own seven-day window. The wall does not
+              reset for everyone at Monday midnight.
             </td>
           </tr>
           <tr>
@@ -133,32 +119,20 @@ export function RulesCopy({ occupied }: { occupied: boolean }) {
         </tbody>
       </table>
       <p>
-        An empty week is valid. There is no #1 brief until someone pays. Do not
-        invent a listing.
+        If nobody has paid for an active placement, the wall has no #1 brief.
       </p>
 
       <h2>No fake followers</h2>
       <p>
         We never display follower counts, subscriber counts, average views,
-        engagement rate, CPM, or estimated reach. Those fields are not on the
-        card and not in the database. Public <strong>clicks</strong> on the
-        brief URL are the only counter.
+        engagement rate, CPM, or estimated reach. Public{" "}
+        <strong>clicks</strong> on the brief URL are the only counter.
       </p>
 
       <h2>Brief URL hygiene</h2>
       <ol>
-        <li>
-          Require <code>https:</code>. Reject <code>http:</code>,{" "}
-          <code>javascript:</code>, and <code>data:</code>.
-        </li>
-        <li>
-          Strip tracking and affiliate query keys: <code>utm_*</code>,{" "}
-          <code>fbclid</code>, <code>gclid</code>, <code>gbraid</code>,{" "}
-          <code>wbraid</code>, <code>mc_eid</code>, <code>ref</code>,{" "}
-          <code>ref_</code>, <code>affiliate</code>, <code>aff</code>,{" "}
-          <code>irclickid</code>. If the query is only trackers, drop it
-          entirely. Path and a non-tracker query (a brief id) may stay.
-        </li>
+        <li>Use a secure, public brief link.</li>
+        <li>Tracking, referral, and affiliate parameters are removed.</li>
         <li>
           Reject chat / invite hosts: Telegram, WhatsApp, Discord, Messenger,
           Signal, Slack invite, and similar group-chat links. The board is
@@ -169,9 +143,8 @@ export function RulesCopy({ occupied }: { occupied: boolean }) {
           NSFW, it does not belong.
         </li>
         <li>
-          Known shorteners (<code>bit.ly</code>, <code>t.co</code>,{" "}
-          <code>tinyurl.com</code>, <code>lnkd.in</code>, and similar) are
-          rejected. We do not silently replace them.
+          Link shorteners and private, local-only, credentialed, or otherwise
+          unsafe destinations are rejected.
         </li>
         <li>
           Two briefs on the same host stay distinct: identity is origin + path
@@ -179,8 +152,7 @@ export function RulesCopy({ occupied }: { occupied: boolean }) {
         </li>
       </ol>
       <p>
-        Chat / invite, NSFW, shorteners, and non-https fail as{" "}
-        <code>400</code>. No listing. No charge.{" "}
+        Rejected links never create a listing or start a charge.{" "}
         <a href="/about">About</a> · <a href="/">Back to the board</a>.
       </p>
     </main>

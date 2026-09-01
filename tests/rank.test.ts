@@ -3,7 +3,7 @@ import { test } from "node:test";
 import {
   RAISE_TOO_SMALL_COPY,
   claimNumberOneUsd,
-  isPolarPaidListing,
+  isWaffoPaidListing,
   paidListings,
   place,
   quoteCheckout,
@@ -140,7 +140,7 @@ test("raise that matches an older equal bid still sorts below it", () => {
   assert.equal(ranked[1]?.id, "challenger");
 });
 
-test("occupied raise-too-small names Polar still charges only the difference — unpaid Polar checkout stays off", () => {
+test("raise-too-small guidance is provider-neutral", () => {
   const current = listing({
     id: "raiser",
     bidUsd: 5,
@@ -154,9 +154,9 @@ test("occupied raise-too-small names Polar still charges only the difference —
     ok: false,
     error: RAISE_TOO_SMALL_COPY,
   });
-  assert.match(RAISE_TOO_SMALL_COPY, /Polar still charges only the difference/);
+  assert.match(RAISE_TOO_SMALL_COPY, /A raise charges only the difference/);
   assert.match(RAISE_TOO_SMALL_COPY, /not a new full bid/);
-  assert.match(RAISE_TOO_SMALL_COPY, /Unpaid Polar checkout stays off the wall/);
+  assert.match(RAISE_TOO_SMALL_COPY, /An incomplete checkout stays off the wall/);
   assert.doesNotMatch(RAISE_TOO_SMALL_COPY, /a new full bid of \$5/);
 });
 
@@ -201,11 +201,11 @@ test("new bid must be at least current + $1, and top + $1 to become #1", () => {
   assert.equal(overtaken[0]?.bidUsd, 11);
 });
 
-test("unpaid stays off the plaster wall — No Terms until Polar reports paid", () => {
+test("unpaid stays off the plaster wall — No Terms until Waffo reports paid", () => {
   const unpaid = listing({
     id: "lst_unpaid",
     brand: "Ghost",
-    terms: "Abandoned Polar checkout.",
+    terms: "Abandoned Waffo checkout.",
     briefUrl: "https://example.com/ghost",
     bidUsd: 99,
     createdAt: "",
@@ -213,7 +213,7 @@ test("unpaid stays off the plaster wall — No Terms until Polar reports paid", 
   const abandoned = listing({
     id: "lst_abandoned",
     brand: "Vapor Co",
-    terms: "Epoch createdAt is not Polar paid.",
+    terms: "Epoch createdAt is not Waffo paid.",
     briefUrl: "https://example.com/vapor",
     bidUsd: 80,
     createdAt: "1970-01-01T00:00:00.000Z",
@@ -227,9 +227,9 @@ test("unpaid stays off the plaster wall — No Terms until Polar reports paid", 
     createdAt: "2026-08-17T00:00:00.000Z",
   });
 
-  assert.equal(isPolarPaidListing(unpaid), false);
-  assert.equal(isPolarPaidListing(abandoned), false);
-  assert.equal(isPolarPaidListing(paid), true);
+  assert.equal(isWaffoPaidListing(unpaid), false);
+  assert.equal(isWaffoPaidListing(abandoned), false);
+  assert.equal(isWaffoPaidListing(paid), true);
   assert.deepEqual(paidListings([unpaid, abandoned]), []);
   assert.deepEqual(rankListings([unpaid, abandoned]), []);
   const ranked = rankListings([unpaid, abandoned, paid]);

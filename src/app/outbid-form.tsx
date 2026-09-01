@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { MAX_BID_USD, MIN_BID_USD } from "../lib/rank";
 
 function clampAmount(value: number): number {
@@ -8,7 +8,39 @@ function clampAmount(value: number): number {
   return Math.max(MIN_BID_USD, Math.min(MAX_BID_USD, Math.trunc(value)));
 }
 
-function BriefIdentityFields() {
+type BriefFieldName = "brand" | "terms" | "briefUrl";
+type BriefFieldChange = (field: BriefFieldName, value: string) => void;
+type BriefFieldInvalid = () => void;
+
+function BriefUrlField({
+  onFieldChange,
+}: {
+  onFieldChange: BriefFieldChange;
+}) {
+  return (
+    <label className="url primary-url" data-slot="url-input">
+      Brief URL
+      <input
+        name="briefUrl"
+        type="url"
+        required
+        placeholder="https://"
+        autoComplete="url"
+        onChange={(event) => onFieldChange("briefUrl", event.target.value)}
+      />
+    </label>
+  );
+}
+
+function BriefIdentityFields({
+  onFieldChange,
+  onInvalid,
+  includeUrl = true,
+}: {
+  onFieldChange: BriefFieldChange;
+  onInvalid?: BriefFieldInvalid;
+  includeUrl?: boolean;
+}) {
   return (
     <>
       <label className="brand">
@@ -19,6 +51,9 @@ function BriefIdentityFields() {
           required
           maxLength={80}
           autoComplete="organization"
+          placeholder="Your brand"
+          onChange={(event) => onFieldChange("brand", event.target.value)}
+          onInvalid={() => onInvalid?.()}
         />
       </label>
       <label className="terms">
@@ -29,47 +64,114 @@ function BriefIdentityFields() {
           required
           maxLength={280}
           placeholder="$800 flat, 1 TikTok"
+          onChange={(event) => onFieldChange("terms", event.target.value)}
+          onInvalid={() => onInvalid?.()}
         />
       </label>
-      <label className="url">
-        Brief URL
-        <input
-          name="briefUrl"
-          type="url"
-          required
-          placeholder="https://"
-          autoComplete="url"
-        />
-      </label>
+      {includeUrl ? <BriefUrlField onFieldChange={onFieldChange} /> : null}
     </>
   );
 }
 
-function OccupiedBriefWrite() {
+function BriefDetails({
+  children,
+  identityMarker = false,
+}: {
+  children: (onInvalid: BriefFieldInvalid) => React.ReactNode;
+  identityMarker?: boolean;
+}) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const reveal = () => {
+    if (detailsRef.current) {
+      detailsRef.current.open = true;
+    }
+  };
   return (
-    <>
-      <BriefIdentityFields />
-      <button className="outbid" type="submit">
-        Outbid
-      </button>
-    </>
-  );
-}
-
-function EmptyClaimFirstWrite() {
-  return (
-    <>
-      <button className="outbid" type="submit" data-first-click="claim">
-        Outbid
-      </button>
+    <details
+      className="brief-details"
+      data-slot="category-control"
+      ref={detailsRef}
+    >
+      <summary>
+        <span>Brief details</span>
+        <span className="brief-details-separator" aria-hidden="true">
+          ·
+        </span>
+        <span className="brief-details-meta">Brand + Terms</span>
+      </summary>
       <div
-        className="brief-identity"
-        data-brief-identity=""
-        data-later-write=""
+        className="brief-details-content"
+        data-brief-identity={identityMarker ? "" : undefined}
       >
-        <p className="later-write-label">Then the brief URL</p>
-        <BriefIdentityFields />
+        {children(reveal)}
       </div>
+    </details>
+  );
+}
+
+function OccupiedBriefWrite({
+  onFieldChange,
+  ready,
+}: {
+  onFieldChange: BriefFieldChange;
+  ready: boolean;
+}) {
+  return (
+    <>
+      <BriefUrlField onFieldChange={onFieldChange} />
+      <BriefDetails>
+        {(onInvalid) => (
+          <BriefIdentityFields
+            onFieldChange={onFieldChange}
+            onInvalid={onInvalid}
+            includeUrl={false}
+          />
+        )}
+      </BriefDetails>
+      <button
+        className="outbid"
+        data-slot="claim-button"
+        type="submit"
+        disabled={!ready}
+        aria-disabled={!ready}
+      >
+        <span className="outbid-label">Outbid</span>
+        <span className="sr-only">Claim rank</span>
+      </button>
+    </>
+  );
+}
+
+function EmptyClaimFirstWrite({
+  onFieldChange,
+  ready,
+}: {
+  onFieldChange: BriefFieldChange;
+  ready: boolean;
+}) {
+  return (
+    <>
+      <BriefUrlField onFieldChange={onFieldChange} />
+      <BriefDetails identityMarker>
+        {(onInvalid) => (
+          <BriefIdentityFields
+            onFieldChange={onFieldChange}
+            onInvalid={onInvalid}
+            includeUrl={false}
+          />
+        )}
+      </BriefDetails>
+      <button
+        className="outbid"
+        data-slot="claim-button"
+        type="submit"
+        data-first-click="claim"
+        disabled={!ready}
+        aria-disabled={!ready}
+      >
+        <span className="outbid-label">Outbid</span>
+        <span className="sr-only">Claim rank</span>
+      </button>
     </>
   );
 }
@@ -97,15 +199,16 @@ function OccupiedCheckoutCopy({
           data-raise-charge=""
           data-current-usd={topBidUsd}
         >
-          Polar charges $<span data-raise-charge-usd="">{raiseChargeUsd}</span>{" "}
-          to raise — only the difference, not a new bid.{" "}
+          Raise charge: $<span data-raise-charge-usd="">{raiseChargeUsd}</span>{" "}
+          — only the difference, not a new full bid.{" "}
         </span>
       ) : (
         <span className="raise-charge" data-raise-charge="">
-          Polar charges the difference on a raise — not a new full bid.{" "}
+          A raise charges only the difference — not a new full bid.{" "}
         </span>
       )}
-      New brief: Polar charges that full amount. Same brief URL already on the wall: Polar charges only the difference. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
+      A new brief pays the full amount. The same brief link already on the wall
+      pays only the difference. Only a confirmed checkout changes the ranking.
     </p>
   );
 }
@@ -118,13 +221,32 @@ export function OutbidForm({
   topBidUsd?: number;
 }) {
   const [amount, setAmount] = useState(() => clampAmount(defaultAmount));
+  const [brand, setBrand] = useState("");
+  const [terms, setTerms] = useState("");
+  const [briefUrl, setBriefUrl] = useState("");
   const floor = clampAmount(defaultAmount);
   const occupied = topBidUsd !== undefined;
   const takesLead = amount > (topBidUsd ?? floor - 1);
+  const formReady =
+    brand.trim().length > 0 &&
+    terms.trim().length > 0 &&
+    (() => {
+      try {
+        return new URL(briefUrl).protocol === "https:";
+      } catch {
+        return false;
+      }
+    })();
+  const onFieldChange: BriefFieldChange = (field, value) => {
+    if (field === "brand") setBrand(value);
+    if (field === "terms") setTerms(value);
+    if (field === "briefUrl") setBriefUrl(value);
+  };
 
   return (
     <aside
       className={occupied ? "paste-rail" : "paste-rail empty-claim-first"}
+      data-slot="claim-hero"
       id="claim"
       data-claim-amount={floor}
       data-top-bid={topBidUsd ?? ""}
@@ -132,11 +254,11 @@ export function OutbidForm({
       aria-label={occupied ? "Post a brief" : "Claim #1"}
     >
       <p className="paste-kicker">
-        {occupied ? "Post a brief this week" : "This week’s wall"}
+        {occupied ? "Post a brief in the rolling last 7 days" : "Rolling last 7 days wall"}
       </p>
-      <h2>
+      <h2 data-slot="claim-heading">
         <span>Claim #1 for</span>
-        <span className="amount-stepper">
+        <span className="amount-stepper" data-slot="amount-stepper">
           <button
             type="button"
             className="step"
@@ -145,11 +267,13 @@ export function OutbidForm({
           >
             −
           </button>
-          <label className="amount-field">
+          <label className="amount-field" htmlFor="bid-usd">
             $
             <input
+              id="bid-usd"
               name="bidUsd"
               form="brief-form"
+              aria-label="Bid amount in whole US dollars"
               inputMode="numeric"
               pattern="[0-9]*"
               required
@@ -182,26 +306,22 @@ export function OutbidForm({
         />
       ) : (
         <p className="claim-note">
-          Blank plaster. ${MIN_BID_USD} pastes the first flyer at #1. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
+          Blank plaster. ${MIN_BID_USD} pastes the first flyer at #1.
         </p>
-      )}
-      {occupied ? null : (
-        <>
-          <p className="empty" data-empty-week="true">
-            This week’s board is empty. The plaster is blank.
-          </p>
-          <p className="empty-hint" data-empty-window="">
-            No seeded briefs. Rank is the bid. Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
-          </p>
-        </>
       )}
       <form
         id="brief-form"
         className="outbid-form"
+        data-slot="claim-form"
         method="post"
         action="/checkout"
+        data-form-ready={formReady ? "true" : "false"}
       >
-        {occupied ? <OccupiedBriefWrite /> : <EmptyClaimFirstWrite />}
+        {occupied ? (
+          <OccupiedBriefWrite onFieldChange={onFieldChange} ready={formReady} />
+        ) : (
+          <EmptyClaimFirstWrite onFieldChange={onFieldChange} ready={formReady} />
+        )}
       </form>
     </aside>
   );

@@ -81,10 +81,10 @@ function parsePlatforms(raw: string | null): Platform[] | undefined {
 }
 
 /**
- * Polar (or the fixture) has reported paid. Empty / epoch / unpaid
+ * Waffo (or the fixture) has reported paid. Empty / epoch / unpaid
  * checkout never ranks and must not paint Terms as #1.
  */
-export function isPolarPaidListing(
+export function isWaffoPaidListing(
   listing: Pick<Listing, "createdAt">,
 ): boolean {
   const paidAt = listing.createdAt?.trim() ?? "";
@@ -99,10 +99,10 @@ export function isPolarPaidListing(
 export function paidListings<T extends Pick<Listing, "createdAt">>(
   listings: readonly T[],
 ): T[] {
-  return listings.filter(isPolarPaidListing);
+  return listings.filter(isWaffoPaidListing);
 }
 
-/** Rank is the bid. Equal bids: older createdAt, then lower id. Polar-paid only. */
+/** Rank is the bid. Equal bids: older createdAt, then lower id. Waffo-paid only. */
 export function rankListings(listings: readonly Listing[]): RankedListing[] {
   const ordered = [...paidListings(listings)].sort((a, b) => {
     if (a.bidUsd !== b.bidUsd) {
@@ -184,9 +184,9 @@ export function place(bidUsd: number): PlaceResult {
   return { ok: true, bidUsd };
 }
 
-/** Occupied raise-too-small: Polar still charges only the difference. Unpaid stays off. */
+/** Public guidance for a raise that does not clear the minimum step. */
 export const RAISE_TOO_SMALL_COPY =
-  "New bid must be at least $1 above the current bid. Polar still charges only the difference, not a new full bid. Unpaid Polar checkout stays off the wall.";
+  "New bid must be at least $1 above the current bid. A raise charges only the difference, not a new full bid. An incomplete checkout stays off the wall.";
 
 export function raise(
   listing: Pick<Listing, "bidUsd">,

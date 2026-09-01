@@ -9,7 +9,7 @@ import { listLiveBoard, nowUtc } from "../../../lib/week";
 export const metadata: Metadata = {
   title: "Raise too small · Creator Brief Wall",
   description:
-    "A raise must be at least $1 above the current bid. Unpaid Polar checkout stays off the wall.",
+    "A raise must be at least $1 above the current bid. Incomplete checkout does not rank.",
 };
 
 export const runtime = "nodejs";

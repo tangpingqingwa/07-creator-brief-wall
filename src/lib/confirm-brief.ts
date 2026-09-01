@@ -10,7 +10,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-/** Confirm sheet HTML. Terms + URL first. Occupied hops stay a later fact after terms. Occupied $bid stays a later fact after terms. Occupied Terms stay the prize over brand. Occupied uncounted preview recedes after terms. Leave is POST /r/:id. GET does not count. */
+/** Confirm sheet HTML. Terms + URL first. Occupied hops stay a later fact after terms. Occupied $bid stays a later fact after terms. Occupied Terms stay the prize over brand. Occupied uncounted preview recedes after terms. Occupied brief URL recedes after terms. Leave is POST /r/:id. GET does not count. */
 export function confirmBriefHtml(listing: Listing): string {
   const url = outboundBriefUrl(listing.briefUrl);
   const brand = escapeHtml(listing.brand);

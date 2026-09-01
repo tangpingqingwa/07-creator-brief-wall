@@ -4,7 +4,7 @@ import {
   rankListings,
   type RankedListing,
 } from "../lib/rank";
-import { BoardChrome, OccupiedFlyers } from "../lib/board-markup";
+import { BoardCards, BoardChrome, HomeRail } from "../lib/board-markup";
 import { OutbidForm } from "./outbid-form";
 
 export function Board({
@@ -24,15 +24,13 @@ export function Board({
     />
   );
   return (
-    <BoardChrome weekId={weekId} occupied={occupied}>
-      {occupied ? (
-        <>
-          <OccupiedFlyers listings={paid} />
-          {claim}
-        </>
-      ) : (
-        claim
-      )}
+    <BoardChrome
+      weekId={weekId}
+      occupied={occupied}
+    >
+      {claim}
+      <HomeRail />
+      <BoardCards listings={paid} />
     </BoardChrome>
   );
 }

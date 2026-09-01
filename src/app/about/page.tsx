@@ -9,7 +9,7 @@ import { AboutCopy } from "../../lib/about-copy";
 export const metadata: Metadata = {
   title: "About · Creator Brief Wall",
   description:
-    "No ads, no API keys, no revenue share. Brands pay to be seen by creators. Rank is the bid.",
+    "Brands pay to place their briefs in front of creators. Rank is the bid.",
 };
 
 export const runtime = "nodejs";

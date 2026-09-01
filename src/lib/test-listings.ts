@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { AppDb } from "./db";
 import { place, raise, type Listing } from "./rank";
 
-/** Test-only fixture money. Not a Polar client. Do not call from production routes. */
+/** Test-only fixture money. Not a Waffo client. Do not call from production routes. */
 export const TEST_ONLY_FIXTURE = true;
 
 export type FixtureListingInput = {

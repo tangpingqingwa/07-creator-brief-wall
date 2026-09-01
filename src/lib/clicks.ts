@@ -1,7 +1,7 @@
 import type { AppDb, ListingRow } from "./db";
-import { isPolarPaidListing, listingFromRow, type Listing } from "./rank";
+import { isWaffoPaidListing, listingFromRow, type Listing } from "./rank";
 import { outboundBriefUrl } from "./urls";
-import { hasCompletedPolarPayment } from "./week";
+import { bidInRollingWeek, hasCompletedWaffoPayment, nowUtc } from "./week";
 
 export class ClickError extends Error {
   readonly httpStatus: number;
@@ -40,14 +40,19 @@ function outboundHop(listing: Listing): string {
   }
 }
 
-/** Load a Polar-paid listing for the confirm sheet. Does not count a click. */
-export function getPublicListing(db: AppDb, listingId: string): Listing {
+/** Load a Waffo-paid listing for the confirm sheet. Does not count a click. */
+export function getPublicListing(
+  db: AppDb,
+  listingId: string,
+  now: Date = nowUtc(),
+): Listing {
   const id = listingId.trim();
   const listing = id ? loadListing(db, id) : undefined;
   if (
     !listing ||
-    !isPolarPaidListing(listing) ||
-    !hasCompletedPolarPayment(db, listing.id)
+    !isWaffoPaidListing(listing) ||
+    !hasCompletedWaffoPayment(db, listing.id) ||
+    !bidInRollingWeek(listing.createdAt, now)
   ) {
     throw new ClickError("listing_not_found", 404);
   }
@@ -59,8 +64,12 @@ export function getPublicListing(db: AppDb, listingId: string): Listing {
  * One increment per successful redirect decision. 302 target is the stored
  * canonical brief URL; we never add trackers. GET confirm does not call this.
  */
-export function incrementPublicClick(db: AppDb, listingId: string): ClickHop {
-  const listing = getPublicListing(db, listingId);
+export function incrementPublicClick(
+  db: AppDb,
+  listingId: string,
+  now: Date = nowUtc(),
+): ClickHop {
+  const listing = getPublicListing(db, listingId, now);
   const url = outboundHop(listing);
 
   db.prepare(`UPDATE listings SET clicks = clicks + 1 WHERE id = ?`).run(listing.id);

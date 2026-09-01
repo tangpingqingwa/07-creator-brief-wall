@@ -1,6 +1,6 @@
 import type { AppDb, ListingRow } from "./db";
 import {
-  isPolarPaidListing,
+  isWaffoPaidListing,
   listingFromRow,
   rankListings,
   type RankedListing,
@@ -8,7 +8,7 @@ import {
 
 /**
  * Public wall window is rolling last 7 days from paid placement.
- * ISO `weekId` (`YYYY-Www`) remains a Monday 00:00 UTC Polar/audit label.
+ * ISO `weekId` (`YYYY-Www`) remains a Monday 00:00 UTC Waffo/audit label.
  * Rank does not expire at civil Monday midnight.
  */
 
@@ -19,7 +19,7 @@ export type UtcWeek = {
 };
 
 const DAY_MS = 86_400_000;
-/** Inclusive length of the public week window. Not a Monday midnight bucket. */
+/** Fixed duration of the public week window. Not a Monday midnight bucket. */
 export const ROLLING_WEEK_MS = 7 * DAY_MS;
 const WEEK_ID_RE = /^(\d{4})-W(\d{2})$/;
 
@@ -64,7 +64,7 @@ export function nextResetUtc(now: Date = nowUtc()): Date {
   return new Date(weekStartUtc(now).getTime() + 7 * DAY_MS);
 }
 
-/** Inclusive start of the rolling last-7-days window. Not civil midnight. */
+/** Lower bound of the rolling last-7-days window. The exact boundary is expired. */
 export function rollingWeekStart(now: Date = nowUtc()): Date {
   return new Date(now.getTime() - ROLLING_WEEK_MS);
 }
@@ -79,10 +79,10 @@ export function bidInRollingWeek(
     return false;
   }
   const t = now.getTime();
-  return paid >= t - ROLLING_WEEK_MS && paid <= t;
+  return paid > t - ROLLING_WEEK_MS && paid <= t;
 }
 
-/** ISO week id in UTC, e.g. `2026-W34`. Polar/audit label, not the live filter. */
+/** ISO week id in UTC, e.g. `2026-W34`. Waffo/audit label, not the live filter. */
 export function utcWeekId(now: Date = nowUtc()): string {
   const thursday = utcMidnight(now);
   const day = thursday.getUTCDay() || 7;
@@ -130,8 +130,8 @@ export function isLiveWeekId(
   return listingWeekId === utcWeekId(now);
 }
 
-/** Polar (or the fixture) wrote a completed payment for this listing. */
-export function hasCompletedPolarPayment(
+/** Waffo (or the fixture) wrote a completed payment for this listing. */
+export function hasCompletedWaffoPayment(
   db: AppDb,
   listingId: string,
 ): boolean {
@@ -145,7 +145,7 @@ export function hasCompletedPolarPayment(
 }
 
 /**
- * Live board rows: Polar-paid `created_at` in the rolling last 7 days.
+ * Live board rows: Waffo-paid `created_at` in the rolling last 7 days.
  * Unpaid / abandoned checkout never occupies the plaster.
  * `weekId` stays an audit label. Rows stay in the table after they age out.
  */
@@ -171,7 +171,7 @@ export function listLiveBoard(
       .map(listingFromRow)
       .filter(
         (row) =>
-          isPolarPaidListing(row) && bidInRollingWeek(row.createdAt, now),
+          isWaffoPaidListing(row) && bidInRollingWeek(row.createdAt, now),
       ),
   );
 }

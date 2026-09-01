@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getDb } from "../../../lib/db";
 import {
   CheckoutError,
-  getPolarPort,
-  isPolarLive,
+  getPaymentPort,
+  isWaffoLive,
   parseCheckoutInput,
   planCheckout,
   recordOpenCheckout,
@@ -18,9 +18,8 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const draft = await readDraft(request);
     const quote = planCheckout(getDb(), draft);
-    const port = getPolarPort();
-    const successUrl =
-      process.env.POLAR_SUCCESS_URL?.trim() || `${origin}/checkout/return`;
+    const port = getPaymentPort();
+    const successUrl = `${origin}/checkout/complete`;
     const started = await port.createCheckout({
       amountUsd: quote.chargeUsd,
       listingDraft: draft,
@@ -43,12 +42,15 @@ export async function POST(request: Request): Promise<Response> {
         { status: error.httpStatus },
       );
     }
-    if (error instanceof Error && error.message.startsWith("BLOCKED-SECRET")) {
+    if (
+      error instanceof Error &&
+      /^(BLOCKED-SECRET|BLOCKED-CONFIG)/.test(error.message)
+    ) {
       return Response.json({ error: error.message }, { status: 503 });
     }
-    if (isPolarLive()) {
+    if (isWaffoLive()) {
       return Response.json(
-        { error: error instanceof Error ? error.message : "Polar checkout failed" },
+        { error: error instanceof Error ? error.message : "Waffo checkout failed" },
         { status: 503 },
       );
     }

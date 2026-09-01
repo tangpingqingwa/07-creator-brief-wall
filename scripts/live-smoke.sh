@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Operator smoke against a local process. Not called from scripts/test.sh or CI.
 # Walks SPEC §11: health, empty board, about/rules, fixture place/outbid/raise/tie,
-# click hop, chat/NSFW reject, WEEK_NOW reset, live Polar missing token.
-# Default process: Polar unset + POLAR_FIXTURE_ONLY=1. Missing Polar secret →
-# BLOCKED-SECRET: POLAR_ACCESS_TOKEN. Do not invent follower counts or unpaid listings.
-# Live Polar (POLAR_LIVE=1 + secrets): a second live-flagged process must return a
-# real sandbox.polar.sh Checkout URL. Never treat a fixture listing as live Polar.
+# click hop, chat/NSFW reject, WEEK_NOW reset, and fail-closed Waffo config.
+# The smoke process always starts with explicit WAFFO_MODE=fixture and never
+# calls a provider. A separate waffo-prod probe verifies missing configuration
+# is rejected by the framework as a non-secret 5xx before provider I/O.
 # Serves the real Next.js process (`next start`) after `next build`.
 set -euo pipefail
 
@@ -47,14 +46,8 @@ RESULT_LOG=""
 BASE="${LIVE_SMOKE_BASE:-}"
 OWNED_PROCESS=0
 
-# Capture operator Polar flags before the fixture process unsets them.
-OP_POLAR_LIVE="${POLAR_LIVE:-}"
-OP_POLAR_ACCESS_TOKEN="${POLAR_ACCESS_TOKEN:-}"
-OP_POLAR_WEBHOOK_SECRET="${POLAR_WEBHOOK_SECRET:-}"
-OP_POLAR_PRODUCT_ID="${POLAR_PRODUCT_ID:-}"
-OP_POLAR_SUCCESS_URL="${POLAR_SUCCESS_URL:-}"
-OP_POLAR_API_BASE="${POLAR_API_BASE:-}"
-OP_POLAR_FIXTURE_ONLY="${POLAR_FIXTURE_ONLY:-}"
+# Capture only non-secret operator context before the fixture process unsets it.
+OP_WAFFO_MODE="${WAFFO_MODE:-}"
 
 kill_tree() {
   local pid="${1:-}"
@@ -124,6 +117,17 @@ record() {
   esac
 }
 
+is_non_secret_5xx() {
+  local code="$1"
+  [[ "$code" =~ ^5[0-9][0-9]$ ]]
+}
+
+non_secret_body() {
+  local body="$1"
+  [[ -s "$body" ]] || return 1
+  ! grep -Eiq -- 'BEGIN (RSA |EC |OPENSSH )?(PRIVATE|PUBLIC) KEY|WAFFO_PRIVATE_KEY=|access[_ -]?token=' "$body"
+}
+
 pick_port() {
   node --input-type=module -e '
     import net from "node:net";
@@ -168,18 +172,24 @@ start_next() {
   shift 2
   (
     cd "$root"
-    unset POLAR_LIVE POLAR_ACCESS_TOKEN POLAR_WEBHOOK_SECRET POLAR_SUCCESS_URL \
-      POLAR_PRODUCT_ID POLAR_FIXTURE_ONLY POLAR_API_BASE WEEK_NOW || true
-    export POLAR_FIXTURE_ONLY=1
+    unset WAFFO_API_BASE WAFFO_MERCHANT_ID \
+      WAFFO_PRIVATE_KEY WAFFO_PRIVATE_KEY_FILE WAFFO_STORE_ID WAFFO_PRODUCT_ID \
+      WAFFO_WEBHOOK_TEST_PUBLIC_KEY WAFFO_WEBHOOK_PROD_PUBLIC_KEY WAFFO_LIVE \
+      WAFFO_ENVIRONMENT WAFFO_SUCCESS_URL WAFFO_STORE_SLUG WEEK_NOW NODE_ENV || true
+    export WAFFO_MODE=fixture
+    # Explicitly mask any stale .env.local live switch. Fixture smoke must be
+    # offline even when an operator's shell has production-era dotenv values.
+    export WAFFO_LIVE=
+    # `next start` defaults NODE_ENV to production; the local smoke is an
+    # explicitly non-production fixture process. The production probe below
+    # overrides this to production after its mode-scoped empty values.
+    export NODE_ENV=development
     export PORT="${port}"
     export DATABASE_PATH="${DB_PATH}"
     export PUBLIC_BASE_URL="http://127.0.0.1:${port}"
     export NEXT_TELEMETRY_DISABLED=1
     while [[ $# -gt 0 ]]; do
       case "$1" in
-        *=)
-          unset "${1%=}" || true
-          ;;
         *)
           export "$1"
           ;;
@@ -281,7 +291,7 @@ card_attr() {
     const html = readFileSync(process.argv[1], "utf8");
     const brand = process.argv[2];
     const key = process.argv[3];
-    const cards = [...html.matchAll(/<li\b[^>]*class="card"[^>]*>[\s\S]*?<\/li>/g)].map((m) => m[0]);
+    const cards = [...html.matchAll(/<li\b[^>]*class="[^"]*\bcard\b[^"]*"[^>]*>[\s\S]*?<\/li>/g)].map((m) => m[0]);
     for (const card of cards) {
       const brandMatch = card.match(/data-brand="([^"]*)"/);
       if (!brandMatch || brandMatch[1] !== brand) continue;
@@ -301,7 +311,7 @@ card_text_has() {
     const html = readFileSync(process.argv[1], "utf8");
     const brand = process.argv[2];
     const needle = process.argv[3];
-    const cards = [...html.matchAll(/<li\b[^>]*class="card"[^>]*>[\s\S]*?<\/li>/g)].map((m) => m[0]);
+    const cards = [...html.matchAll(/<li\b[^>]*class="[^"]*\bcard\b[^"]*"[^>]*>[\s\S]*?<\/li>/g)].map((m) => m[0]);
     for (const card of cards) {
       const brandMatch = card.match(/data-brand="([^"]*)"/);
       if (!brandMatch || brandMatch[1] !== brand) continue;
@@ -333,7 +343,7 @@ complete_fixture_return() {
   local return_body="$3"
   local path
   path="$(return_path_from_location "$loc" || true)"
-  if [[ -z "$path" || "$path" != /checkout/return* ]]; then
+  if [[ -z "$path" || "$path" != /checkout/complete* ]]; then
     echo "nolocation"
     return 0
   fi
@@ -410,8 +420,8 @@ if [[ -z "${BASE}" ]]; then
   BASE="http://127.0.0.1:${PORT}"
   LOG_PATH="${WORKDIR}/server.log"
   echo "starting local fixture process on ${BASE}"
-  echo "POLAR_FIXTURE_ONLY=1 (fixture checkout is a received pay)"
-  STARTED_PID="$(start_next "$PORT" "$LOG_PATH" "POLAR_FIXTURE_ONLY=1")"
+  echo "WAFFO_MODE=fixture (offline fixture checkout)"
+  STARTED_PID="$(start_next "$PORT" "$LOG_PATH" "WAFFO_MODE=fixture")"
   OWNED_PROCESS=1
   if ! wait_health "$BASE"; then
     echo "server log:" >&2
@@ -427,19 +437,8 @@ else
 fi
 
 echo "base=${BASE}"
-echo "operator POLAR_LIVE=${OP_POLAR_LIVE:-<unset>}"
-if [[ -n "${OP_POLAR_ACCESS_TOKEN}" ]]; then
-  echo "operator POLAR_ACCESS_TOKEN=<set>"
-else
-  echo "operator POLAR_ACCESS_TOKEN=<unset>"
-fi
-if [[ -n "${OP_POLAR_PRODUCT_ID}" ]]; then
-  echo "operator POLAR_PRODUCT_ID=<set>"
-else
-  echo "operator POLAR_PRODUCT_ID=<unset>"
-fi
-echo "operator POLAR_API_BASE=${OP_POLAR_API_BASE:-<unset>}"
-echo "operator POLAR_FIXTURE_ONLY=${OP_POLAR_FIXTURE_ONLY:-<unset>}"
+echo "operator WAFFO_MODE=${OP_WAFFO_MODE:-<unset>} (ignored for fixture smoke)"
+echo "provider calls=0 (fixture mode)"
 
 # --- health ---
 health_body="${WORKDIR}/healthz.json"
@@ -487,17 +486,16 @@ rules_body="${WORKDIR}/rules.html"
 rules_code="$(http_get "$BASE" "/rules" "$rules_body" || true)"
 if [[ "$about_code" == "200" && "$rules_code" == "200" ]] \
   && html_has "$about_body" 'Rank is the bid' \
-  && html_has "$about_body" '[Ww]eekly' \
+  && html_has "$about_body" 'seven-day placement window' \
   && html_has "$rules_body" 'Rank is the bid' \
-  && html_has "$rules_body" 'Monday 00:00' \
-  && html_has "$rules_body" 'Rolling last 7 days' \
-  && html_has "$rules_body" '[Ww]eekly'; then
+  && html_has "$rules_body" 'Rolling last 7 days from paid placement' \
+  && html_has "$rules_body" 'does not reset for everyone at Monday midnight'; then
   record "about-rules" "PASS" "GET /about and /rules 200; rank is the bid; rolling last 7 days"
 else
   record "about-rules" "FAIL" "about HTTP ${about_code} rules HTTP ${rules_code}"
 fi
 
-# --- place $5 (fixture Polar) ---
+# --- place $5 (fixture Waffo) ---
 unpaid_body="${WORKDIR}/place-unpaid.json"
 unpaid_hdrs="${WORKDIR}/place-unpaid.hdrs"
 unpaid_code="$(http_post_json "$BASE" "/checkout" \
@@ -666,7 +664,7 @@ else
   RESET_BASE="http://127.0.0.1:${RESET_PORT}"
   RESET_LOG="${WORKDIR}/reset.log"
   RESET_PID="$(start_next "$RESET_PORT" "$RESET_LOG" \
-    "POLAR_FIXTURE_ONLY=1" \
+    "WAFFO_MODE=fixture" \
     "WEEK_NOW=2099-01-05T00:00:00.000Z")"
   if ! wait_health "$RESET_BASE"; then
     echo "reset server log:" >&2
@@ -691,116 +689,61 @@ else
   fi
 fi
 
-# --- secret: live Polar missing token ---
-# Dedicated process: POLAR_LIVE=1, fixture-only unset, token unset.
-echo "== polar live missing token =="
+# --- production configuration: fail closed before provider I/O ---
+echo "== waffo production config is fail-closed =="
 LIVE_PORT="$(pick_port)"
-LIVE_DB="${WORKDIR}/polar-live.sqlite"
-LIVE_LOG="${WORKDIR}/polar-live.log"
+LIVE_DB="${WORKDIR}/waffo-prod.sqlite"
+LIVE_LOG="${WORKDIR}/waffo-prod.log"
 LIVE_BASE="http://127.0.0.1:${LIVE_PORT}"
 LIVE_PID="$(
   DB_PATH="${LIVE_DB}" start_next "$LIVE_PORT" "$LIVE_LOG" \
-    "POLAR_LIVE=1" \
-    "POLAR_FIXTURE_ONLY=" \
-    "POLAR_ACCESS_TOKEN=" \
-    "POLAR_WEBHOOK_SECRET=" \
-    "POLAR_PRODUCT_ID="
+    "WAFFO_MODE=waffo-prod" \
+    "NODE_ENV=production" \
+    "WAFFO_MERCHANT_ID=" \
+    "WAFFO_PRIVATE_KEY=" \
+    "WAFFO_PRIVATE_KEY_FILE=" \
+    "WAFFO_STORE_ID=" \
+    "WAFFO_PRODUCT_ID=" \
+    "WAFFO_WEBHOOK_PROD_PUBLIC_KEY=" \
+    "WAFFO_API_BASE=https://api.waffo.ai"
 )"
-if ! wait_health "$LIVE_BASE"; then
-  if grep -q 'BLOCKED-SECRET: POLAR_ACCESS_TOKEN' "${LIVE_LOG}"; then
-    echo "BLOCKED-SECRET: POLAR_ACCESS_TOKEN"
-    record "secret" "BLOCKED-SECRET" "POLAR_ACCESS_TOKEN"
-  else
-    echo "live Polar process log:" >&2
-    cat "${LIVE_LOG}" >&2 || true
-    record "secret" "FAIL" "live Polar process did not become healthy"
+live_health_body="${WORKDIR}/live-health.json"
+live_page_body="${WORKDIR}/live-page.html"
+live_click_body="${WORKDIR}/live-click.html"
+live_health_code=""
+for _ in $(seq 1 20); do
+  live_health_code="$(curl -sS -o "$live_health_body" -w "%{http_code}" \
+    --connect-timeout 2 --max-time 5 "${LIVE_BASE}/healthz" || true)"
+  if [[ "$live_health_code" != "000" && -n "$live_health_code" ]]; then
+    break
   fi
+  sleep 0.25
+done
+live_page_code="$(http_get "$LIVE_BASE" "/" "$live_page_body" || true)"
+live_click_code="$(http_get "$LIVE_BASE" "/r/does-not-exist" "$live_click_body" || true)"
+if is_non_secret_5xx "$live_health_code" \
+  && is_non_secret_5xx "$live_page_code" \
+  && is_non_secret_5xx "$live_click_code" \
+  && non_secret_body "$live_health_body" \
+  && non_secret_body "$live_page_body" \
+  && non_secret_body "$live_click_body" \
+  && grep -qF 'BLOCKED-SECRET: WAFFO_MERCHANT_ID' "$LIVE_LOG"; then
+  echo "BLOCKED-SECRET: WAFFO_MERCHANT_ID"
+  record "secret" "BLOCKED-SECRET" "Next instrumentation rejected health/page/click with non-secret 5xx before provider I/O; provider calls=0"
 else
-  live_body="${WORKDIR}/live.json"
-  live_hdrs="${WORKDIR}/live.hdrs"
-  live_code="$(http_post_json "$LIVE_BASE" "/checkout" \
-    "{\"brand\":\"Live Polar Brand\",\"terms\":\"must not list without token\",\"briefUrl\":\"https://live.example/smoke-${STAMP}\",\"bidUsd\":5}" \
-    "$live_body" "$live_hdrs" || true)"
-  live_err="$(json_field "$live_body" "error" || true)"
-  live_board="${WORKDIR}/live-board.html"
-  http_get "$LIVE_BASE" "/" "$live_board" >/dev/null || true
-  if html_has "$live_board" 'Live Polar Brand'; then
-    record "secret" "FAIL" "unpaid live Polar session appeared on the board"
-  elif [[ "$live_code" == "503" ]] \
-    && [[ "$live_err" == "BLOCKED-SECRET: POLAR_ACCESS_TOKEN" ]]; then
-    echo "BLOCKED-SECRET: POLAR_ACCESS_TOKEN"
-    record "secret" "BLOCKED-SECRET" "POLAR_ACCESS_TOKEN"
-  elif grep -q 'BLOCKED-SECRET: POLAR_ACCESS_TOKEN' "$live_body" "${LIVE_LOG}"; then
-    echo "BLOCKED-SECRET: POLAR_ACCESS_TOKEN"
-    record "secret" "BLOCKED-SECRET" "POLAR_ACCESS_TOKEN"
-  else
-    record "secret" "FAIL" "POLAR_LIVE=1 missing token HTTP ${live_code} error=${live_err}"
-  fi
+  echo "waffo-prod process log:" >&2
+  cat "${LIVE_LOG}" >&2 || true
+  record "secret" "FAIL" "expected non-secret 5xx for health/page/click, got health=${live_health_code} page=${live_page_code} click=${live_click_code}"
 fi
 if [[ -n "${LIVE_PID}" ]]; then
   stop_http "${LIVE_PID}" "${LIVE_PORT}"
 fi
 LIVE_PID=""
 
-# --- live Polar sandbox checkout (operator secrets; never a fixture listing) ---
-echo "== polar live sandbox checkout =="
-if [[ "${OP_POLAR_LIVE}" != "1" || "${OP_POLAR_FIXTURE_ONLY}" == "1" ]]; then
-  record "live-polar-checkout" "PASS-ERROR" "POLAR_LIVE not live-flagged; did not invent a paid row"
-elif [[ -z "${OP_POLAR_ACCESS_TOKEN}" ]]; then
-  echo "BLOCKED-SECRET: POLAR_ACCESS_TOKEN"
-  record "live-polar-checkout" "BLOCKED-SECRET" "POLAR_ACCESS_TOKEN"
-elif [[ -z "${OP_POLAR_PRODUCT_ID}" ]]; then
-  echo "BLOCKED-SECRET: POLAR_PRODUCT_ID"
-  record "live-polar-checkout" "BLOCKED-SECRET" "POLAR_PRODUCT_ID"
-else
-  LIVE_PORT="$(pick_port)"
-  LIVE_DB="${WORKDIR}/polar-sandbox.sqlite"
-  LIVE_LOG="${WORKDIR}/polar-sandbox.log"
-  LIVE_BASE="http://127.0.0.1:${LIVE_PORT}"
-  LIVE_SUCCESS="${OP_POLAR_SUCCESS_URL:-${LIVE_BASE}/checkout/return}"
-  LIVE_API_BASE="${OP_POLAR_API_BASE:-https://sandbox-api.polar.sh}"
-  LIVE_PID="$(
-    DB_PATH="${LIVE_DB}" start_next "$LIVE_PORT" "$LIVE_LOG" \
-      "POLAR_LIVE=1" \
-      "POLAR_FIXTURE_ONLY=" \
-      "POLAR_ACCESS_TOKEN=${OP_POLAR_ACCESS_TOKEN}" \
-      "POLAR_WEBHOOK_SECRET=${OP_POLAR_WEBHOOK_SECRET:-}" \
-      "POLAR_PRODUCT_ID=${OP_POLAR_PRODUCT_ID}" \
-      "POLAR_SUCCESS_URL=${LIVE_SUCCESS}" \
-      "POLAR_API_BASE=${LIVE_API_BASE}"
-  )"
-  if ! wait_health "$LIVE_BASE"; then
-    echo "live Polar sandbox process log:" >&2
-    cat "${LIVE_LOG}" >&2 || true
-    record "live-polar-checkout" "FAIL" "live Polar sandbox process did not become healthy"
-  else
-    live_pay_body="${WORKDIR}/live-pay.json"
-    live_pay_hdrs="${WORKDIR}/live-pay.hdrs"
-    live_pay_code="$(http_post_json "$LIVE_BASE" "/checkout" \
-      "{\"brand\":\"Live Polar Sandbox ${STAMP}\",\"terms\":\"sandbox checkout must not list unpaid\",\"briefUrl\":\"https://live-sandbox.example/smoke-${STAMP}\",\"bidUsd\":5}" \
-      "$live_pay_body" "$live_pay_hdrs" || true)"
-    live_pay_loc="$(header_value "$live_pay_hdrs" "location" || true)"
-    live_pay_err="$(json_field "$live_pay_body" "error" || true)"
-    live_pay_board="${WORKDIR}/live-pay-board.html"
-    http_get "$LIVE_BASE" "/" "$live_pay_board" >/dev/null || true
-    if html_has "$live_pay_board" "Live Polar Sandbox ${STAMP}"; then
-      record "live-polar-checkout" "FAIL" "unpaid live Polar session appeared on the board"
-    elif [[ "$live_pay_code" =~ ^30[12378]$ ]] \
-      && [[ "$live_pay_loc" == https://sandbox.polar.sh/* ]]; then
-      record "live-polar-checkout" "PASS" "live Polar sandbox Checkout URL; unpaid session not listed"
-    elif [[ "$live_pay_code" == "503" ]] \
-      && [[ "$live_pay_err" == BLOCKED-SECRET:* ]]; then
-      echo "${live_pay_err}"
-      record "live-polar-checkout" "BLOCKED-SECRET" "${live_pay_err#BLOCKED-SECRET: }"
-    else
-      record "live-polar-checkout" "FAIL" "POLAR_LIVE=1 HTTP ${live_pay_code} loc_host=$(printf '%s' "$live_pay_loc" | sed -E 's#https?://([^/]+).*#\1#') error=${live_pay_err}"
-    fi
-  fi
-  if [[ -n "${LIVE_PID}" ]]; then
-    stop_http "${LIVE_PID}" "${LIVE_PORT}"
-  fi
-  LIVE_PID=""
-fi
+# A real production checkout is deliberately outside this smoke: it requires
+# stable public HTTPS, durable storage, registered `/webhooks/waffo`, and an
+# operator-approved deployment. No provider call is made here.
+record "live-waffo-checkout" "PASS-ERROR" "waffo-prod checkout intentionally not called; provider calls=0; requires public HTTPS + webhook registration"
 
 echo
 echo "== summary =="

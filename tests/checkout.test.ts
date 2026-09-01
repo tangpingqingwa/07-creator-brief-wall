@@ -1,25 +1,21 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { openDatabase, resetDbCache, type ListingRow } from "../src/lib/db";
+import { getDb, openDatabase, resetDbCache, type ListingRow } from "../src/lib/db";
 import {
   CheckoutError,
-  FakePolarPort,
-  LivePolarPort,
-  POLAR_API_BASE,
-  applyPaidListing,
+  FixturePaymentPort,
+  applyVerifiedPaidEvent,
   findListingByBrief,
-  getPolarPort,
+  getPaymentPort,
   handleCheckoutReturn,
-  isPolarLive,
   parseBidUsd,
   planCheckout,
-  polarApiBase,
+  recordOpenCheckout,
 } from "../src/lib/polar";
 import { Board } from "../src/app/board";
 import { AboutCopy } from "../src/lib/about-copy";
@@ -32,7 +28,7 @@ import {
 import { findLiveListingByBrief, listLiveBoard, utcWeekId } from "../src/lib/week";
 
 const WEEK = "2026-W34";
-const SUCCESS_URL = "http://127.0.0.1:3000/checkout/return";
+const SUCCESS_URL = "http://127.0.0.1:3000/checkout/complete";
 
 function draft(overrides: Partial<{
   weekId: string;
@@ -97,10 +93,10 @@ async function withDatabasePath(
   }
 }
 
-test("FakePolarPort $5 appears on the board after completion", async () => {
+test("FixturePaymentPort $5 appears on the board after completion", async () => {
   const db = openDatabase(":memory:");
-  const polar = new FakePolarPort(db);
-  const started = await polar.createCheckout({
+  const waffo = new FixturePaymentPort(db);
+  const started = await waffo.createCheckout({
     amountUsd: 5,
     listingDraft: draft(),
     successUrl: SUCCESS_URL,
@@ -111,7 +107,7 @@ test("FakePolarPort $5 appears on the board after completion", async () => {
   };
   assert.equal(unpaid.n, 0);
 
-  const listing = await polar.completeCheckout(started.checkoutId);
+  const listing = await waffo.completeCheckout(started.checkoutId);
   assert.ok(listing);
   assert.equal(listing.brand, "Acme");
   assert.equal(listing.bidUsd, 5);
@@ -135,32 +131,32 @@ test("FakePolarPort $5 appears on the board after completion", async () => {
   assert.match(occupiedHtml, /data-raise-difference=""/);
   assert.match(
     occupiedHtml,
-    /Polar charges \$<span data-raise-charge-usd="">1<\/span> to raise — only the difference, not a new bid/,
+    /Raise charge: \$<span data-raise-charge-usd="">1<\/span> — only the difference, not a new full bid/,
   );
   assert.match(
     occupiedHtml,
-    /Same brief URL already on the wall: Polar charges only the difference/,
+    /same brief link already on the wall[\s\S]*pays only the difference/,
   );
   assert.match(
     occupiedHtml,
-    /Unpaid checkout stays off the board until Polar reports paid/,
+    /Only a confirmed checkout changes the ranking/,
   );
   assert.match(occupiedHtml, /data-first-click="open"/);
   assert.match(occupiedHtml, /class="terms-label">Terms/);
-  // occupied checkout copy names Polar raise-pays-difference — unpaid stays off
+  // occupied checkout copy names Waffo raise-pays-difference — unpaid stays off
 });
 
-test("unpaid Polar checkout stays off the plaster until Polar reports paid", async () => {
+test("unpaid Waffo checkout stays off the plaster until Waffo reports paid", async () => {
   const db = openDatabase(":memory:");
-  const polar = new FakePolarPort(db);
+  const waffo = new FixturePaymentPort(db);
   const previousWeekNow = process.env.WEEK_NOW;
   process.env.WEEK_NOW = "2026-08-17T00:00:00.000Z";
   try {
-    const started = await polar.createCheckout({
+    const started = await waffo.createCheckout({
       amountUsd: 5,
       listingDraft: draft({
         brand: "Ghost",
-        terms: "Abandoned Polar checkout.",
+        terms: "Abandoned Waffo checkout.",
         briefUrl: "https://example.com/ghost",
       }),
       successUrl: SUCCESS_URL,
@@ -173,27 +169,47 @@ test("unpaid Polar checkout stays off the plaster until Polar reports paid", asy
     assert.match(leftoverHtml, /data-occupied="false"/);
     assert.match(leftoverHtml, /Claim #1 for/);
     assert.match(leftoverHtml, /data-first-click="claim"/);
-    assert.match(leftoverHtml, /Then the brief URL/);
+    assert.match(leftoverHtml, /data-brief-identity=""/);
+    assert.match(leftoverHtml, /name="brand"/);
+    assert.match(leftoverHtml, /name="terms"/);
+    assert.match(leftoverHtml, /name="briefUrl"/);
+    const briefUrlAt = leftoverHtml.indexOf('name="briefUrl"');
+    const identityAt = leftoverHtml.indexOf('data-brief-identity=""');
+    const brandAt = leftoverHtml.indexOf('name="brand"');
+    const termsAt = leftoverHtml.indexOf('name="terms"');
+    const submitAt = leftoverHtml.indexOf('data-first-click="claim"');
+    const outbidAt = leftoverHtml.indexOf(">Claim rank<");
+    assert.ok(
+      briefUrlAt >= 0 &&
+        briefUrlAt < identityAt &&
+        identityAt < brandAt &&
+        brandAt < termsAt &&
+        termsAt < submitAt &&
+        submitAt <= outbidAt,
+    );
+    assert.doesNotMatch(
+      leftoverHtml,
+      /data-later-write|later-write-label|Then the brief URL|formNoValidate/,
+    );
     assert.match(
       leftoverHtml,
-      /Unpaid checkout stays off the board until Polar reports paid/,
+      /An incomplete checkout never creates a #1 brief/,
     );
-    assert.match(leftoverHtml, /An abandoned brief is not Terms as #1/);
     assert.doesNotMatch(leftoverHtml, /data-raise-difference/);
-    assert.doesNotMatch(leftoverHtml, /Polar charges only the difference/);
-    assert.doesNotMatch(leftoverHtml, /Ghost|Abandoned Polar checkout/);
+    assert.doesNotMatch(leftoverHtml, /Waffo charges only the difference/);
+    assert.doesNotMatch(leftoverHtml, /Ghost|Abandoned Waffo checkout/);
     assert.doesNotMatch(leftoverHtml, /data-prize=/);
     assert.doesNotMatch(leftoverHtml, /Open brief/);
     assert.doesNotMatch(leftoverHtml, /Post a brief/);
     assert.doesNotMatch(leftoverHtml, /data-first-click="open"/);
 
-    await polar.abandonCheckout(started.checkoutId);
-    assert.equal(await polar.completeCheckout(started.checkoutId), null);
+    await waffo.abandonCheckout(started.checkoutId);
+    assert.equal(await waffo.completeCheckout(started.checkoutId), null);
     assert.equal(
       (db.prepare("SELECT COUNT(*) AS n FROM listings").get() as { n: number }).n,
       0,
     );
-    assert.equal(polar.getCheckout(started.checkoutId)?.status, "canceled");
+    assert.equal(waffo.getCheckout(started.checkoutId)?.status, "canceled");
     assert.deepEqual(
       listLiveBoard(db, new Date("2026-08-17T00:00:00.000Z")),
       [],
@@ -207,7 +223,7 @@ test("unpaid Polar checkout stays off the plaster until Polar reports paid", asy
   }
 });
 
-test("occupied /about names Polar raise-pays-difference — unpaid Polar checkout stays off", async () => {
+test("occupied /about keeps raise and payment copy provider-neutral", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cbw-about-raise-"));
   const dbPath = join(dir, "app.sqlite");
   const previousWeekNow = process.env.WEEK_NOW;
@@ -222,23 +238,23 @@ test("occupied /about names Polar raise-pays-difference — unpaid Polar checkou
       assert.match(emptyHtml, /data-page="about"/);
       assert.match(emptyHtml, /data-occupied="false"/);
       assert.doesNotMatch(emptyHtml, /data-about-raise/);
-      assert.doesNotMatch(emptyHtml, /Polar charges the difference on a raise/);
+      assert.doesNotMatch(emptyHtml, /Waffo charges the difference on a raise/);
       assert.doesNotMatch(emptyHtml, /data-raise-difference/);
       assert.doesNotMatch(emptyHtml, /data-raise-charged/);
 
-      const polar = new FakePolarPort();
-      const unpaidStart = await polar.createCheckout({
+      const waffo = new FixturePaymentPort();
+      const unpaidStart = await waffo.createCheckout({
         amountUsd: 5,
         listingDraft: draft({
           brand: "Ghost",
-          terms: "Abandoned Polar checkout.",
+          terms: "Abandoned Waffo checkout.",
           briefUrl: "https://example.com/ghost-about",
         }),
         successUrl: SUCCESS_URL,
       });
       const unpaidCancel = await handleCheckoutReturn(
         { checkoutId: unpaidStart.checkoutId, status: "cancel" },
-        polar,
+        waffo,
       );
       assert.equal(unpaidCancel.status, "cancel");
       assert.equal(unpaidCancel.listing, null);
@@ -251,21 +267,21 @@ test("occupied /about names Polar raise-pays-difference — unpaid Polar checkou
       );
       assert.match(unpaidAbout, /data-occupied="false"/);
       assert.doesNotMatch(unpaidAbout, /data-about-raise/);
-      assert.doesNotMatch(unpaidAbout, /Polar charges the difference on a raise/);
+      assert.doesNotMatch(unpaidAbout, /Waffo charges the difference on a raise/);
       assert.doesNotMatch(unpaidAbout, /Ghost/);
       assert.equal(
         unpaidAbout,
         renderToStaticMarkup(createElement(AboutCopy, { occupied: false })),
       );
 
-      const paidStart = await polar.createCheckout({
+      const paidStart = await waffo.createCheckout({
         amountUsd: 5,
         listingDraft: draft(),
         successUrl: SUCCESS_URL,
       });
       const placed = await handleCheckoutReturn(
         { checkoutId: paidStart.checkoutId },
-        polar,
+        waffo,
       );
       assert.equal(placed.status, "success");
       assert.equal(placed.payment?.kind, "place");
@@ -282,11 +298,11 @@ test("occupied /about names Polar raise-pays-difference — unpaid Polar checkou
       assert.match(occupiedAbout, /data-about-raise=""/);
       assert.match(
         occupiedAbout,
-        /Polar charges the difference on a raise — not a new full bid/,
+        /A raise charges the original payer only the difference/,
       );
       assert.match(
         occupiedAbout,
-        /Unpaid Polar checkout stays off the wall until Polar reports paid/,
+        /A brief appears only after payment is confirmed/,
       );
       assert.match(occupiedAbout, /Rank is the bid/);
       assert.doesNotMatch(occupiedAbout, /data-raise-difference/);
@@ -306,7 +322,7 @@ test("occupied /about names Polar raise-pays-difference — unpaid Polar checkou
   });
 });
 
-test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkout stays off", async () => {
+test("occupied /rules keeps raise and payment copy provider-neutral", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cbw-rules-raise-"));
   const dbPath = join(dir, "app.sqlite");
   const previousWeekNow = process.env.WEEK_NOW;
@@ -320,26 +336,26 @@ test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkou
       );
       assert.match(emptyHtml, /data-page="rules"/);
       assert.match(emptyHtml, /data-occupied="false"/);
-      assert.match(emptyHtml, /Raise pays difference/);
+      assert.match(emptyHtml, /same cleaned brief link may raise/i);
       assert.doesNotMatch(emptyHtml, /data-rules-raise/);
-      assert.doesNotMatch(emptyHtml, /Polar charges the difference on a raise/);
+      assert.doesNotMatch(emptyHtml, /Waffo charges the difference on a raise/);
       assert.doesNotMatch(emptyHtml, /data-raise-difference/);
       assert.doesNotMatch(emptyHtml, /data-raise-charged/);
       assert.doesNotMatch(emptyHtml, /data-about-raise/);
 
-      const polar = new FakePolarPort();
-      const unpaidStart = await polar.createCheckout({
+      const waffo = new FixturePaymentPort();
+      const unpaidStart = await waffo.createCheckout({
         amountUsd: 5,
         listingDraft: draft({
           brand: "Ghost",
-          terms: "Abandoned Polar checkout.",
+          terms: "Abandoned Waffo checkout.",
           briefUrl: "https://example.com/ghost-rules",
         }),
         successUrl: SUCCESS_URL,
       });
       const unpaidCancel = await handleCheckoutReturn(
         { checkoutId: unpaidStart.checkoutId, status: "cancel" },
-        polar,
+        waffo,
       );
       assert.equal(unpaidCancel.status, "cancel");
       assert.equal(unpaidCancel.listing, null);
@@ -352,21 +368,21 @@ test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkou
       );
       assert.match(unpaidRules, /data-occupied="false"/);
       assert.doesNotMatch(unpaidRules, /data-rules-raise/);
-      assert.doesNotMatch(unpaidRules, /Polar charges the difference on a raise/);
+      assert.doesNotMatch(unpaidRules, /Waffo charges the difference on a raise/);
       assert.doesNotMatch(unpaidRules, /Ghost/);
       assert.equal(
         unpaidRules,
         renderToStaticMarkup(createElement(RulesCopy, { occupied: false })),
       );
 
-      const paidStart = await polar.createCheckout({
+      const paidStart = await waffo.createCheckout({
         amountUsd: 5,
         listingDraft: draft(),
         successUrl: SUCCESS_URL,
       });
       const placed = await handleCheckoutReturn(
         { checkoutId: paidStart.checkoutId },
-        polar,
+        waffo,
       );
       assert.equal(placed.status, "success");
       assert.equal(placed.payment?.kind, "place");
@@ -383,14 +399,14 @@ test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkou
       assert.match(occupiedRules, /data-rules-raise=""/);
       assert.match(
         occupiedRules,
-        /Polar charges the difference on a raise — not a new full bid/,
+        /A raise charges the original payer only the difference/,
       );
       assert.match(
         occupiedRules,
-        /Unpaid Polar checkout stays off the wall until Polar reports paid/,
+        /incomplete or abandoned checkout never appears on the wall/i,
       );
       assert.match(occupiedRules, /Rank is the bid/);
-      assert.match(occupiedRules, /Raise pays difference/);
+      assert.match(occupiedRules, /same cleaned brief link may raise/i);
       assert.doesNotMatch(occupiedRules, /data-raise-difference/);
       assert.doesNotMatch(occupiedRules, /data-raise-charged/);
       assert.doesNotMatch(occupiedRules, /data-raise-charge=/);
@@ -409,45 +425,61 @@ test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkou
   });
 });
 
-test("occupied raise-too-small names Polar still charges only the difference — unpaid Polar checkout stays off", () => {
-  assert.match(RAISE_TOO_SMALL_COPY, /Polar still charges only the difference/);
+test("raise-too-small guidance stays provider-neutral", () => {
+  assert.match(RAISE_TOO_SMALL_COPY, /A raise charges only the difference/);
   assert.match(RAISE_TOO_SMALL_COPY, /not a new full bid/);
-  assert.match(RAISE_TOO_SMALL_COPY, /Unpaid Polar checkout stays off the wall/);
+  assert.match(RAISE_TOO_SMALL_COPY, /An incomplete checkout stays off the wall/);
   assert.match(RAISE_TOO_SMALL_COPY, /at least \$1 above the current bid/);
 });
 
 test("webhook / fixture completion lists; abandoned webhook does not", async () => {
   const db = openDatabase(":memory:");
-  const polar = new FakePolarPort(db);
+  const waffo = new FixturePaymentPort(db);
+  const listingDraft = draft({
+    brand: "Webhook Co",
+    terms: "$500, 1 YouTube",
+    briefUrl: "https://example.com/webhook",
+  });
+  const started = await waffo.createCheckout({
+    amountUsd: 5,
+    listingDraft,
+    successUrl: SUCCESS_URL,
+  });
   const paidBody = JSON.stringify({
-    type: "checkout.updated",
+    type: "order.paid",
     data: {
-      id: "chk_webhook_paid",
-      status: "succeeded",
+      id: "ord_webhook_paid",
+      checkout_id: started.checkoutId,
+      product_id: "fixture",
+      currency: "usd",
+      total_amount: 500,
+      status: "paid",
+      paid: true,
       metadata: {
-        brand: "Webhook Co",
-        terms: "$500, 1 YouTube",
-        briefUrl: "https://example.com/webhook",
+        brand: listingDraft.brand,
+        terms: listingDraft.terms,
+        briefUrl: listingDraft.briefUrl,
         bidUsd: "5",
         weekId: WEEK,
+        chargeUsd: "5",
       },
     },
   });
-  const paid = await polar.parseWebhook(paidBody, {});
+  const paid = await waffo.parseWebhook(paidBody, { "webhook-id": "evt_fixture_paid" });
   assert.ok(!("ignored" in paid));
   if ("ignored" in paid) {
     throw new Error("expected paid webhook");
   }
-  applyPaidListing(db, paid.draft, paid.checkoutId, paid.paidAt);
+  applyVerifiedPaidEvent(db, paid);
   assert.equal(
     (db.prepare("SELECT COUNT(*) AS n FROM listings").get() as { n: number }).n,
     1,
   );
 
-  const abandoned = await polar.parseWebhook(
+  const abandoned = await waffo.parseWebhook(
     JSON.stringify({
-      type: "checkout.updated",
-      data: { id: "chk_abandoned", status: "canceled" },
+      type: "checkout.expired",
+      data: { id: "chk_abandoned", status: "expired" },
     }),
     {},
   );
@@ -460,13 +492,13 @@ test("webhook / fixture completion lists; abandoned webhook does not", async () 
 
 test("handleCheckoutReturn pays on success and not on cancel", async () => {
   const db = openDatabase(":memory:");
-  const polar = new FakePolarPort(db);
-  const paid = await polar.createCheckout({
+  const waffo = new FixturePaymentPort(db);
+  const paid = await waffo.createCheckout({
     amountUsd: 5,
     listingDraft: draft(),
     successUrl: SUCCESS_URL,
   });
-  const canceled = await polar.createCheckout({
+  const canceled = await waffo.createCheckout({
     amountUsd: 12,
     listingDraft: draft({
       brand: "Beta",
@@ -478,7 +510,7 @@ test("handleCheckoutReturn pays on success and not on cancel", async () => {
 
   const success = await handleCheckoutReturn(
     { checkoutId: paid.checkoutId },
-    polar,
+    waffo,
   );
   assert.equal(success.status, "success");
   assert.equal(success.listing?.bidUsd, 5);
@@ -487,7 +519,7 @@ test("handleCheckoutReturn pays on success and not on cancel", async () => {
 
   const cancel = await handleCheckoutReturn(
     { checkoutId: canceled.checkoutId, status: "cancel" },
-    polar,
+    waffo,
   );
   assert.equal(cancel.status, "cancel");
   assert.equal(cancel.listing, null);
@@ -519,7 +551,7 @@ test("POST /checkout starts fixture session; unpaid does not list", async () => 
     assert.equal(response.status, 303);
     const location = response.headers.get("location");
     assert.ok(location);
-    assert.match(location, /\/checkout\/return\?checkoutId=/);
+    assert.match(location, /\/checkout\/complete\?checkoutId=/);
     const db = openDatabase(dbPath);
     assert.equal(
       (db.prepare("SELECT COUNT(*) AS n FROM listings").get() as { n: number }).n,
@@ -532,22 +564,42 @@ test("webhook route fixture completion writes the listing", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cbw-webhook-"));
   const dbPath = join(dir, "app.sqlite");
   await withDatabasePath(dbPath, async () => {
-    const { POST } = await import("../src/app/api/webhooks/polar/route");
+    const listingDraft = draft({
+      brand: "Hook Brand",
+      terms: "1 Instagram Reel",
+      briefUrl: "https://example.com/hook",
+    });
+    const fixture = new FixturePaymentPort(openDatabase(dbPath));
+    const started = await fixture.createCheckout({
+      amountUsd: 5,
+      listingDraft,
+      successUrl: SUCCESS_URL,
+    });
+    const { POST } = await import("../src/app/api/webhooks/waffo/route");
     const response = await POST(
-      new Request("http://127.0.0.1/webhooks/polar", {
+      new Request("http://127.0.0.1/webhooks/waffo", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "webhook-id": "evt_route_paid",
+        },
         body: JSON.stringify({
           type: "order.paid",
           data: {
-            id: "chk_route_paid",
+            id: "ord_route_paid",
+            checkout_id: started.checkoutId,
+            product_id: "fixture",
+            currency: "usd",
+            total_amount: 500,
             status: "paid",
+            paid: true,
             metadata: {
-              brand: "Hook Brand",
-              terms: "1 Instagram Reel",
-              briefUrl: "https://example.com/hook",
+              brand: listingDraft.brand,
+              terms: listingDraft.terms,
+              briefUrl: listingDraft.briefUrl,
               bidUsd: "5",
               weekId: WEEK,
+              chargeUsd: "5",
             },
           },
         }),
@@ -563,171 +615,24 @@ test("webhook route fixture completion writes the listing", async () => {
   });
 });
 
-test("POLAR_FIXTURE_ONLY=1 wins over POLAR_LIVE=1", () => {
-  assert.equal(
-    isPolarLive({ POLAR_LIVE: "1", POLAR_FIXTURE_ONLY: "1" }),
-    false,
-  );
-  assert.equal(isPolarLive({ POLAR_LIVE: "1" }), true);
-  assert.equal(isPolarLive({}), false);
-
-  withEnv({ POLAR_LIVE: "1", POLAR_FIXTURE_ONLY: "1" }, () => {
-    const db = openDatabase(":memory:");
-    assert.equal(getPolarPort(db) instanceof FakePolarPort, true);
-    assert.throws(() => new LivePolarPort(), /env-gated|BLOCKED-SECRET/);
-  });
+test("retired provider compatibility cannot handle webhook traffic", async () => {
+  const { POST } = await import("../src/app/api/webhooks/polar/route");
+  const response = await POST(new Request("http://127.0.0.1/webhooks/polar", { method: "POST", body: "{}" }));
+  assert.equal(response.status, 410);
+  assert.match((await response.json()).error, /retired/);
 });
 
-test("live Polar is unused unless POLAR_LIVE=1", () => {
-  withEnv({ POLAR_LIVE: undefined, POLAR_FIXTURE_ONLY: "1" }, () => {
-    assert.equal(isPolarLive(), false);
-    assert.throws(() => new LivePolarPort(), /env-gated/);
-    const source = readFileSync(
-      join(process.cwd(), "src", "lib", "polar.ts"),
-      "utf8",
-    );
-    assert.match(source, /unused unless POLAR_LIVE=1|env-gated/);
-    assert.match(source, /class FakePolarPort/);
-  });
-});
-
-test("polarApiBase defaults to production and honors POLAR_API_BASE", () => {
-  assert.equal(POLAR_API_BASE, "https://api.polar.sh");
-  assert.equal(polarApiBase({}), POLAR_API_BASE);
-  assert.equal(
-    polarApiBase({ POLAR_API_BASE: "https://sandbox-api.polar.sh/" }),
-    "https://sandbox-api.polar.sh",
-  );
-});
-
-test("live Polar constructor is secret-gated", () => {
-  withEnv(
-    {
-      POLAR_LIVE: "1",
-      POLAR_FIXTURE_ONLY: undefined,
-      POLAR_ACCESS_TOKEN: undefined,
-      POLAR_PRODUCT_ID: undefined,
-    },
-    () => {
-      assert.throws(() => new LivePolarPort(), /BLOCKED-SECRET: POLAR_ACCESS_TOKEN/);
-    },
-  );
-});
-
-test("live Polar createCheckout defaults to production Polar API", async () => {
-  const seen: string[] = [];
-  const polar = new LivePolarPort({
-    env: {
-      POLAR_LIVE: "1",
-      POLAR_ACCESS_TOKEN: "test-token",
-      POLAR_PRODUCT_ID: "prod_test",
-    },
-    fetch: async (input) => {
-      seen.push(String(input));
-      return new Response(
-        JSON.stringify({
-          id: "chk_prod",
-          url: "https://polar.sh/checkout/chk_prod",
-        }),
-        { status: 201, headers: { "content-type": "application/json" } },
-      );
-    },
-  });
-  await polar.createCheckout({
-    amountUsd: 5,
-    listingDraft: draft(),
-    successUrl: SUCCESS_URL,
-  });
-  assert.deepEqual(seen, [`${POLAR_API_BASE}/v1/checkouts/`]);
-});
-
-test("live Polar createCheckout uses POLAR_API_BASE override", async () => {
-  const seen: string[] = [];
-  const polar = new LivePolarPort({
-    env: {
-      POLAR_LIVE: "1",
-      POLAR_ACCESS_TOKEN: "test-token",
-      POLAR_PRODUCT_ID: "prod_test",
-      POLAR_API_BASE: "https://sandbox-api.polar.sh",
-    },
-    fetch: async (input) => {
-      seen.push(String(input));
-      return new Response(
-        JSON.stringify({
-          id: "chk_sandbox",
-          url: "https://sandbox.polar.sh/checkout/chk_sandbox",
-        }),
-        { status: 201, headers: { "content-type": "application/json" } },
-      );
-    },
-  });
-  const started = await polar.createCheckout({
-    amountUsd: 5,
-    listingDraft: draft(),
-    successUrl: SUCCESS_URL,
-  });
-  assert.deepEqual(seen, ["https://sandbox-api.polar.sh/v1/checkouts/"]);
-  assert.equal(started.checkoutId, "chk_sandbox");
-  assert.equal(started.url, "https://sandbox.polar.sh/checkout/chk_sandbox");
-});
-
-test("live Polar webhook verifies the signature", async () => {
-  const secret = "whsec_test";
-  const rawBody = JSON.stringify({
-    type: "order.paid",
-    data: {
-      id: "chk_signed",
-      status: "paid",
-      metadata: {
-        brand: "Signed",
-        terms: "signed terms",
-        briefUrl: "https://example.com/signed",
-        bidUsd: "5",
-        weekId: WEEK,
-      },
-    },
-  });
-  const webhookId = "msg_1";
-  const timestamp = "1710000000";
-  const signature = `v1,${createHmac("sha256", secret)
-    .update(`${webhookId}.${timestamp}.${rawBody}`)
-    .digest("base64")}`;
-  const polar = new LivePolarPort({
-    env: {
-      POLAR_LIVE: "1",
-      POLAR_ACCESS_TOKEN: "test-token",
-      POLAR_PRODUCT_ID: "prod_test",
-      POLAR_WEBHOOK_SECRET: secret,
-    },
-    fetch: async () => new Response("unused"),
-  });
-  const paid = await polar.parseWebhook(rawBody, {
-    "webhook-id": webhookId,
-    "webhook-timestamp": timestamp,
-    "webhook-signature": signature,
-  });
-  assert.ok(!("ignored" in paid));
-  await assert.rejects(
-    polar.parseWebhook(rawBody, {
-      "webhook-id": webhookId,
-      "webhook-timestamp": timestamp,
-      "webhook-signature": "v1,not-the-signature",
-    }),
-    /invalid Polar webhook signature/,
-  );
-});
-
-test("/checkout/return markup shows success or cancel", async () => {
+test("/checkout/return markup shows pending or cancel without a payment mutation", async () => {
   const { default: ReturnPage } = await import(
     "../src/app/checkout/return/page"
   );
   const successHtml = renderToStaticMarkup(
     await ReturnPage({
-      searchParams: Promise.resolve({ checkoutId: "missing" }),
+      searchParams: Promise.resolve({ intent: "missing" }),
     }),
   );
-  assert.match(successHtml, /data-return="success"/);
-  assert.match(successHtml, /on the board/i);
+  assert.match(successHtml, /data-return="pending"/);
+  assert.match(successHtml, /Payment pending/i);
   assert.match(successHtml, /Back to the board/);
   assert.doesNotMatch(successHtml, /data-raise-charged/);
   assert.doesNotMatch(successHtml, /the difference, not a new full bid/);
@@ -741,30 +646,103 @@ test("/checkout/return markup shows success or cancel", async () => {
     }),
   );
   assert.match(cancelHtml, /data-return="cancel"/);
-  assert.match(cancelHtml, /No rank change/);
-  assert.match(
-    cancelHtml,
-    /A canceled or unpaid Polar return still changes no rank/,
-  );
-  assert.match(cancelHtml, /does not list/);
-  assert.match(cancelHtml, /Polar reports paid/);
-  assert.match(cancelHtml, /An abandoned brief is not Terms as #1/);
+  assert.match(cancelHtml, /No rank was claimed/);
+  assert.match(cancelHtml, /never creates a listing or becomes #1/);
   assert.doesNotMatch(cancelHtml, /data-raise-charged/);
+
+  const { default: CompletePage } = await import(
+    "../src/app/checkout/complete/page"
+  );
+  const completeHtml = renderToStaticMarkup(
+    await CompletePage({
+      searchParams: Promise.resolve({ intent: "missing" }),
+    }),
+  );
+  assert.match(completeHtml, /data-return="pending"/);
+  assert.match(completeHtml, /Payment pending/i);
+  assert.doesNotMatch(completeHtml, /data-raise-charged/);
 });
 
-test("occupied /checkout/return after a raise names Polar charged the difference — unpaid cancel stays off", async () => {
+test("/checkout/return renders durable unknown, reconciliation, and rejected states truthfully", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "cbw-return-states-"));
+  const dbPath = join(dir, "app.sqlite");
+  await withDatabasePath(dbPath, async () => {
+    const db = getDb();
+    const { default: ReturnPage } = await import(
+      "../src/app/checkout/return/page"
+    );
+    const now = new Date().toISOString();
+    const insert = db.prepare(
+      `INSERT INTO checkout_intents (
+        intent_id, intent_fingerprint, metadata_fingerprint, week_id, window_key,
+        brand, terms, brief_url, canonical_url, bid_usd, target_bid_cents,
+        quote_base_bid_cents, charge_cents, kind, expected_amount_usd, currency,
+        mode, store_id, product_id, tax_category, provider_product_id,
+        provider_checkout_id, provider_checkout_url, session_id, checkout_url,
+        expires_at, status, failure_code, failure_message, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?, ?)`
+    );
+    for (const [status, marker, message] of [
+      ["unknown", "unknown", /Payment status unknown/],
+      ["needs_reconciliation", "reconciliation", /Payment needs review/],
+      ["rejected", "rejected", /Payment not accepted/],
+    ] as const) {
+      const intentId = `return-${status}`;
+      insert.run(
+        intentId,
+        `fingerprint-${status}`,
+        `metadata-${status}`,
+        WEEK,
+        WEEK,
+        `Return ${status}`,
+        "one vertical video",
+        `https://example.com/return-${status}`,
+        `https://example.com/return-${status}`,
+        5,
+        500,
+        0,
+        500,
+        "place",
+        5,
+        "usd",
+        "test",
+        "STO_fixture",
+        "PROD_fixture",
+        "digital_goods",
+        "fixture",
+        status,
+        `failure-${status}`,
+        `failure ${status}`,
+        now,
+        now,
+      );
+      const html = renderToStaticMarkup(
+        await ReturnPage({
+          searchParams: Promise.resolve({ intent: intentId }),
+        }),
+      );
+      assert.match(html, new RegExp(`data-return="${marker}"`));
+      assert.match(html, message);
+      assert.doesNotMatch(html, /data-return="success"/);
+      assert.match(html, /rank change/);
+    }
+  });
+});
+
+test("occupied /checkout/return names the raise difference without provider copy", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cbw-raise-return-"));
   const dbPath = join(dir, "app.sqlite");
   await withDatabasePath(dbPath, async () => {
-    const polar = new FakePolarPort();
-    const placedStart = await polar.createCheckout({
+    const waffo = new FixturePaymentPort();
+    const placedStart = await waffo.createCheckout({
       amountUsd: 5,
       listingDraft: draft(),
       successUrl: SUCCESS_URL,
     });
     const placed = await handleCheckoutReturn(
       { checkoutId: placedStart.checkoutId },
-      polar,
+      waffo,
     );
     assert.equal(placed.status, "success");
     assert.equal(placed.payment?.kind, "place");
@@ -785,20 +763,20 @@ test("occupied /checkout/return after a raise names Polar charged the difference
     assert.doesNotMatch(placeHtml, /data-raise-charged/);
     assert.doesNotMatch(placeHtml, /the difference, not a new full bid/);
 
-    const raiseStart = await polar.createCheckout({
+    const raiseStart = await waffo.createCheckout({
       amountUsd: 2,
       listingDraft: draft({ bidUsd: 7 }),
       successUrl: SUCCESS_URL,
     });
     const unpaidCancel = await handleCheckoutReturn(
       { checkoutId: raiseStart.checkoutId, status: "cancel" },
-      polar,
+      waffo,
     );
     assert.equal(unpaidCancel.status, "cancel");
     assert.equal(unpaidCancel.listing, null);
     assert.equal(unpaidCancel.payment?.kind, "raise");
     assert.equal(unpaidCancel.payment?.chargeUsd, 2);
-    assert.equal(polar.getCheckout(raiseStart.checkoutId)?.status, "canceled");
+    assert.equal(waffo.getCheckout(raiseStart.checkoutId)?.status, "canceled");
     assert.equal(
       (openDatabase(dbPath).prepare("SELECT bid_usd FROM listings").get() as {
         bid_usd: number;
@@ -815,22 +793,19 @@ test("occupied /checkout/return after a raise names Polar charged the difference
       }),
     );
     assert.match(raiseCancelHtml, /data-return="cancel"/);
-    assert.match(raiseCancelHtml, /No rank change/);
-    assert.match(
-      raiseCancelHtml,
-      /A canceled or unpaid Polar return still changes no rank/,
-    );
+    assert.match(raiseCancelHtml, /No rank was claimed/);
+    assert.match(raiseCancelHtml, /never creates a listing or becomes #1/);
     assert.doesNotMatch(raiseCancelHtml, /data-raise-charged/);
     assert.doesNotMatch(raiseCancelHtml, /on the board/i);
 
-    const paidRaise = await polar.createCheckout({
+    const paidRaise = await waffo.createCheckout({
       amountUsd: 2,
       listingDraft: draft({ bidUsd: 7 }),
       successUrl: SUCCESS_URL,
     });
     const raised = await handleCheckoutReturn(
       { checkoutId: paidRaise.checkoutId },
-      polar,
+      waffo,
     );
     assert.equal(raised.status, "success");
     assert.equal(raised.payment?.kind, "raise");
@@ -848,7 +823,7 @@ test("occupied /checkout/return after a raise names Polar charged the difference
     assert.match(raiseHtml, /data-raise-charged=""/);
     assert.match(
       raiseHtml,
-      /Polar charged \$<span data-raise-charge-usd="">2<\/span> — the difference, not a new full bid/,
+      /\$<span data-raise-charge-usd="">2<\/span> was charged — the difference, not a new full bid/,
     );
     assert.match(raiseHtml, /Acme is listed at \$7/);
     assert.doesNotMatch(raiseHtml, /data-return="cancel"/);
@@ -863,13 +838,13 @@ test("occupied /checkout/return after a raise names Polar charged the difference
 
 test("same brief URL raise charges new − current; rival pays a full bid", async () => {
   const db = openDatabase(":memory:");
-  const polar = new FakePolarPort(db);
-  const first = await polar.createCheckout({
+  const waffo = new FixturePaymentPort(db);
+  const first = await waffo.createCheckout({
     amountUsd: 5,
     listingDraft: draft(),
     successUrl: SUCCESS_URL,
   });
-  const placed = await polar.completeCheckout(first.checkoutId);
+  const placed = await waffo.completeCheckout(first.checkoutId);
   assert.ok(placed);
   assert.equal(placed.bidUsd, 5);
 
@@ -884,7 +859,7 @@ test("same brief URL raise charges new − current; rival pays a full bid", asyn
 
   await assert.rejects(
     () =>
-      polar.createCheckout({
+      waffo.createCheckout({
         amountUsd: 7,
         listingDraft: draft({ bidUsd: 7 }),
         successUrl: SUCCESS_URL,
@@ -896,13 +871,13 @@ test("same brief URL raise charges new − current; rival pays a full bid", asyn
     },
   );
 
-  const raisedStart = await polar.createCheckout({
+  const raisedStart = await waffo.createCheckout({
     amountUsd: 2,
     listingDraft: draft({ brand: "Acme Raised", bidUsd: 7 }),
     successUrl: SUCCESS_URL,
   });
-  assert.equal(polar.getCheckout(raisedStart.checkoutId)?.amountUsd, 2);
-  const raised = await polar.completeCheckout(raisedStart.checkoutId);
+  assert.equal(waffo.getCheckout(raisedStart.checkoutId)?.amountUsd, 2);
+  const raised = await waffo.completeCheckout(raisedStart.checkoutId);
   assert.ok(raised);
   assert.equal(raised.id, placed.id);
   assert.equal(raised.bidUsd, 7);
@@ -924,7 +899,7 @@ test("same brief URL raise charges new − current; rival pays a full bid", asyn
     chargeUsd: 8,
   });
 
-  const stealStart = await polar.createCheckout({
+  const stealStart = await waffo.createCheckout({
     amountUsd: 8,
     listingDraft: draft({
       brand: "Rival",
@@ -933,8 +908,8 @@ test("same brief URL raise charges new − current; rival pays a full bid", asyn
     }),
     successUrl: SUCCESS_URL,
   });
-  assert.equal(polar.getCheckout(stealStart.checkoutId)?.amountUsd, 8);
-  const rival = await polar.completeCheckout(stealStart.checkoutId);
+  assert.equal(waffo.getCheckout(stealStart.checkoutId)?.amountUsd, 8);
+  const rival = await waffo.completeCheckout(stealStart.checkoutId);
   assert.ok(rival);
   assert.notEqual(rival.id, placed.id);
   assert.equal(rival.bidUsd, 8);
@@ -968,17 +943,17 @@ test("same brief URL raise charges new − current; rival pays a full bid", asyn
 
 test("same brief still inside last-7-days raises after the UTC week label rolls", async () => {
   const db = openDatabase(":memory:");
-  const polar = new FakePolarPort(db);
+  const waffo = new FixturePaymentPort(db);
   const previousWeekNow = process.env.WEEK_NOW;
   const url = "https://example.com/sunday-raise";
   try {
     process.env.WEEK_NOW = "2026-08-16T12:00:00.000Z";
-    const first = await polar.createCheckout({
+    const first = await waffo.createCheckout({
       amountUsd: 5,
       listingDraft: draft({ weekId: "2026-W33", briefUrl: url }),
       successUrl: SUCCESS_URL,
     });
-    const placed = await polar.completeCheckout(first.checkoutId);
+    const placed = await waffo.completeCheckout(first.checkoutId);
     assert.ok(placed);
     assert.equal(placed.weekId, "2026-W33");
     assert.equal(placed.createdAt, "2026-08-16T12:00:00.000Z");
@@ -1003,7 +978,7 @@ test("same brief still inside last-7-days raises after the UTC week label rolls"
       currentBidUsd: 5,
     });
 
-    const raisedStart = await polar.createCheckout({
+    const raisedStart = await waffo.createCheckout({
       amountUsd: 2,
       listingDraft: draft({
         weekId: "2026-W34",
@@ -1013,7 +988,7 @@ test("same brief still inside last-7-days raises after the UTC week label rolls"
       }),
       successUrl: SUCCESS_URL,
     });
-    const raised = await polar.completeCheckout(raisedStart.checkoutId);
+    const raised = await waffo.completeCheckout(raisedStart.checkoutId);
     assert.ok(raised);
     assert.equal(raised.id, placed.id);
     assert.equal(raised.weekId, "2026-W33");
@@ -1043,21 +1018,21 @@ test("same brief still inside last-7-days raises after the UTC week label rolls"
 
 test("unpaid raise does not change rank", async () => {
   const db = openDatabase(":memory:");
-  const polar = new FakePolarPort(db);
-  const first = await polar.createCheckout({
+  const waffo = new FixturePaymentPort(db);
+  const first = await waffo.createCheckout({
     amountUsd: 5,
     listingDraft: draft(),
     successUrl: SUCCESS_URL,
   });
-  await polar.completeCheckout(first.checkoutId);
+  await waffo.completeCheckout(first.checkoutId);
 
-  const raiseStart = await polar.createCheckout({
+  const raiseStart = await waffo.createCheckout({
     amountUsd: 2,
     listingDraft: draft({ bidUsd: 7 }),
     successUrl: SUCCESS_URL,
   });
-  await polar.abandonCheckout(raiseStart.checkoutId);
-  assert.equal(await polar.completeCheckout(raiseStart.checkoutId), null);
+  await waffo.abandonCheckout(raiseStart.checkoutId);
+  assert.equal(await waffo.completeCheckout(raiseStart.checkoutId), null);
   const row = db
     .prepare("SELECT bid_usd FROM listings WHERE brief_url = ?")
     .get("https://example.com/acme") as { bid_usd: number };
@@ -1071,13 +1046,13 @@ test("POST /checkout raise of the same brief URL charges the difference", async 
   process.env.WEEK_NOW = "2026-08-17T00:00:00.000Z";
   try {
   await withDatabasePath(dbPath, async () => {
-    const polar = new FakePolarPort();
-    const placed = await polar.createCheckout({
+    const waffo = new FixturePaymentPort();
+    const placed = await waffo.createCheckout({
       amountUsd: 5,
       listingDraft: draft({ briefUrl: "https://example.com/route-raise" }),
       successUrl: SUCCESS_URL,
     });
-    await polar.completeCheckout(placed.checkoutId);
+    await waffo.completeCheckout(placed.checkoutId);
 
     const { POST } = await import("../src/app/api/checkout/route");
     const tooSmall = await POST(
@@ -1120,7 +1095,7 @@ test("POST /checkout raise of the same brief URL charges the difference", async 
     };
     assert.equal(tooSmallBody.code, "raise_too_small");
     assert.equal(tooSmallBody.error, RAISE_TOO_SMALL_COPY);
-    assert.match(tooSmallBody.error, /Polar still charges only the difference/);
+    assert.match(tooSmallBody.error, /A raise charges only the difference/);
     assert.match(tooSmallBody.error, /not a new full bid/);
 
     const response = await POST(
@@ -1142,11 +1117,11 @@ test("POST /checkout raise of the same brief URL charges the difference", async 
       "checkoutId",
     );
     assert.ok(checkoutId);
-    const pending = polar.getCheckout(checkoutId);
+    const pending = waffo.getCheckout(checkoutId);
     assert.equal(pending?.amountUsd, 3);
     assert.equal(pending?.listingDraft.bidUsd, 8);
 
-    const listing = await polar.completeCheckout(checkoutId);
+    const listing = await waffo.completeCheckout(checkoutId);
     assert.equal(listing?.bidUsd, 8);
     const db = openDatabase(dbPath);
     const payments = db

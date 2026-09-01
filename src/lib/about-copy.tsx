@@ -20,10 +20,9 @@ export function AboutCopy({ occupied }: { occupied: boolean }) {
         keeps the higher rank.
       </p>
       <p>
-        There are <strong>no ads</strong>, <strong>no API keys</strong>, and{" "}
-        <strong>no revenue share</strong> with creators or listed brands. Polar
-        is Merchant of Record in live; that fee is the operator&apos;s cost, not
-        a cut of a creator payout. There is no API-key product.
+        Anyone can read the wall without an account. A brief appears only
+        after payment is confirmed, and a canceled or abandoned checkout
+        changes nothing.
       </p>
       <p>
         This site is <strong>independent</strong>. It is not affiliated with
@@ -32,25 +31,19 @@ export function AboutCopy({ occupied }: { occupied: boolean }) {
         or “estimated reach.”
       </p>
       <p>
-        Copy is <strong>English</strong>. Currency is <strong>USD</strong>. The
-        market is <strong>global</strong> — there is no China-city default. This
-        is the <strong>creator-brief-wall</strong> vertical, a clone of{" "}
-        <a href="https://outbid.lol">outbid.lol</a> pay-to-rank mechanics.
-      </p>
-      <p>
-        Anyone can read the board without an account. Payment is the only write
-        path. Live money is Polar Checkout. Tests use a fixture so they never
-        call live Polar. Abandoned checkout does not invent a brief.
+        The wall is in <strong>English</strong>, bids use{" "}
+        <strong>USD</strong>, and creators can browse briefs from anywhere.
       </p>
       {occupied ? (
         <p className="about-raise" data-about-raise="">
-          Polar charges the difference on a raise — not a new full bid. Unpaid Polar checkout stays off the wall until Polar reports paid.
+          A raise charges the original payer only the difference. The new rank
+          appears after payment is confirmed.
         </p>
       ) : null}
       <p>
         <a href="/rules">Read the rules</a> for the $5 minimum, older-wins ties,
-        raise-pays-difference, weekly reset (rolling last 7 days, not Monday
-        00:00 UTC), and banned chat / NSFW URLs.{" "}
+        raise-pays-difference, the seven-day placement window, and banned chat
+        / NSFW URLs.{" "}
         <a href="/">Back to the board</a>.
       </p>
     </main>

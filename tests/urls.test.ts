@@ -118,39 +118,39 @@ test("outbound brief URL never adds tracking", () => {
   assert.doesNotMatch(outbound, /utm_|fbclid/);
 });
 
-test("about states independence and no ads / API keys / revenue share", () => {
+test("about explains the public wall without implementation or clone copy", () => {
   const html = renderToStaticMarkup(
     createElement(AboutCopy, { occupied: false }),
   );
   assert.match(html, /data-page="about"/);
   assert.match(html, /data-occupied="false"/);
-  assert.match(html, /no ads/i);
-  assert.match(html, /no API keys/i);
-  assert.match(html, /no revenue share/i);
+  assert.match(html, /Creator Brief Wall is a public pay-to-rank board/);
   assert.match(html, /Rank is the bid/);
   assert.match(html, /seen by creators/);
-  assert.match(html, /not affiliated/i);
+  assert.match(html, /payment is confirmed/);
   assert.match(html, /TikTok/);
   assert.match(html, /YouTube/);
   assert.match(html, /Instagram/);
   assert.match(html, /Twitch/);
   assert.match(html, /Meta/);
-  assert.match(html, /creator-brief-wall/);
-  assert.match(html, /outbid\.lol/);
+  assert.doesNotMatch(
+    html,
+    /outbid\.lol|creator-brief-wall|\bclone\b|\bv1\b|\bfixture\b|API keys?|Waffo|weekId|createdAt|paidAt/i,
+  );
   assert.doesNotMatch(html, /data-about-raise/);
-  assert.doesNotMatch(html, /Polar charges the difference on a raise/);
+  assert.doesNotMatch(html, /Waffo charges the difference on a raise/);
   assert.doesNotMatch(html, /[0-9][0-9,]*\s*(followers|subscribers)/i);
 });
 
-test("occupied /about names Polar raise-pays-difference — unpaid Polar checkout stays off", () => {
+test("occupied /about explains raise pricing without provider copy", () => {
   const empty = renderToStaticMarkup(
     createElement(AboutCopy, { occupied: false }),
   );
   assert.match(empty, /data-page="about"/);
   assert.match(empty, /data-occupied="false"/);
-  assert.match(empty, /Abandoned checkout does not invent a brief/);
+  assert.match(empty, /canceled or abandoned checkout changes nothing/);
   assert.doesNotMatch(empty, /data-about-raise/);
-  assert.doesNotMatch(empty, /Polar charges the difference on a raise/);
+  assert.doesNotMatch(empty, /Waffo charges the difference on a raise/);
   assert.doesNotMatch(empty, /not a new full bid/);
   assert.doesNotMatch(empty, /data-raise-difference/);
   assert.doesNotMatch(empty, /data-raise-charged/);
@@ -163,14 +163,14 @@ test("occupied /about names Polar raise-pays-difference — unpaid Polar checkou
   assert.match(occupied, /data-about-raise=""/);
   assert.match(
     occupied,
-    /Polar charges the difference on a raise — not a new full bid/,
+    /A raise charges the original payer only the difference/,
   );
   assert.match(
     occupied,
-    /Unpaid Polar checkout stays off the wall until Polar reports paid/,
+    /A brief appears only after payment is confirmed/,
   );
   assert.match(occupied, /Rank is the bid/);
-  assert.match(occupied, /no ads/i);
+  assert.doesNotMatch(occupied, /Waffo|outbid\.lol|\bclone\b|\bfixture\b/i);
   assert.doesNotMatch(occupied, /data-raise-difference/);
   assert.doesNotMatch(occupied, /data-raise-charged/);
   assert.doesNotMatch(occupied, /data-raise-charge=/);
@@ -221,42 +221,42 @@ test("rules state min $5, rank=bid, older wins, raise pays difference", () => {
   assert.match(html, /data-occupied="false"/);
   assert.match(html, /Rank is the bid/);
   assert.match(html, /\$5/);
-  assert.match(html, /Older wins ties/);
-  assert.match(html, /Raise pays difference/);
-  assert.match(html, /Rolling last 7 days\. Not Monday 00:00 UTC/);
-  assert.match(html, /Monday 00:00:00\.000 UTC/);
+  assert.match(html, /brief placed first keeps the higher rank/);
+  assert.match(html, /same cleaned brief link may raise/i);
+  assert.match(html, /charged only the <strong>difference/);
+  assert.match(html, /Rolling seven-day window/);
+  assert.match(html, /does not reset for everyone at Monday midnight/);
   assert.match(html, /fake followers/i);
   assert.match(html, /NSFW/);
   assert.match(html, /Telegram/);
-  assert.match(html, /https:/);
-  assert.match(html, /utm_\*/);
-  assert.match(html, /bit\.ly/);
+  assert.match(html, /secure, public brief link/);
+  assert.match(html, /Tracking, referral, and affiliate parameters are removed/);
+  assert.match(html, /Link shorteners/);
+  assert.doesNotMatch(html, /weekId|createdAt|paidAt|Waffo|outbid\.lol|\bclone\b|\bfixture\b/i);
   assert.doesNotMatch(html, /data-rules-raise/);
-  assert.doesNotMatch(html, /Polar charges the difference on a raise/);
+  assert.doesNotMatch(html, /Waffo charges the difference on a raise/);
 });
 
-test("occupied /rules raise identity is last-7-days, not the UTC week label", () => {
+test("occupied /rules explains active-placement raises in public language", () => {
   const html = renderToStaticMarkup(
     createElement(RulesCopy, { occupied: true }),
   );
-  assert.match(html, /Same canonical brief URL still inside last 7 days raises/);
-  assert.match(html, /weekId<\/code> stays an audit label — not raise identity/);
-  assert.doesNotMatch(html, /same UTC week raises/i);
-  assert.doesNotMatch(html, /same weekId/i);
-  assert.match(html, /Raise pays difference/);
-  assert.match(html, /Rolling last 7 days\. Not Monday 00:00 UTC/);
+  assert.match(html, /same cleaned brief link may raise while its placement is active/i);
+  assert.match(html, /A raise charges the original payer only the difference/);
+  assert.match(html, /Each placement keeps its own seven-day window/);
+  assert.doesNotMatch(html, /weekId|createdAt|paidAt|Waffo|outbid\.lol|\bclone\b|\bfixture\b/i);
 });
 
-test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkout stays off", () => {
+test("occupied /rules keeps payment and raise copy provider-neutral", () => {
   const empty = renderToStaticMarkup(
     createElement(RulesCopy, { occupied: false }),
   );
   assert.match(empty, /data-page="rules"/);
   assert.match(empty, /data-occupied="false"/);
-  assert.match(empty, /Raise pays difference/);
-  assert.match(empty, /Unpaid checkout stays off the board until Polar reports paid/);
+  assert.match(empty, /same cleaned brief link may raise/i);
+  assert.match(empty, /incomplete or abandoned checkout never appears on the wall/i);
   assert.doesNotMatch(empty, /data-rules-raise/);
-  assert.doesNotMatch(empty, /Polar charges the difference on a raise/);
+  assert.doesNotMatch(empty, /Waffo charges the difference on a raise/);
   assert.doesNotMatch(empty, /not a new full bid/);
   assert.doesNotMatch(empty, /data-raise-difference/);
   assert.doesNotMatch(empty, /data-raise-charged/);
@@ -270,14 +270,15 @@ test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkou
   assert.match(occupied, /data-rules-raise=""/);
   assert.match(
     occupied,
-    /Polar charges the difference on a raise — not a new full bid/,
+    /A raise charges the original payer only the difference/,
   );
   assert.match(
     occupied,
-    /Unpaid Polar checkout stays off the wall until Polar reports paid/,
+    /incomplete or abandoned checkout never appears on the wall/i,
   );
   assert.match(occupied, /Rank is the bid/);
-  assert.match(occupied, /Raise pays difference/);
+  assert.match(occupied, /same cleaned brief link may raise/i);
+  assert.doesNotMatch(occupied, /Waffo|outbid\.lol|\bclone\b|\bfixture\b/i);
   assert.doesNotMatch(occupied, /data-raise-difference/);
   assert.doesNotMatch(occupied, /data-raise-charged/);
   assert.doesNotMatch(occupied, /data-raise-charge=/);
@@ -285,7 +286,7 @@ test("occupied /rules names Polar raise-pays-difference — unpaid Polar checkou
   assert.doesNotMatch(occupied, /[0-9][0-9,]*\s*(followers|subscribers)/i);
 });
 
-test("occupied raise-too-small names Polar still charges only the difference — unpaid Polar checkout stays off", () => {
+test("raise-too-small copy is provider-neutral in empty and occupied states", () => {
   const empty = renderToStaticMarkup(
     createElement(RaiseTooSmallCopy, { occupied: false }),
   );
@@ -294,10 +295,10 @@ test("occupied raise-too-small names Polar still charges only the difference —
   assert.match(empty, /No rank change/);
   assert.match(
     empty,
-    /Unpaid Polar checkout stays off the wall until Polar reports paid/,
+    /incomplete or abandoned checkout stays off the wall/i,
   );
   assert.doesNotMatch(empty, /data-raise-too-small/);
-  assert.doesNotMatch(empty, /Polar still charges only the difference/);
+  assert.doesNotMatch(empty, /Waffo still charges only the difference/);
   assert.doesNotMatch(empty, /not a new full bid/);
   assert.doesNotMatch(empty, /data-raise-difference/);
   assert.doesNotMatch(empty, /data-raise-charged/);
@@ -311,17 +312,14 @@ test("occupied raise-too-small names Polar still charges only the difference —
   assert.match(occupied, /data-occupied="true"/);
   assert.match(occupied, /data-raise-too-small=""/);
   assert.match(occupied, /Raise is too small/);
-  assert.match(occupied, /Polar still charges only the difference/);
-  assert.match(occupied, /not a new full bid/);
-  assert.match(
-    occupied,
-    /Unpaid Polar checkout stays off the wall/,
-  );
+  assert.match(occupied, /original payer is charged only the difference/);
+  assert.match(occupied, /wall changes only after payment is confirmed/);
   assert.match(occupied, /at least \$1 above the current bid/);
   assert.doesNotMatch(occupied, /data-raise-difference/);
   assert.doesNotMatch(occupied, /data-raise-charged/);
   assert.doesNotMatch(occupied, /data-raise-charge=/);
   assert.doesNotMatch(occupied, /data-about-raise/);
   assert.doesNotMatch(occupied, /data-rules-raise/);
+  assert.doesNotMatch(occupied, /Waffo|outbid\.lol|\bclone\b|\bfixture\b/i);
   assert.doesNotMatch(occupied, /[0-9][0-9,]*\s*(followers|subscribers)/i);
 });

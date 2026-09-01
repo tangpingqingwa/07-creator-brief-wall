@@ -10,11 +10,12 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test --test-force-exit --test-reporter spec tests/*.test.ts"
+    "test": "WAFFO_MODE=fixture tsx --test --test-force-exit --test-reporter spec tests/*.test.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^11.10.0",
-    "next": "^15.5.2",
+    "@waffo/pancake-ts": "0.19.1",
+    "better-sqlite3": "13.0.3",
+    "next": "16.3.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

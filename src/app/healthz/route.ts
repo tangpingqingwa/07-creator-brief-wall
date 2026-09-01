@@ -1,4 +1,4 @@
-import { getDb } from "../../lib/db";
+import { assertRuntimeReady } from "../../lib/polar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -6,7 +6,11 @@ export const dynamic = "force-dynamic";
 export type HealthzOk = { ok: true };
 
 export async function GET(): Promise<Response> {
-  getDb().prepare("SELECT 1 AS ok").get();
-  const body: HealthzOk = { ok: true };
-  return Response.json(body, { status: 200 });
+  try {
+    assertRuntimeReady();
+    const body: HealthzOk = { ok: true };
+    return Response.json(body, { status: 200 });
+  } catch {
+    return Response.json({ ok: false, ready: false }, { status: 503 });
+  }
 }

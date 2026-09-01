@@ -39,7 +39,7 @@ function confirmDocument(body: string): string {
 <style>${css}</style>
 </head>
 <body>
-<div class="site-frame">${body}</div>
+<div class="site-frame">${body}<footer class="maker-footer" data-maker-contact=""><p>Built by <a href="mailto:tangpingqingwa@gmail.com">tangpingqingwa@gmail.com</a></p></footer></div>
 </body>
 </html>
 `;

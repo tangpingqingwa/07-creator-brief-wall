@@ -1,7 +1,8 @@
 import React, { type ReactNode } from "react";
 import {
-  isPolarPaidListing,
+  isWaffoPaidListing,
   rankListings,
+  type Platform,
   type RankedListing,
 } from "./rank";
 
@@ -13,49 +14,87 @@ function hostLabel(url: string): string {
   }
 }
 
-function PostBriefHop() {
+const FIND_RESULT_LIMIT = 6;
+
+/** Search stays a small pure helper for integrations; the wall itself has no search chrome. */
+export function findPaidBriefs(
+  listings: readonly RankedListing[],
+  query: string,
+): RankedListing[] {
+  const normalized = query.trim().toLocaleLowerCase();
+  const paid = listings.filter((listing) => isWaffoPaidListing(listing));
+  if (!normalized) {
+    return paid.slice(0, FIND_RESULT_LIMIT);
+  }
+  const terms = normalized.split(/\s+/).filter(Boolean);
+  return paid
+    .filter((listing) => {
+      const searchable = [
+        listing.brand,
+        hostLabel(listing.briefUrl),
+        listing.terms,
+      ]
+        .join(" ")
+        .toLocaleLowerCase();
+      return terms.every((term) => searchable.includes(term));
+    })
+    .slice(0, FIND_RESULT_LIMIT);
+}
+
+const PLATFORM_LABELS: Record<Platform, string> = {
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  instagram: "Instagram",
+  twitch: "Twitch",
+};
+
+function PlatformLanes({ listing }: { listing: RankedListing }) {
+  const platforms = listing.platforms?.filter(
+    (platform, index, all) => all.indexOf(platform) === index,
+  );
+  if (!platforms || platforms.length === 0) {
+    return null;
+  }
+  return (
+    <ul className="platform-lanes" data-platform-lanes="" aria-label="Creator platforms">
+      {platforms.map((platform) => (
+        <li className="platform-lane" data-platform={platform} key={platform}>
+          {PLATFORM_LABELS[platform]}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PostBriefLink() {
   return (
     <a
-      className="post-brief post-after-open post-after-open-first post-after-open-two post-after-open-three post-after-open-four post-after-open-five post-after-open-six"
+      className="post-brief"
       href="#claim"
       data-post-brief=""
-      data-post-after-open=""
-      data-post-after-open-first=""
       data-first-write="post"
-      data-post-after-open-two=""
-      data-post-after-open-three=""
-      data-post-after-open-four=""
-      data-post-after-open-five=""
-      data-post-after-open-six=""
-      aria-label="Post a brief after Open brief"
+      aria-label="Post a brief"
     >
-      <span className="post-after-note">after Open brief</span>
       <span className="post-label">Post a brief</span>
       <span className="post-dest">Claim #1</span>
     </a>
   );
 }
 
-function OpenBriefHop({ listing }: { listing: RankedListing }) {
+function OpenBriefLink({ listing }: { listing: RankedListing }) {
   const host = hostLabel(listing.briefUrl);
   if (listing.rank === 1) {
     return (
       <a
-        className="brief-url open-after-terms open-after-post-first open-after-post-two open-after-post-three open-after-post-four open-after-post-five"
+        className="brief-url"
+        data-slot="card-action"
         href={`/r/${listing.id}`}
         data-brief-url={listing.briefUrl}
         data-open-brief=""
-        data-open-after-terms=""
         data-first-click="open"
-        data-open-after-post-first=""
         data-first-read="open"
-        data-open-after-post-two-stamp=""
-        data-open-after-post-three-stamp=""
-        data-open-after-post-four-stamp=""
-        data-open-after-post-five-stamp=""
         aria-label={`Open brief at ${host}`}
       >
-        <span className="open-after-note">after Terms</span>
         <span className="open-label">Open brief</span>
         <span className="host">{host}</span>
       </a>
@@ -64,6 +103,7 @@ function OpenBriefHop({ listing }: { listing: RankedListing }) {
   return (
     <a
       className="brief-url later-open"
+      data-slot="card-action"
       href={`/r/${listing.id}`}
       data-brief-url={listing.briefUrl}
       data-open-brief=""
@@ -77,23 +117,25 @@ function OpenBriefHop({ listing }: { listing: RankedListing }) {
 }
 
 function OccupiedLeadFlyer({ listing }: { listing: RankedListing }) {
-  if (!isPolarPaidListing(listing)) {
+  if (!isWaffoPaidListing(listing)) {
     return null;
   }
   const lead = true;
-  const hop = <OpenBriefHop listing={listing} />;
+  const openBriefLink = <OpenBriefLink listing={listing} />;
   return (
     <li
       className="card card-lead"
+      data-slot="paid-card"
       data-rank={listing.rank}
       data-id={listing.id}
       data-brand={listing.brand}
       data-bid={listing.bidUsd}
-      data-polar-paid=""
+      data-waffo-paid=""
     >
       <span className="tape" aria-hidden="true" />
       <span className="rank">#{listing.rank}</span>
       <span className="brand">{listing.brand}</span>
+      <PlatformLanes listing={listing} />
       <p
         className="terms prize-before-price"
         data-terms=""
@@ -103,11 +145,15 @@ function OccupiedLeadFlyer({ listing }: { listing: RankedListing }) {
         <span className="terms-label">Terms</span>
         <span className="terms-copy">{listing.terms}</span>
       </p>
-      {lead ? hop : null}
+      {lead ? openBriefLink : null}
       <span className="bid later-fact" data-later-fact="">
         ${listing.bidUsd}
       </span>
-      <span className="clicks later-fact" data-clicks={listing.clicks} data-later-fact="">
+      <span
+        className="clicks later-fact"
+        data-clicks={listing.clicks}
+        data-later-fact=""
+      >
         {listing.clicks} clicks
       </span>
       <span className="brief-url-text">{listing.briefUrl}</span>
@@ -116,38 +162,34 @@ function OccupiedLeadFlyer({ listing }: { listing: RankedListing }) {
 }
 
 function OccupiedLaterFlyer({ listing }: { listing: RankedListing }) {
-  if (!isPolarPaidListing(listing)) {
+  if (!isWaffoPaidListing(listing)) {
     return null;
   }
   const lead = false;
-  const hop = <OpenBriefHop listing={listing} />;
+  const openBriefLink = <OpenBriefLink listing={listing} />;
   return (
     <li
       className="card later-flyer"
+      data-slot="paid-card"
       data-rank={listing.rank}
       data-id={listing.id}
       data-brand={listing.brand}
       data-bid={listing.bidUsd}
       data-later-flyer=""
-      data-polar-paid=""
+      data-waffo-paid=""
     >
-      <p className="later-rankline">
-        <span className="rank">#{listing.rank}</span>
-        <span className="brand later-brand">{listing.brand}</span>
+      <span className="rank">#{listing.rank}</span>
+      <span className="brand later-brand">{listing.brand}</span>
+      <PlatformLanes listing={listing} />
+      <p className="later-terms" data-terms="">
+        <span className="later-terms-kicker">Terms</span>
+        <span className="later-terms-copy">{listing.terms}</span>
       </p>
-      <div className="later-slip">
-        <p className="later-terms" data-terms="">
-          <span className="later-terms-kicker">Terms</span>
-          <span className="later-terms-copy">{listing.terms}</span>
-        </p>
-        <p className="later-foot">
-          <span className="bid">${listing.bidUsd}</span>
-          <span className="clicks" data-clicks={listing.clicks}>
-            {listing.clicks} clicks
-          </span>
-        </p>
-        {lead ? null : hop}
-      </div>
+      <span className="bid">${listing.bidUsd}</span>
+      <span className="clicks" data-clicks={listing.clicks}>
+        {listing.clicks} clicks
+      </span>
+      {lead ? null : openBriefLink}
       <span className="brief-url-text">{listing.briefUrl}</span>
     </li>
   );
@@ -155,31 +197,48 @@ function OccupiedLaterFlyer({ listing }: { listing: RankedListing }) {
 
 export function OccupiedFlyers({ listings }: { listings: RankedListing[] }) {
   const paid = rankListings(listings);
-  const lead = paid.find((listing) => listing.rank === 1);
-  const later = paid.filter((listing) => listing.rank !== 1);
+  const [lead, ...later] = paid;
   if (!lead) {
     return null;
   }
   return (
-    <div className="flyers">
-      <ol
-        className="cards cards-lead"
-        aria-label="Paid briefs this week"
-        data-rolling-week=""
+    <div className="flyers" data-slot="paid-listings">
+      <section
+        className="top-three"
+        data-slot="top-three"
+        data-top-three=""
+        aria-label="Top paid creator briefs"
       >
-        <OccupiedLeadFlyer key={lead.id} listing={lead} />
-      </ol>
-      {later.length > 0 ? (
-        <section className="later-pack" data-later-pack="">
-          <p className="later-note">These flyers are not this week’s #1 prize</p>
-          <ol className="cards cards-later" aria-label="Later briefs this week">
-            {later.map((listing) => (
-              <OccupiedLaterFlyer key={listing.id} listing={listing} />
-            ))}
-          </ol>
-        </section>
-      ) : null}
-      <PostBriefHop />
+        <ol
+          className="cards cards-lead"
+          data-slot="top-three-list"
+          aria-label="Paid briefs — rolling last 7 days"
+          data-rolling-week=""
+        >
+          <OccupiedLeadFlyer key={lead.id} listing={lead} />
+        </ol>
+        {later.length > 0 ? (
+          <section
+            className="later-pack"
+            data-slot="later-list"
+            data-later-pack=""
+          >
+            <p className="later-note">
+              These flyers are not #1 in the rolling last 7 days. They are still paid creator briefs.
+            </p>
+            <ol
+              className="cards cards-later"
+              data-slot="later-list"
+              aria-label="Later briefs — rolling last 7 days"
+            >
+              {later.map((listing) => (
+                <OccupiedLaterFlyer key={listing.id} listing={listing} />
+              ))}
+            </ol>
+          </section>
+        ) : null}
+      </section>
+      <PostBriefLink />
     </div>
   );
 }
@@ -188,17 +247,46 @@ export function BoardCards({ listings }: { listings: RankedListing[] }) {
   const paid = rankListings(listings);
   if (paid.length === 0) {
     return (
-      <section className="plaster" aria-label="This week’s wall">
+      <section
+        className="plaster"
+        data-slot="empty-state"
+        aria-label="Rolling last 7 days of paid briefs"
+      >
         <p className="empty" data-empty-week="true">
-          This week’s board is empty. The plaster is blank.
+          The rolling last 7 days board is empty. The plaster is blank.
         </p>
-        <p className="empty-hint" data-empty-window="">
-          No seeded briefs. Rank is the bid. Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC. Unpaid checkout stays off the board until Polar reports paid. An abandoned brief is not Terms as #1.
-        </p>
+        <details className="empty-details">
+          <summary>About the rolling window</summary>
+          <p className="empty-hint" data-empty-window="">
+            Rank is the bid. Each confirmed placement remains eligible for
+            seven days, and the wall does not reset for everyone at Monday
+            midnight. An incomplete checkout never creates a #1 brief.
+          </p>
+        </details>
       </section>
     );
   }
   return <OccupiedFlyers listings={paid} />;
+}
+
+export function HomeRail() {
+  return (
+    <nav
+      className="home-rail"
+      data-slot="wall-shortcuts"
+      aria-label="Brief wall shortcuts"
+    >
+      <a className="home-rail-item home-rail-active" href="/">
+        <span>All briefs</span>
+      </a>
+      <a className="home-rail-item" href="/about">
+        <span>How it works</span>
+      </a>
+      <a className="home-rail-item" href="/rules">
+        <span>Rules</span>
+      </a>
+    </nav>
+  );
 }
 
 export function BoardChrome({
@@ -211,23 +299,52 @@ export function BoardChrome({
   occupied?: boolean;
 }) {
   return (
-    <main className="board" data-week-id={weekId}>
-      <header className="mast">
-        <p className="mast-mark">This week only · UTC</p>
-        <h1>Creator Brief Wall</h1>
-        <p className="lede">
-          This week’s briefs, ranked by money. Creators see who paid to be taken.
-        </p>
-        <nav className="mast-nav" aria-label="Site">
-          <a href="/">Wall</a>
+    <main
+      className="board creator-wall"
+      data-slot="wall-shell"
+      data-week-id={weekId}
+      data-theme="light"
+      data-identity="plaster-flyers"
+    >
+      <header className="mast wall-mast" data-slot="site-header">
+        <a
+          className="wall-brand"
+          data-slot="brand"
+          href="/"
+          aria-label="Creator Brief Wall home"
+        >
+          Creator Brief Wall
+        </a>
+        <p className="mast-mark">Rolling last 7 days · UTC</p>
+        <nav className="mast-nav" data-slot="primary-nav" aria-label="Site">
+          <a className="mast-wall-link" href="/">
+            Wall
+          </a>
           <a href="/about">About</a>
           <a href="/rules">Rules</a>
         </nav>
+        <h1>Creator Brief Wall</h1>
+        <p className="lede">
+          Paid briefs from the rolling last 7 days, ranked by money. Creators see who paid to be taken. Read the terms before you open the brief.
+        </p>
       </header>
+      <div
+        className="wall-context"
+        data-slot="wall-context"
+        aria-label="Current board context"
+      >
+        <p className="wall-window" data-slot="wall-window">
+          <span>Live wall</span>
+          <span aria-hidden="true">·</span>
+          <span>rolling 7 days · paid placement</span>
+        </p>
+      </div>
       <div
         className={
           occupied ? "wall-stage wall-occupied" : "wall-stage wall-empty"
         }
+        data-slot="wall-content"
+        id="wall"
         data-occupied={occupied ? "true" : "false"}
       >
         {children}
@@ -236,10 +353,10 @@ export function BoardChrome({
         className={occupied ? "rules-note week-window" : "rules-note empty-window"}
         data-empty-window={occupied ? undefined : ""}
       >
-        Rank is the bid. Minimum $5.{" "}
+        Rank is the bid. Minimum $5. {""}
         {occupied
-          ? "Rolling last 7 days. Not Monday 00:00 UTC."
-          : "Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC."}{" "}
+          ? "Each paid brief stays live for seven days."
+          : "Each confirmed brief stays live for seven days."}{" "}
         <a href="/about">About</a> · <a href="/rules">Rules</a>
       </p>
     </main>

@@ -3,7 +3,7 @@
 **Version:** 1.0
 **Status:** Ready to build
 **Repo:** https://github.com/tangpingqingwa/07-creator-brief-wall
-**Market:** Global English. USD. Polar Merchant of Record.
+**Market:** Global English. USD. Waffo Merchant of Record.
 
 This document is the build contract. If README and SPEC disagree, SPEC wins until README is updated. If SPEC and code disagree, fix one of them in the same PR.
 
@@ -30,7 +30,8 @@ Clone of [outbid.lol](https://outbid.lol/) mechanics, applied to creator briefs.
 - Listing is **brand + payout/terms summary + brief URL**. Clicks on the brief URL are counted and public.
 - Weekly reset. Live board is the rolling last 7 days from paid placement. Not Monday 00:00 UTC.
 - Honest fields only. **No invented follower counts, reach, CPM, or “avg views.”**
-- Payments via Polar (live) and a fixture checkout (tests / CI).
+- Payments via an explicit Waffo mode (`waffo-test` or `waffo-prod`) and a
+  fixture checkout (`fixture` for tests / CI).
 - Pages: board, about, rules, checkout return.
 - USD, English, global. No China-city default. No consumer ad network.
 
@@ -48,7 +49,7 @@ Clone of [outbid.lol](https://outbid.lol/) mechanics, applied to creator briefs.
 
 - If after 90 days brands will not bid because creators are not looking, freeze features. Do not add a marketplace to “fix” an empty room.
 - If a listing invents audience size, take it down. Do not paper over it with a disclaimer.
-- Polar down → checkout errors. Do not silently switch to a card form we do not operate.
+- Waffo down → checkout errors. Do not silently switch to a card form we do not operate.
 
 ---
 
@@ -60,7 +61,7 @@ Clone of [outbid.lol](https://outbid.lol/) mechanics, applied to creator briefs.
 | Brand / agency | Put one brief above everyone else for this week | Pay USD, appear at the rank the bid can take, screenshot “#1 this week.” |
 | Viewer (no account) | Watch who is paying | Public board, public bid, public clicks. |
 
-No logged-in creator profile in v1. Paying is Polar checkout, not a first-party account.
+No logged-in creator profile in v1. Paying is Waffo checkout, not a first-party account.
 
 ---
 
@@ -70,9 +71,9 @@ No logged-in creator profile in v1. Paying is Polar checkout, not a first-party 
 GET  /                         weekly board + place/raise form
 GET  /about                    what this is (not affiliated with TikTok/Meta/Google/Amazon)
 GET  /rules                    ranking, money, URL, NSFW, reset
-GET  /checkout/return          Polar return (paid | canceled)
-POST /checkout                 start Polar (live) or fixture session
-POST /webhooks/polar           Polar webhook → claim rank
+GET  /checkout/return          Waffo return (pending | paid | canceled)
+POST /checkout                 start the explicit Waffo mode or fixture session
+POST /webhooks/waffo           Waffo webhook → claim rank
 GET  /r/:id                    confirm sheet: terms + brief URL before leaving
 POST /r/:id                    increment public click, 302 to canonical brief URL
 GET  /healthz                  200 if process up
@@ -111,7 +112,7 @@ type Listing = {
 
 `terms` is the brand’s own payout/terms **summary** (e.g. “$800 flat + product, 1 TikTok, no competitor mentions”). The site does not calculate or guarantee the payout.
 
-Identity for raise: same **canonical brief URL** still inside the rolling last 7 days from first paid placement. Brand name may be edited on raise; the URL key does not change. `weekId` stays a Polar/audit label — not raise identity. A brand who paid Sunday still raises on Monday if that placement is inside last 7 days. After the window ends, the same URL is a new place (full bid), not a raise.
+Identity for raise: same **canonical brief URL** still inside the rolling last 7 days from first paid placement. Brand name may be edited on raise; the URL key does not change. `weekId` stays a Waffo/audit label — not raise identity. A brand who paid Sunday still raises on Monday if that placement is inside last 7 days. After the window ends, the same URL is a new place (full bid), not a raise.
 
 ---
 
@@ -124,8 +125,8 @@ Copied from outbid.lol, with this vertical’s minimum and weekly reset.
 3. Paying less than #1 still lists at the rank that bid can take.
 4. **Equal bids:** the **older** listing (earlier `createdAt` at that amount, then earlier first payment) keeps the higher rank.
 5. **Raise:** submit the same canonical brief URL again while that listing is still inside last 7 days. `weekId` is not the raise key. The new bid must be an integer **at least $1 above the listing’s current bid**. To take #1 from someone else, the new bid must be **at least $1 above the current top bid**. The payer pays only the **difference**. Someone else cannot steal that rank by paying only that difference — they must pay a full bid **strictly greater** than the current top.
-6. A completed Polar payment (or fixture payment in tests) is what claims the rank. Unpaid checkout sessions do nothing.
-7. **Weekly reset:** rolling last 7 days from first paid placement (`createdAt`). Every listing ages off the live board seven days later. Clicks and bids do not carry over. The window starts empty when nothing paid remains inside it. Optional read-only archive of aged rows is allowed; it must not affect live rank. Monday 00:00 UTC is the ISO `weekId` Polar/audit label, **not** the public expiry. A brand outside that civil midnight does not lose the plaster on a timezone tax. Not a 24h lock on #1.
+6. A completed Waffo payment (or fixture payment in tests) is what claims the rank. Unpaid checkout sessions do nothing.
+7. **Weekly reset:** rolling last 7 days from first paid placement (`createdAt`). Every listing ages off the live board seven days later. Clicks and bids do not carry over. The window starts empty when nothing paid remains inside it. Optional read-only archive of aged rows is allowed; it must not affect live rank. Monday 00:00 UTC is the ISO `weekId` Waffo/audit label, **not** the public expiry. A brand outside that civil midnight does not lose the plaster on a timezone tax. Not a 24h lock on #1.
 
 Display order: `bidUsd DESC`, then `createdAt ASC` (older wins ties), then `id ASC`.
 
@@ -152,16 +153,18 @@ Apply before persist and before redirect.
 
 | Mode | When | Behavior |
 |---|---|---|
-| Fixture | tests, CI, `POLAR_LIVE` unset | `FakePolarPort` completes checkout in-process. No network. |
-| Live Polar | `POLAR_LIVE=1` + Polar secrets | Polar Checkout, webhook claims rank. Polar is Merchant of Record. |
+| `fixture` | explicit `WAFFO_MODE=fixture` in tests/local smoke | `FixturePaymentPort` completes checkout in-process. No provider network. |
+| `waffo-test` | explicit non-production mode plus test-scoped Waffo config | Waffo test checkout and signed test webhook; never accepted by production. |
+| `waffo-prod` | explicit production mode plus production-scoped Waffo config | Waffo production checkout and signed production webhook; durable DB and public HTTPS required. |
 
 - Currency: **USD** only.
 - Amount charged on first place: the bid.
 - Amount charged on raise: **newBid − currentBid** for that listing.
-- Missing live secrets during operator smoke: record `BLOCKED-SECRET` with the exact env var. Do not fake a live charge.
-- CI and `scripts/test.sh` **never** set `POLAR_LIVE=1` and never call Polar.
+- Missing mode-scoped secrets during operator smoke: record `BLOCKED-SECRET` with the exact env var. Do not fake a provider charge.
+- CI and `scripts/test.sh` run only explicit `WAFFO_MODE=fixture` and never call Waffo.
+- The canonical signed endpoint is `POST /webhooks/waffo`; the retired Polar path is inert and returns 410.
 
-Env (live only): `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_SUCCESS_URL`, `POLAR_PRODUCT_ID` (or equivalent Polar checkout product). Names are frozen in `.env.example` when the checkout PR lands.
+Mode-scoped deployment env: `WAFFO_MODE`, `WAFFO_MERCHANT_ID`, `WAFFO_PRIVATE_KEY` (or file), `WAFFO_STORE_ID`, `WAFFO_PRODUCT_ID`, `WAFFO_WEBHOOK_TEST_PUBLIC_KEY` / `WAFFO_WEBHOOK_PROD_PUBLIC_KEY`, `PUBLIC_BASE_URL`, `WAFFO_API_BASE=https://api.waffo.ai`, and a durable `DATABASE_PATH` for production. Names are frozen in `.env.example`.
 
 ---
 
@@ -171,29 +174,29 @@ Env (live only): `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_SUCCESS_UR
 
 Outbid-like: one brief URL field, brand, terms, amount, **Outbid** button. Ranked cards show rank, brand, **terms** as the labeled prize, then **$bid**, **clicks**, and the brief URL (or a “Open brief” control that goes to the confirm sheet at `/r/:id`). On the taped flyer, terms sit before $bid. On the **#1** flyer only, Terms reads first and larger than `$bid` and clicks. That `$bid` stays a later fact — muted, after Terms, not shouting beside the prize. Occupied #1 clicks stay a later fact after Terms — muted, not shouting beside the prize. Later ranks stay quieter. Occupied **Open brief** on #1 is the first click; later-rank Open is the same hop, quieter, after that flyer. Occupied Terms stay the prize. Later Open stays after #1 Open in the later list — a foot after that flyer’s `$bid`, not the prize hop beside Terms. Do not add a second named open control. **Open brief** is the hop after Terms — not a second prize next to `$bid`. On an occupied wall, **Open brief** wins the first click. **Post a brief** follows that hop — it does not sit before the flyers. It lands on Claim #1. After Open wins the first click, concentrate that same **Post a brief** hop so a first-time buyer who came to post can still find it. Do not add a second named post control. After that write hop is concentrated, concentrate the same **Open brief** hop so a first-time creator who came to read still opens the flyer. Do not add a second named open control. After that Open brief hop is re-concentrated, concentrate the same **Post a brief** hop again so a first-time buyer who came to post can still find it under the louder Open. Do not add a second named post control. After that Post hop is concentrated again, concentrate the same **Open brief** hop again so a first-time creator who came to read still opens the flyer under the louder Post. Do not add a second named open control. After that Open brief hop is re-concentrated again, concentrate the same **Post a brief** hop again so a first-time buyer who came to post can still find it under the louder Open. Do not add a second named post control. After that Post hop is concentrated again, concentrate the same **Open brief** hop again so a first-time creator who came to read still opens the flyer under the louder Post. Do not add a second named open control. After that Open brief hop is re-concentrated again, concentrate the same **Post a brief** hop again so a first-time buyer who came to post can still find it under the louder Open. Do not add a second named post control. After that Post hop is concentrated again, concentrate the same **Open brief** hop again so a first-time creator who came to read still opens the flyer under the louder Post. Do not add a second named open control. After that Open brief hop is re-concentrated again, concentrate the same **Post a brief** hop again so a first-time buyer who came to post can still find it under the louder Open. Do not add a second named post control. After that Post hop is concentrated again, concentrate the same **Open brief** hop again so a first-time creator who came to read still opens the flyer under the louder Post. Do not add a second named open control. After that Open brief hop is re-concentrated again, concentrate the same **Post a brief** hop again so a first-time buyer who came to post can still find it under the louder Open. Do not add a second named post control.
 
-On occupied plaster, checkout copy names Polar charges the difference on a raise — not a new full bid. The $ on Claim #1 is the public bid. New brief: Polar charges that full amount. Same brief URL already on the wall: Polar charges only the difference. Unpaid Polar checkout stays off the wall until Polar reports paid.
+On occupied plaster, checkout copy names Waffo charges the difference on a raise — not a new full bid. The $ on Claim #1 is the public bid. New brief: Waffo charges that full amount. Same brief URL already on the wall: Waffo charges only the difference. Unpaid Waffo checkout stays off the wall until Waffo reports paid.
 
 Empty week: honest empty state. Do not seed fake briefs. Empty plaster already leads with Claim #1, so it has no Post a brief hop, no first-write Post after Open, no first-read Open after Post, no second Post concentrate after Open is re-concentrated, no second Open concentrate after Post is re-concentrated, no third Post concentrate after Open is re-concentrated again, no third Open concentrate after Post is re-concentrated again, no fourth Post concentrate after Open is re-concentrated again, no fourth Open concentrate after Post is re-concentrated again, no fifth Post concentrate after Open is re-concentrated again, no fifth Open concentrate after Post is re-concentrated again, and no sixth Post concentrate after Open is re-concentrated again. Occupied chrome (Post, Open, Terms, later-fact `$bid`, later-rank Open, cards-later, prize stamps, rolling-week flyer stamps) must not leak onto an empty week. Empty `/` is Claim #1 paper — not a flyer-shaped plaster hole beside the form. Empty `/` keeps later-open / cards-later CSS off Claim #1 paper. Empty plaster has one first click: **Claim #1** / **Outbid**. Brand, terms, and the brief URL are a later write after that hop — not same-weight fields fighting Outbid. Occupied claim still keeps those fields on the rail with Outbid. Empty `/` names a fair window: rolling last 7 days from paid placement, **not** Monday 00:00 UTC. Do not print “The board resets Monday 00:00 UTC” on blank plaster.
 
 ### About (`/about`)
 
-State: no ads, no API keys, no revenue share. Brands pay to be seen by creators. Rank is the bid. Independent; not affiliated with TikTok, YouTube, Instagram, Twitch, or Meta. Occupied `/about` names Polar charges the difference on a raise, not a new full bid. Unpaid Polar checkout stays off the wall.
+State: no ads, no API keys, no revenue share. Brands pay to be seen by creators. Rank is the bid. Independent; not affiliated with TikTok, YouTube, Instagram, Twitch, or Meta. Occupied `/about` names Waffo charges the difference on a raise, not a new full bid. Unpaid Waffo checkout stays off the wall.
 
 ### Rules (`/rules`)
 
-Publish §6–§7 in operator language. Include min $5, older-wins-ties, raise = difference, weekly reset, no fake followers, no chat/NSFW. Occupied `/rules` names Polar charges the difference on a raise, not a new full bid. Unpaid Polar checkout stays off the wall.
+Publish §6–§7 in operator language. Include min $5, older-wins-ties, raise = difference, weekly reset, no fake followers, no chat/NSFW. Occupied `/rules` names Waffo charges the difference on a raise, not a new full bid. Unpaid Waffo checkout stays off the wall.
 
 ### Checkout return
 
-Paid place → “You’re on the board” + link home. Occupied `/checkout/return` after a raise names Polar charged the difference, not a new full bid. Canceled / unpaid Polar return still changes no rank.
+Paid place → “You’re on the board” + link home. Occupied `/checkout/return` after a raise names Waffo charged the difference, not a new full bid. Canceled / unpaid Waffo return still changes no rank.
 
 ### Raise too small (`/checkout/raise-too-small`)
 
-Occupied raise-too-small names Polar still charges only the difference, not a new full bid. Unpaid Polar checkout stays off the wall. A raise that is not at least $1 above the current bid never starts Polar checkout.
+Occupied raise-too-small names Waffo still charges only the difference, not a new full bid. Unpaid Waffo checkout stays off the wall. A raise that is not at least $1 above the current bid never starts Waffo checkout.
 
 ### Confirm brief (`GET /r/:id`)
 
-A first-time creator who opens a flyer sees the terms and the full brief URL before leaving. Rank and public hops sit after that confirm. Occupied confirm hops stay a later fact after terms — muted, not shouting beside the prize. Occupied confirm $bid stays a later fact after terms — muted, not shouting beside the prize. Occupied confirm Terms stay the prize over brand — muted, not shouting over the terms prize. Occupied confirm uncounted preview recedes after terms — muted, not shouting over the terms prize. Leave is `POST /r/:id` (“Leave to the brief”). A GET does not count as a click. Opening the flyer (`GET /r/:id`) stays 200 and does not increment `clicks`; the hop is counted only on the confirmed leave.
+A first-time creator who opens a flyer sees the terms and the full brief URL before leaving. Rank and public hops sit after that confirm. Occupied confirm hops stay a later fact after terms — muted, not shouting beside the prize. Occupied confirm $bid stays a later fact after terms — muted, not shouting beside the prize. Occupied confirm Terms stay the prize over brand — muted, not shouting over the terms prize. Occupied confirm uncounted preview recedes after terms — muted, not shouting over the terms prize. Occupied confirm brief URL recedes after terms — muted, not shouting over the terms prize. Leave is `POST /r/:id` (“Leave to the brief”). A GET does not count as a click. Opening the flyer (`GET /r/:id`) stays 200 and does not increment `clicks`; the hop is counted only on the confirmed leave.
 
 On the occupied wall, a first-time creator reads **Terms** as the labeled prize on the taped flyer. `$bid` and clicks stay later facts. On the #1 flyer only, that Terms prize reads first and larger than `$bid` and clicks, and `$bid` stays a later fact so it cannot shout beside Terms. Occupied #1 clicks stay a later fact after Terms so they cannot shout beside the prize. They do not have to open the confirm sheet to know the payout summary. After Terms, **Open brief** is the certain next hop — the first click. Later ranks keep that same Open brief hop quieter so it cannot steal the first click from #1. Occupied Terms stay the prize. Later Open stays after #1 Open in the later list, after that flyer’s `$bid`. After Post is concentrated as the first write, that same Open brief hop is the first read. After Post is re-concentrated as the first write, that same Open brief hop is still the first read — concentrated so it does not disappear under the louder Post. After Post is re-concentrated again as the first write, that same Open brief hop is still the first read — concentrated so it does not disappear under the louder Post. After Post is re-concentrated again as the first write, that same Open brief hop is still the first read — concentrated so it does not disappear under the louder Post. After Post is re-concentrated again as the first write, that same Open brief hop is still the first read — concentrated so it does not disappear under the louder Post. Leave still confirms on GET `/r/:id`. Opening that sheet has not counted a hop.
 
@@ -209,10 +212,10 @@ On the occupied wall, a first-time buyer who came to post hops **Post a brief** 
 | Bid &gt; $50,000 | 400 |
 | Missing brand / terms / brief URL | 400 |
 | Chat, NSFW, shortener, non-https | 400, listing rejected |
-| Raise without paying the difference | 400 `raise_too_small`; no rank change. Occupied raise-too-small names Polar still charges only the difference, not a new full bid. Unpaid Polar checkout stays off the wall. |
+| Raise without paying the difference | 400 `raise_too_small`; no rank change. Occupied raise-too-small names Waffo still charges only the difference, not a new full bid. Unpaid Waffo checkout stays off the wall. |
 | Equal bid vs existing #1 from a different URL | lists below the older row |
-| Polar / fixture payment not completed | no listing |
-| Polar live misconfigured | checkout 503; smoke may be `BLOCKED-SECRET` |
+| Waffo / fixture payment not completed | no listing |
+| Waffo mode/config misconfigured | checkout 503; smoke may be `BLOCKED-SECRET` |
 | Weekly reset | previous rows gone from `/` |
 
 Never invent a listing to fill the page. Never show a follower number.
@@ -228,14 +231,14 @@ Operator-only (`scripts/live-smoke.sh`). Not called from `scripts/test.sh` or Ac
 | Health | `GET /healthz` 200 |
 | Empty board | `/` has no fake follower counts and no seeded briefs |
 | About / rules | both 200, mention rank = bid and weekly reset |
-| Place $5 | fixture or live Polar; card appears with brand + terms + $5 |
+| Place $5 | explicit fixture or Waffo mode; card appears with brand + terms + $5 |
 | Outbid | second brief at $6 is #1; first stays on the board |
 | Raise | first listing pays **$1** difference to $7 and becomes #1 |
 | Tie | two $8 bids: older stays higher |
 | Click | confirm on `GET /r/:id`, then `POST /r/:id`; public clicks increment on the confirmed leave; destination has no tracking junk we added |
 | Reject | chat URL and NSFW URL do not list |
 | Reset | after week roll (test clock or documented operator hook), board empty |
-| Secret | live Polar missing token → `BLOCKED-SECRET: POLAR_ACCESS_TOKEN` (or the frozen name) |
+| Secret | missing mode-scoped Waffo secret → `BLOCKED-SECRET: <exact variable>` |
 
 `FAIL` = crash, wrong rank, invented followers, or a live charge in CI.
 
@@ -259,4 +262,4 @@ Full process: [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 Implementation plan (stack, modules, PR DAG): [BUILD.md](./BUILD.md).
 
-Until there is an application binary, `scripts/test.sh` still has to pass: contract files exist, SPEC/CONTRIBUTING agree, no tracked secrets. Adding a server or CLI means **extending** that script with unit/contract tests. Live Polar calls are optional and must not be required for `main` to stay green.
+Until there is an application binary, `scripts/test.sh` still has to pass: contract files exist, SPEC/CONTRIBUTING agree, no tracked secrets. Adding a server or CLI means **extending** that script with unit/contract tests. Waffo calls are optional and must not be required for `main` to stay green.

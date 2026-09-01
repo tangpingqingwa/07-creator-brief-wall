@@ -96,14 +96,15 @@ test("clicks and bids do not carry over to the next weekId", () => {
   assert.equal(prior.clicks, 5);
 });
 
-test("rolling last-7-days window is 7 * 24h, not Monday 00:00 UTC", () => {
+test("rolling last-7-days window is 7 * 24h with an expired exact boundary", () => {
   const now = new Date("2026-08-24T00:00:00.000Z");
   assert.equal(ROLLING_WEEK_MS, 7 * 24 * 60 * 60 * 1000);
   assert.equal(
     rollingWeekStart(now).toISOString(),
     "2026-08-17T00:00:00.000Z",
   );
-  assert.equal(bidInRollingWeek("2026-08-17T00:00:00.000Z", now), true);
+  assert.equal(bidInRollingWeek("2026-08-17T00:00:00.000Z", now), false);
+  assert.equal(bidInRollingWeek("2026-08-17T00:00:00.001Z", now), true);
   assert.equal(bidInRollingWeek("2026-08-16T23:59:59.000Z", now), false);
   assert.equal(bidInRollingWeek("2026-08-23T23:59:59.000Z", now), true);
   assert.equal(bidInRollingWeek("2026-08-24T00:00:01.000Z", now), false);
@@ -115,7 +116,7 @@ test("Monday 00:00 UTC does not drop a bid still inside the rolling week", () =>
   assert.equal(bidInRollingWeek(sundayPay, mondayMidnight), true);
   assert.equal(
     bidInRollingWeek(sundayPay, new Date("2026-08-23T12:00:00.000Z")),
-    true,
+    false,
   );
   assert.equal(
     bidInRollingWeek(sundayPay, new Date("2026-08-23T12:00:01.000Z")),
@@ -150,14 +151,14 @@ test("live board keeps a Sunday pay across Monday 00:00 UTC and drops it after 7
     assert.equal(monday[0]?.id, "lst_sunday");
     assert.equal(monday[0]?.bidUsd, 20);
 
-    const stillLive = listLiveBoard(
-      db,
-      new Date("2026-08-23T12:00:00.000Z"),
-    );
-    assert.equal(stillLive.length, 1);
-    assert.equal(stillLive[0]?.id, "lst_sunday");
+  const stillLive = listLiveBoard(
+    db,
+    new Date("2026-08-23T11:59:59.999Z"),
+  );
+  assert.equal(stillLive.length, 1);
+  assert.equal(stillLive[0]?.id, "lst_sunday");
 
-    const aged = listLiveBoard(db, new Date("2026-08-23T12:00:01.000Z"));
+  const aged = listLiveBoard(db, new Date("2026-08-23T12:00:00.000Z"));
     assert.equal(aged.length, 0);
 
     const stored = db.prepare("SELECT COUNT(*) AS n FROM listings").get() as {

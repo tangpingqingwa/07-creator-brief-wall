@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Offline gate for main. Must exit 0 on a clean clone with no secrets.
 # When application code lands, add unit/contract tests here. Do not delete the
-# contract checks. Do not require live Polar or other third-party networks.
+# contract checks. Do not require live Waffo or other third-party networks.
 # Operator live smoke is scripts/live-smoke.sh and is never invoked from here.
 set -euo pipefail
 
@@ -37,9 +37,11 @@ grep -qE '^[[:space:]]+ci:[[:space:]]*$' .github/workflows/ci.yml \
   || fail "ci.yml missing job id ci"
 grep -q 'scripts/test.sh' .github/workflows/ci.yml \
   || fail "ci.yml does not run scripts/test.sh"
+grep -Fq 'npm audit --omit=dev --audit-level=high' .github/workflows/ci.yml \
+  || fail "ci.yml must enforce the production dependency audit"
 
 echo "== product contract keywords =="
-grep -qi 'Polar' SPEC.md || fail "SPEC.md must name Polar"
+grep -qi 'Waffo' SPEC.md || fail "SPEC.md must name Waffo"
 grep -q '\$5' SPEC.md || fail "SPEC.md must document min \$5"
 grep -qi 'weekly' SPEC.md || fail "SPEC.md must document weekly reset"
 grep -qi 'follower' SPEC.md || fail "SPEC.md must forbid fake follower counts"
@@ -63,22 +65,34 @@ echo "== live-smoke stays operator-only =="
 if grep -Eq '^\s*(bash )?(\./)?scripts/live-smoke\.sh' scripts/test.sh; then
   fail "test.sh must not invoke live-smoke.sh"
 fi
-if grep -E '^[[:space:]]*(export[[:space:]]+)?POLAR_LIVE=1' scripts/test.sh >/dev/null; then
-  fail "test.sh must not set POLAR_LIVE=1"
-fi
 if [[ -f .github/workflows/ci.yml ]]; then
-  if grep -nE 'live-smoke|POLAR_LIVE=1' .github/workflows/ci.yml >/dev/null; then
-    fail "CI must not run live-smoke or set POLAR_LIVE=1"
+  if grep -nE 'live-smoke|waffo-prod|waffo-test' .github/workflows/ci.yml >/dev/null; then
+    fail "CI must not run live-smoke or a networked Waffo mode"
   fi
 fi
-grep -q 'BLOCKED-SECRET: POLAR_ACCESS_TOKEN' scripts/live-smoke.sh \
-  || fail "live-smoke.sh must name BLOCKED-SECRET: POLAR_ACCESS_TOKEN"
-grep -q 'POLAR_LIVE' scripts/live-smoke.sh \
-  || fail "live-smoke.sh must gate live Polar on POLAR_LIVE"
-grep -q 'sandbox.polar.sh' scripts/live-smoke.sh \
-  || fail "live-smoke.sh must require a Polar sandbox Checkout URL"
-grep -q 'POLAR_API_BASE' scripts/live-smoke.sh \
-  || fail "live-smoke.sh must pass POLAR_API_BASE to the live process"
+grep -q 'BLOCKED-SECRET: WAFFO_MERCHANT_ID' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must report the mode-scoped merchant blocker"
+grep -q 'WAFFO_MODE=waffo-prod' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must probe explicit waffo-prod configuration"
+grep -q 'WAFFO_MODE=fixture' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must run the local process in explicit fixture mode"
+grep -q 'https://api.waffo.ai' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must name the pinned Waffo production API"
+grep -q 'provider calls=0' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must assert zero provider calls"
+grep -q 'WAFFO_API_BASE' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must pass WAFFO_API_BASE to the live process"
+grep -q 'is_non_secret_5xx' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must recognize framework-level non-secret 5xx readiness"
+grep -q 'non_secret_body' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must reject secret material in readiness errors"
+grep -q 'live_page_code' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must block the ordinary page when production readiness fails"
+grep -q 'live_click_code' scripts/live-smoke.sh \
+  || fail "live-smoke.sh must block click traffic when production readiness fails"
+if grep -q 'live_health_code" == "503"' scripts/live-smoke.sh; then
+  fail "live-smoke.sh must not require the route-level 503 after instrumentation rejection"
+fi
 grep -q 'live-smoke refuses CI=true' scripts/live-smoke.sh \
   || fail "live-smoke.sh must refuse CI=true"
 grep -q 'live-smoke must not run in GitHub Actions' scripts/live-smoke.sh \
@@ -100,14 +114,37 @@ if [[ -f package.json ]]; then
     fi
   fi
 
-  unset POLAR_LIVE
-  unset POLAR_ACCESS_TOKEN
-  unset POLAR_WEBHOOK_SECRET
-  unset POLAR_SUCCESS_URL
-  unset POLAR_PRODUCT_ID
-  unset POLAR_API_BASE
-  unset POLAR_FIXTURE_ONLY
-  export POLAR_FIXTURE_ONLY=1
+  echo "== pinned production dependencies (offline) =="
+  node <<'NODE'
+const fs = require("node:fs");
+const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+const expected = {
+  "@waffo/pancake-ts": "0.19.1",
+  "better-sqlite3": "13.0.3",
+  next: "16.3.3",
+};
+for (const [name, version] of Object.entries(expected)) {
+  if (pkg.dependencies?.[name] !== version) {
+    throw new Error(`${name} package.json must pin ${version}`);
+  }
+  const installed = lock.packages?.[`node_modules/${name}`]?.version;
+  if (installed !== version) {
+    throw new Error(`${name} package-lock.json must resolve ${version}, got ${installed ?? "missing"}`);
+  }
+}
+NODE
+
+  unset WAFFO_PRODUCT_ID
+  unset WAFFO_API_BASE
+  unset WAFFO_LIVE
+  unset WAFFO_FIXTURE_ONLY
+  unset NODE_ENV
+  unset WAFFO_MODE
+  export WAFFO_MODE=fixture
+  # Keep any local dotenv file from reviving the obsolete live switch when
+  # the later Next.js smoke server starts in the explicit fixture mode.
+  export WAFFO_LIVE=
 
   if [[ -f tsconfig.json ]]; then
     echo "== tsc --noEmit =="
@@ -160,26 +197,26 @@ if [[ -f package.json ]]; then
     || fail "test runner reported 0 tests"
   grep -q 'unpaid stays off the plaster wall' "${test_log}" \
     || fail "unpaid stays off the plaster wall leftover test did not run"
-  grep -q 'No Terms until Polar reports paid' "${test_log}" \
-    || fail "unpaid-off Polar paid leftover test did not run"
-  grep -q 'occupied checkout copy names Polar raise-pays-difference' "${test_log}" \
-    || fail "occupied checkout raise-pays-difference leftover test did not run"
+  grep -q 'No Terms until Waffo reports paid' "${test_log}" \
+    || fail "unpaid-off Waffo paid leftover test did not run"
+  grep -q 'occupied checkout copy explains full bids and raise differences without provider copy' "${test_log}" \
+    || fail "occupied checkout full-bid/raise-difference invariant test did not run"
   grep -q 'unpaid stays off' "${test_log}" \
     || fail "occupied checkout unpaid-stays-off leftover test did not run"
-  grep -q 'occupied /checkout/return after a raise names Polar charged the difference' "${test_log}" \
-    || fail "occupied checkout-return raise-pays-difference leftover test did not run"
-  grep -q 'unpaid cancel stays off' "${test_log}" \
-    || fail "occupied checkout-return unpaid-cancel leftover test did not run"
-  grep -q 'occupied /about names Polar raise-pays-difference' "${test_log}" \
-    || fail "occupied /about raise-pays-difference leftover test did not run"
-  grep -q 'unpaid Polar checkout stays off' "${test_log}" \
-    || fail "occupied /about unpaid Polar checkout leftover test did not run"
-  grep -q 'occupied /rules names Polar raise-pays-difference' "${test_log}" \
-    || fail "occupied /rules raise-pays-difference leftover test did not run"
-  grep -q 'occupied raise-too-small names Polar still charges only the difference' "${test_log}" \
-    || fail "occupied raise-too-small leftover test did not run"
-  grep -q 'unpaid Polar checkout stays off' "${test_log}" \
-    || fail "occupied raise-too-small unpaid Polar checkout leftover test did not run"
+  grep -q 'occupied /checkout/return names the raise difference without provider copy' "${test_log}" \
+    || fail "occupied checkout-return raise-difference invariant test did not run"
+  grep -q 'handleCheckoutReturn pays on success and not on cancel' "${test_log}" \
+    || fail "checkout return paid/cancel invariant test did not run"
+  grep -q 'occupied /about keeps raise and payment copy provider-neutral' "${test_log}" \
+    || fail "occupied /about raise/payment invariant test did not run"
+  grep -q 'unpaid Waffo checkout stays off' "${test_log}" \
+    || fail "occupied /about unpaid Waffo checkout leftover test did not run"
+  grep -q 'occupied /rules keeps raise and payment copy provider-neutral' "${test_log}" \
+    || fail "occupied /rules raise/payment invariant test did not run"
+  grep -q 'raise-too-small guidance stays provider-neutral' "${test_log}" \
+    || fail "raise-too-small payment invariant test did not run"
+  grep -q 'unpaid Waffo checkout stays off' "${test_log}" \
+    || fail "occupied raise-too-small unpaid Waffo checkout leftover test did not run"
   rm -f "${test_log}"
 
   echo "== skeleton files =="
@@ -187,7 +224,8 @@ if [[ -f package.json ]]; then
     src/db/schema.sql \
     src/lib/db.ts \
     src/app/healthz/route.ts \
-    src/app/page.tsx
+    src/app/page.tsx \
+    src/instrumentation.ts
   do
     [[ -f "$f" ]] || fail "missing $f"
   done
@@ -195,10 +233,20 @@ if [[ -f package.json ]]; then
     || fail "schema.sql missing listings"
   grep -q 'CREATE TABLE IF NOT EXISTS payments' src/db/schema.sql \
     || fail "schema.sql missing payments"
+  grep -q 'CREATE TABLE IF NOT EXISTS waffo_webhook_events' src/db/schema.sql \
+    || fail "schema.sql missing Waffo webhook event ledger"
+  echo "== startup readiness composition =="
+  grep -q 'assertRuntimeReady' src/instrumentation.ts \
+    || fail "instrumentation must invoke the shared readiness gate"
+  grep -q 'assertRuntimeReady' src/app/healthz/route.ts \
+    || fail "healthz must use the shared readiness gate"
+  grep -q 'instrumentation register keeps an explicit fixture process usable' tests/healthz.test.ts \
+    || fail "readiness tests must cover explicit fixture startup"
+  grep -q 'instrumentation register rejects production-like traffic before routes' tests/healthz.test.ts \
+    || fail "readiness tests must cover production-like startup rejection"
   if grep -qiE 'follower|subscriber|engagement rate|estimated reach' src/db/schema.sql; then
     fail "schema.sql must not store invented audience metrics"
   fi
-  [[ "${POLAR_LIVE:-}" != "1" ]] || fail "POLAR_LIVE must stay unset in test.sh"
 
   echo "== board UI + ranking =="
   for f in \
@@ -225,28 +273,41 @@ if [[ -f package.json ]]; then
     || fail "BoardCards empty helper must still be blank plaster"
   grep -q 'export function OccupiedFlyers' src/lib/board-markup.tsx \
     || fail "occupied week must compose OccupiedFlyers"
-  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+  grep -q 'plaster is blank' src/lib/board-markup.tsx \
     || fail "empty week must say the plaster is blank on Claim #1"
-  grep -q 'data-empty-week="true"' src/app/outbid-form.tsx \
+  grep -q 'data-empty-week="true"' src/lib/board-markup.tsx \
     || fail "empty Claim #1 paper must carry the honest empty-week stamp"
   grep -q 'className="card' src/lib/board-markup.tsx || fail "a brief must be a flyer card"
   grep -q 'Claim #1 for' src/app/outbid-form.tsx || fail "form missing Claim #1"
   grep -q 'amount-stepper' src/app/outbid-form.tsx || fail "form missing ± amount stepper"
   grep -q 'amount-field' src/app/board.css || fail "CSS missing dashed amount field"
+  grep -q 'Rolling last 7 days · UTC' src/lib/board-markup.tsx \
+    || fail "mast mark must name the rolling last-7-days window"
+  grep -q 'Paid briefs from the rolling last 7 days' src/lib/board-markup.tsx \
+    || fail "lede must name paid briefs from the rolling last-7-days window"
+  grep -q 'aria-label="Paid briefs — rolling last 7 days"' src/lib/board-markup.tsx \
+    || fail "lead list aria label must name the rolling last-7-days window"
+  grep -q 'aria-label="Later briefs — rolling last 7 days"' src/lib/board-markup.tsx \
+    || fail "later list aria label must name the rolling last-7-days window"
+  grep -q 'These flyers are not #1 in the rolling last 7 days' src/lib/board-markup.tsx \
+    || fail "later note must name the rolling last-7-days prize window"
+  grep -q 'Rolling last 7 days wall' src/app/outbid-form.tsx \
+    || fail "form kicker must name the rolling last-7-days wall"
+  grep -q 'Paid briefs from the rolling last 7 days' src/app/layout.tsx \
+    || fail "metadata must name paid briefs from the rolling last-7-days window"
   grep -q 'export function claimNumberOneUsd' src/lib/rank.ts \
     || fail "rank.ts must export claimNumberOneUsd"
   grep -q 'claimNumberOneUsd' src/app/board.tsx \
-    || fail "board must seed the claim amount from this week’s top bid"
-  grep -q '<OccupiedFlyers listings={paid} />' src/app/board.tsx \
-    || fail "occupied week must render OccupiedFlyers from Polar-paid rows"
+    || fail "board must seed the claim amount from the rolling window's top bid"
+  grep -q '<BoardCards listings={paid} />' src/app/board.tsx \
+    || fail "board must compose the occupied/empty cards component after the claim and rail"
   if grep -q '<EmptyPlaster' src/app/board.tsx; then
     fail "empty week must not render a second EmptyPlaster column beside Claim #1"
   fi
-  if grep -q '<BoardCards' src/app/board.tsx; then
-    fail "empty and occupied walls must compose separately, not share BoardCards"
-  fi
+  grep -q '<BoardCards listings={paid} />' src/app/board.tsx \
+    || fail "board must keep the shared cards slot after the claim and rail"
   grep -q 'data-claim-amount' src/app/outbid-form.tsx \
-    || fail "claim strip must expose this week’s #1 price"
+    || fail "claim strip must expose the rolling window's #1 price"
   grep -q 'Need \$' src/app/outbid-form.tsx \
     || fail "occupied claim must say what it costs to take #1"
   grep -q 'Blank plaster' src/app/outbid-form.tsx \
@@ -261,14 +322,14 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover empty plaster with no Terms / Open leak"
   grep -q 'empty plaster stays Claim #1 with no later-open / cards-later leak' tests/board.test.ts \
     || fail "board tests must cover empty plaster with no later-open leak"
-  grep -q 'empty plaster Claim #1 is the first click — brief URL is a later write' tests/board.test.ts \
-    || fail "board tests must cover empty plaster Claim #1 then later brief URL"
-  grep -q 'claim strip defaults to this week' tests/board.test.ts \
+  grep -q 'empty plaster Claim #1 uses a direct identity-to-Outbid form' tests/board.test.ts \
+    || fail "board tests must cover the direct empty Claim #1 form"
+  grep -q "claim strip defaults to the rolling window's real #1 price" tests/board.test.ts \
     || fail "board tests must cover the live #1 claim amount"
   grep -q 'occupied wall puts flyers' tests/board.test.ts \
     || fail "board tests must cover flyer-first occupied reading order"
-  grep -q 'one flyer has a single labeled Open brief hop' tests/board.test.ts \
-    || fail "board tests must cover the labeled Open brief hop"
+  grep -q 'occupied wall keeps one obvious Open brief and one quiet Claim #1 route' tests/board.test.ts \
+    || fail "board tests must cover one obvious Open brief and one quiet Claim #1 route"
   grep -q 'one flyer names Terms as the prize before $bid' tests/board.test.ts \
     || fail "board tests must cover labeled Terms before \$bid"
   grep -q 'occupied #1 Terms reads first and larger than $bid and clicks' tests/board.test.ts \
@@ -283,8 +344,6 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover quieter later flyers than #1 Terms"
   grep -q 'occupied Terms stay the prize and later Open stays after #1 Open' tests/board.test.ts \
     || fail "board tests must cover later Open after #1 Open"
-  grep -q 'one flyer opens the brief after Terms, not next to $bid' tests/board.test.ts \
-    || fail "board tests must cover Open brief after Terms"
   grep -q 'GET confirm sheet puts terms and the brief URL before the leave hop' tests/board.test.ts \
     || fail "board tests must cover the confirm sheet"
   grep -q 'GET confirm-before-leave does not increment clicks' tests/board.test.ts \
@@ -297,134 +356,34 @@ if [[ -f package.json ]]; then
     || fail "board tests must cover occupied confirm Terms staying the prize over brand"
   grep -q 'occupied confirm uncounted preview recedes after terms and does not shout over the prize' tests/board.test.ts \
     || fail "board tests must cover occupied confirm uncounted preview receding after terms"
-  grep -q 'occupied wall names one Post a brief hop' tests/board.test.ts \
-    || fail "board tests must cover the occupied Post a brief hop"
-  grep -q 'occupied wall posts a brief after Open brief' tests/board.test.ts \
-    || fail "board tests must cover Post a brief after Open brief"
-  grep -q 'occupied wall lets Open brief win the first click after Post follows Open' tests/board.test.ts \
-    || fail "board tests must cover Open brief winning the first click"
-  grep -q 'occupied wall concentrates Post a brief after Open wins the first click' tests/board.test.ts \
-    || fail "board tests must cover concentrated Post a brief after Open first click"
-  grep -q 'occupied wall concentrates Open brief after Post is concentrated' tests/board.test.ts \
-    || fail "board tests must cover concentrated Open brief after Post first write"
-  grep -q 'occupied wall concentrates Post a brief after Open is re-concentrated' tests/board.test.ts \
-    || fail "board tests must cover concentrated Post a brief after Open first read"
-  grep -q 'occupied wall concentrates Open brief after Post is re-concentrated' tests/board.test.ts \
-    || fail "board tests must cover concentrated Open brief after Post first write is re-concentrated"
-  grep -q 'occupied wall concentrates Post a brief after Open is re-concentrated again' tests/board.test.ts \
-    || fail "board tests must cover concentrated Post a brief after Open first read is re-concentrated again"
-  grep -q 'occupied wall concentrates Open brief after Post is re-concentrated again' tests/board.test.ts \
-    || fail "board tests must cover concentrated Open brief after Post first write is re-concentrated again"
-  grep -q 'occupied wall concentrates Post a brief after Open is re-concentrated again under louder Open' tests/board.test.ts \
-    || fail "board tests must cover concentrated Post a brief after Open first read is re-concentrated again under louder Open"
-  grep -q 'occupied wall concentrates Open brief after Post is re-concentrated again under louder Post' tests/board.test.ts \
-    || fail "board tests must cover concentrated Open brief after Post first write is re-concentrated again under louder Post"
-  grep -q 'occupied wall concentrates Post a brief after Open is re-concentrated again under louder Open brief' tests/board.test.ts \
-    || fail "board tests must cover concentrated Post a brief after Open first read is re-concentrated again under louder Open brief"
-  grep -q 'occupied wall concentrates Open brief after Post is re-concentrated again under louder Post a brief' tests/board.test.ts \
-    || fail "board tests must cover concentrated Open brief after Post first write is re-concentrated again under louder Post a brief"
-  grep -q 'occupied wall concentrates Post a brief after Open is re-concentrated again under louder Open brief hop' tests/board.test.ts \
-    || fail "board tests must cover concentrated Post a brief after Open first read is re-concentrated again under louder Open brief hop"
+  grep -q 'occupied confirm brief URL recedes after terms and does not shout over the prize' tests/board.test.ts \
+    || fail "board tests must cover occupied confirm brief URL receding after terms"
   grep -q 'data-first-click' src/lib/board-markup.tsx \
     || fail "occupied #1 Open brief must mark the first click"
-  grep -q 'data-open-after-post-first' src/lib/board-markup.tsx \
-    || fail "Open brief must concentrate after Post is the first write"
   grep -q 'data-first-read="open"' src/lib/board-markup.tsx \
-    || fail "Open brief must stamp the first read after Post"
-  grep -q 'data-open-after-post-two-stamp' src/lib/board-markup.tsx \
-    || fail "Open brief must concentrate after Post is re-concentrated"
-  grep -q 'data-open-after-post-three-stamp' src/lib/board-markup.tsx \
-    || fail "Open brief must concentrate after Post is re-concentrated again"
-  grep -q 'data-open-after-post-four-stamp' src/lib/board-markup.tsx \
-    || fail "Open brief must concentrate after Post is re-concentrated again under louder Post"
-  grep -q 'data-open-after-post-five-stamp' src/lib/board-markup.tsx \
-    || fail "Open brief must concentrate after Post is re-concentrated again under louder Post a brief"
+    || fail "Open brief must mark the first read"
   grep -q 'data-first-click="open"' src/app/board.css \
     || fail "CSS must make Open brief win the first click"
-  grep -q 'open-after-post-first' src/app/board.css \
-    || fail "CSS must concentrate Open brief after Post first write"
-  grep -q 'open-after-post-two' src/app/board.css \
-    || fail "CSS must concentrate Open brief after Post is re-concentrated"
-  grep -q 'open-after-post-three' src/app/board.css \
-    || fail "CSS must concentrate Open brief after Post is re-concentrated again"
-  grep -q 'open-after-post-four' src/app/board.css \
-    || fail "CSS must concentrate Open brief after Post is re-concentrated again under louder Post"
-  grep -q 'open-after-post-five' src/app/board.css \
-    || fail "CSS must concentrate Open brief after Post is re-concentrated again under louder Post a brief"
   grep -q 'data-post-brief' src/lib/board-markup.tsx \
     || fail "occupied wall must mark Post a brief"
-  grep -q 'data-post-after-open' src/lib/board-markup.tsx \
-    || fail "Post a brief must mark the hop after Open brief"
-  grep -q 'data-post-after-open-first' src/lib/board-markup.tsx \
-    || fail "Post a brief must concentrate after Open wins the first click"
   grep -q 'data-first-write="post"' src/lib/board-markup.tsx \
-    || fail "Post a brief must stamp the first write after Open"
-  grep -q 'data-post-after-open-two' src/lib/board-markup.tsx \
-    || fail "Post a brief must concentrate after Open is re-concentrated"
-  grep -q 'data-post-after-open-three' src/lib/board-markup.tsx \
-    || fail "Post a brief must concentrate after Open is re-concentrated again"
-  grep -q 'data-post-after-open-four' src/lib/board-markup.tsx \
-    || fail "Post a brief must concentrate after Open is re-concentrated again under louder Open"
-  grep -q 'data-post-after-open-five' src/lib/board-markup.tsx \
-    || fail "Post a brief must concentrate after Open is re-concentrated again under louder Open brief"
-  grep -q 'data-post-after-open-six' src/lib/board-markup.tsx \
-    || fail "Post a brief must concentrate after Open is re-concentrated again under louder Open brief hop"
-  grep -q 'after Open brief' src/lib/board-markup.tsx \
-    || fail "Post a brief must say after Open brief"
-  grep -q 'post-after-open' src/lib/board-markup.tsx \
-    || fail "Post a brief after Open brief must stay the buyer hop"
-  grep -q 'post-after-note' src/app/board.css \
-    || fail "CSS must style the after-Open-brief hop note"
-  grep -q 'className="post-brief post-after-open post-after-open-first post-after-open-two post-after-open-three post-after-open-four post-after-open-five post-after-open-six"' src/lib/board-markup.tsx \
-    || fail "Post a brief must stay the buyer hop"
+    || fail "Post a brief must mark the first write"
   grep -q 'href="#claim"' src/lib/board-markup.tsx \
-    || fail "Post a brief must hop to the claim strip"
+    || fail "Post a brief must link to the claim strip"
   grep -q 'Post a brief' src/lib/board-markup.tsx \
     || fail "occupied wall must say Post a brief"
   grep -q 'post-label' src/lib/board-markup.tsx \
-    || fail "Post a brief must be the labeled hop"
+    || fail "Post a brief must be labeled"
   grep -q 'Claim #1' src/lib/board-markup.tsx \
     || fail "Post a brief must land on Claim #1"
-  grep -q 'Post a brief this week' src/app/outbid-form.tsx \
-    || fail "occupied claim must say Post a brief this week"
+  grep -q 'Post a brief in the rolling last 7 days' src/app/outbid-form.tsx \
+    || fail "occupied claim must say Post a brief in the rolling last 7 days"
   grep -q 'post-brief' src/app/board.css \
-    || fail "CSS must style the Post a brief hop"
-  grep -q 'post-after-open-first' src/app/board.css \
-    || fail "CSS must concentrate Post a brief after Open first click"
-  grep -q 'post-after-open-two' src/app/board.css \
-    || fail "CSS must concentrate Post a brief after Open is re-concentrated"
-  grep -q 'post-after-open-three' src/app/board.css \
-    || fail "CSS must concentrate Post a brief after Open is re-concentrated again"
-  grep -q 'post-after-open-four' src/app/board.css \
-    || fail "CSS must concentrate Post a brief after Open is re-concentrated again under louder Open"
-  grep -q 'post-after-open-five' src/app/board.css \
-    || fail "CSS must concentrate Post a brief after Open is re-concentrated again under louder Open brief"
-  grep -q 'post-after-open-six' src/app/board.css \
-    || fail "CSS must concentrate Post a brief after Open is re-concentrated again under louder Open brief hop"
+    || fail "CSS must style the Post a brief route"
   grep -q 'open-label' src/lib/board-markup.tsx \
-    || fail "Open brief must be the labeled hop on a flyer"
+    || fail "Open brief must be the labeled action on a flyer"
   grep -q 'data-open-brief' src/lib/board-markup.tsx \
-    || fail "Open brief hop must be marked data-open-brief"
-  grep -q 'data-open-after-terms' src/lib/board-markup.tsx \
-    || fail "Open brief must mark the hop after Terms"
-  grep -q 'after Terms' src/lib/board-markup.tsx \
-    || fail "Open brief must say after Terms"
-  grep -q 'open-after-terms' src/lib/board-markup.tsx \
-    || fail "Open brief after Terms must stay the flyer hop"
-  grep -q 'open-after-note' src/app/board.css \
-    || fail "CSS must style the after-Terms hop note"
-  grep -q 'brief-url open-after-terms' src/lib/board-markup.tsx \
-    || fail "Open brief must stay the flyer hop"
-  grep -q 'brief-url open-after-terms open-after-post-first' src/lib/board-markup.tsx \
-    || fail "occupied #1 Open brief must concentrate after Post"
-  grep -q 'brief-url open-after-terms open-after-post-first open-after-post-two' src/lib/board-markup.tsx \
-    || fail "occupied #1 Open brief must concentrate after Post is re-concentrated"
-  grep -q 'brief-url open-after-terms open-after-post-first open-after-post-two open-after-post-three' src/lib/board-markup.tsx \
-    || fail "occupied #1 Open brief must concentrate after Post is re-concentrated again"
-  grep -q 'brief-url open-after-terms open-after-post-first open-after-post-two open-after-post-three open-after-post-four' src/lib/board-markup.tsx \
-    || fail "occupied #1 Open brief must concentrate after Post is re-concentrated again under louder Post"
-  grep -q 'brief-url open-after-terms open-after-post-first open-after-post-two open-after-post-three open-after-post-four open-after-post-five' src/lib/board-markup.tsx \
-    || fail "occupied #1 Open brief must concentrate after Post is re-concentrated again under louder Post a brief"
+    || fail "Open brief must be marked data-open-brief"
   grep -q 'data-terms' src/lib/board-markup.tsx \
     || fail "flyer must mark the Terms prize"
   grep -q 'terms-label' src/lib/board-markup.tsx \
@@ -459,11 +418,11 @@ if [[ -f package.json ]]; then
     || fail "CSS must mute #1 clicks so they cannot shout beside Terms"
   grep -Fq 'Occupied #1 clicks stay a later fact after Terms' SPEC.md \
     || fail "SPEC must keep occupied #1 clicks a later fact after Terms"
-  grep -q 'function OpenBriefHop' src/lib/board-markup.tsx \
-    || fail "occupied Open must compose OpenBriefHop, not stamp a mute class"
-  grep -q '{lead ? hop : null}' src/lib/board-markup.tsx \
+  grep -q 'function OpenBriefLink' src/lib/board-markup.tsx \
+    || fail "occupied Open must use one quiet link component"
+  grep -q '{lead ? openBriefLink : null}' src/lib/board-markup.tsx \
     || fail "occupied #1 Open must sit after Terms, before \$bid"
-  grep -q '{lead ? null : hop}' src/lib/board-markup.tsx \
+  grep -q '{lead ? null : openBriefLink}' src/lib/board-markup.tsx \
     || fail "later Open must recede after \$bid, not sit in the Terms prize slot"
   grep -q 'cards-lead' src/lib/board-markup.tsx \
     || fail "occupied #1 flyer must sit in the lead cards list"
@@ -532,7 +491,7 @@ if "font-weight: 500" not in clicks_later.group(0):
     raise SystemExit(1)
 later_open = size(r"\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*font-size:\s*([\d.]+)rem")
 base_open = size(r"\.wall-occupied \.card \.brief-url \{\n[^}]*font-size:\s*([\d.]+)rem")
-lead_open = size(r"\.wall-occupied \.card \.brief-url\.open-after-post-five\s*\{[^}]*font-size:\s*([\d.]+)rem")
+lead_open = size(r"\.wall-occupied \.card \.brief-url\[data-first-click=\"open\"\]\s*\{[^}]*font-size:\s*([\d.]+)rem")
 if not (later_open < base_open and later_open < lead_open):
     raise SystemExit(1)
 later_block = re.search(
@@ -626,6 +585,8 @@ PY
     || fail "CSS must keep occupied confirm Terms copy the prize over brand"
   grep -qF '.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-uncounted[data-confirm-uncounted]' src/app/board.css \
     || fail "CSS must recede occupied confirm uncounted preview so it cannot shout over Terms"
+  grep -qF '.confirm-sheet.confirm-before-leave[data-confirm-before-leave] .confirm-url[data-brief-url]' src/app/board.css \
+    || fail "CSS must recede occupied confirm brief URL so it cannot shout over Terms"
   grep -Fq 'Occupied confirm hops stay a later fact after terms' SPEC.md \
     || fail "SPEC must keep occupied confirm hops a later fact after terms"
   grep -Fq 'Occupied confirm $bid stays a later fact after terms' SPEC.md \
@@ -634,6 +595,8 @@ PY
     || fail "SPEC must keep occupied confirm Terms the prize over brand"
   grep -Fq 'Occupied confirm uncounted preview recedes after terms' SPEC.md \
     || fail "SPEC must recede occupied confirm uncounted preview after terms"
+  grep -Fq 'Occupied confirm brief URL recedes after terms' SPEC.md \
+    || fail "SPEC must recede occupied confirm brief URL after terms"
   python3 - src/app/board.css <<'PY' || fail "confirm hops must recede after terms and stay muted, not --bid"
 import re
 import sys
@@ -758,148 +721,104 @@ if "font-weight: 700" not in terms.group(0):
 if "color: var(--ink)" not in terms.group(0):
     raise SystemExit(1)
 PY
-  if grep -nE 'data-post-after-open-seven|data-open-after-post-six-stamp' \
-    src/lib/board-markup.tsx src/app/outbid-form.tsx src/app/board.css src/lib/confirm-brief.ts >/dev/null
+  python3 - src/app/board.css <<'PY' || fail "confirm brief URL must recede after terms so Terms stay the prize"
+import re
+import sys
+css = open(sys.argv[1], encoding="utf-8").read()
+url = re.search(
+    r"\.confirm-sheet\.confirm-before-leave\[data-confirm-before-leave\] \.confirm-url\[data-brief-url\]\s*\{[^}]*\}",
+    css,
+    re.S,
+)
+terms = re.search(
+    r"\.confirm-sheet\.confirm-before-leave\[data-confirm-before-leave\] \.confirm-terms-copy\s*\{[^}]*\}",
+    css,
+    re.S,
+)
+if url is None or terms is None:
+    raise SystemExit(1)
+url_size = re.search(r"font-size:\s*([\d.]+)rem", url.group(0))
+terms_size = re.search(r"font-size:\s*([\d.]+)rem", terms.group(0))
+if url_size is None or terms_size is None:
+    raise SystemExit(1)
+if float(terms_size.group(1)) <= float(url_size.group(1)):
+    raise SystemExit(1)
+if "color: var(--muted)" not in url.group(0):
+    raise SystemExit(1)
+if "font-weight: 500" not in url.group(0):
+    raise SystemExit(1)
+if "font-weight: 700" in url.group(0):
+    raise SystemExit(1)
+if "color: var(--ink)" in url.group(0):
+    raise SystemExit(1)
+if "color: var(--bid)" in url.group(0):
+    raise SystemExit(1)
+if "font-weight: 700" not in terms.group(0):
+    raise SystemExit(1)
+if "color: var(--ink)" not in terms.group(0):
+    raise SystemExit(1)
+PY
+  if grep -nE 'open-after|post-after|after Open brief|after Terms' \
+    src/lib/board-markup.tsx src/app/board.css src/app/outbid-form.tsx >/dev/null
   then
-    fail "do not stamp *-after-*-N on empty plaster or confirm-before-leave"
+    fail "board surface must not contain implementation-hop residue"
   fi
-  echo "== UX: empty plaster Claim #1 is the first click — brief URL is a later write =="
+  echo "== UX: empty plaster Claim #1 uses a direct brief identity → Outbid form =="
   grep -q 'empty-claim-first' src/app/outbid-form.tsx \
     || fail "empty Claim #1 must use the empty-claim-first class"
   grep -q 'data-empty-claim-first' src/app/outbid-form.tsx \
     || fail "empty Claim #1 must stamp data-empty-claim-first"
   grep -q 'data-first-click="claim"' src/app/outbid-form.tsx \
-    || fail "empty Claim #1 Outbid must win the first click"
-  grep -q 'data-later-write' src/app/outbid-form.tsx \
-    || fail "empty plaster must stamp the brief URL as a later write"
+    || fail "empty Claim #1 Outbid must retain its first-click contract"
   grep -q 'data-brief-identity' src/app/outbid-form.tsx \
-    || fail "empty plaster must wrap brand / terms / brief URL as listing identity"
-  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
-    || fail "empty plaster must name the brief URL as a later write"
+    || fail "empty Claim #1 must wrap its direct brief identity fields"
   grep -q 'EmptyClaimFirstWrite' src/app/outbid-form.tsx \
-    || fail "empty plaster must compose Claim #1 before the brief URL"
+    || fail "empty Claim #1 must compose its direct form write"
   grep -q 'OccupiedBriefWrite' src/app/outbid-form.tsx \
     || fail "occupied claim must keep brief fields on the rail with Outbid"
-  grep -q 'Empty plaster: Brief URL is a later write after Claim #1 / Outbid' src/app/board.css \
-    || fail "empty CSS must name the brief URL as a later write after Claim #1"
-  grep -Fq '.wall-stage.wall-empty[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] .brief-identity[data-later-write]' src/app/board.css \
-    || fail "empty CSS must compose later-write identity off the claim rail"
-  grep -Fq '.wall-stage.wall-empty[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] .later-write-label' src/app/board.css \
-    || fail "empty CSS must label the later brief URL write"
-  grep -Fq '.wall-stage.wall-empty[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] .outbid[data-first-click="claim"]' src/app/board.css \
-    || fail "empty CSS must make Claim #1 Outbid the first click"
-  grep -Fq '.wall-occupied .paste-rail .brief-identity[data-later-write]' src/app/board.css \
-    || fail "occupied week must hide empty later-write identity"
-  grep -Fq '.wall-occupied .paste-rail [data-first-click="claim"]' src/app/board.css \
-    || fail "occupied week must hide empty Claim #1 first-click"
-  grep -q 'Then the brief URL' tests/board.test.ts \
-    || fail "board tests must name the later brief URL write"
-  grep -q 'data-first-click="claim"' tests/board.test.ts \
-    || fail "board tests must stamp empty Claim #1 as the first click"
+  grep -q 'empty plaster Claim #1 uses a direct identity-to-Outbid form' tests/board.test.ts \
+    || fail "board tests must cover the direct empty Claim #1 form"
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .paste-rail.empty-claim-first[data-empty-claim-first] .outbid[data-first-click="claim"]' src/app/board.css \
+    || fail "empty CSS must keep Claim #1 Outbid prominent"
   grep -q 'Claim #1' src/app/outbid-form.tsx \
-    || fail "empty later-write cut must keep Claim #1"
-  grep -q 'plaster is blank' src/app/outbid-form.tsx \
-    || fail "empty later-write cut must keep blank plaster"
-  grep -q 'Open brief' src/lib/board-markup.tsx \
-    || fail "empty later-write cut must keep occupied Open brief"
-  grep -q 'Post a brief' src/lib/board-markup.tsx \
-    || fail "empty later-write cut must keep occupied Post a brief"
-  grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
-    || fail "empty later-write cut must keep occupied Open brief the first click"
-  grep -q 'data-prize=' src/lib/board-markup.tsx \
-    || fail "empty later-write cut must keep occupied Terms as the prize"
+    || fail "empty form must keep Claim #1"
   grep -q 'amount-field' src/app/outbid-form.tsx \
-    || fail "empty later-write cut must keep the dashed amount"
+    || fail "empty form must keep the dashed amount"
   grep -q 'className="step"' src/app/outbid-form.tsx \
-    || fail "empty later-write cut must keep ± steppers"
+    || fail "empty form must keep ± steppers"
   grep -q 'Outbid' src/app/outbid-form.tsx \
-    || fail "empty later-write cut must keep Outbid"
+    || fail "empty form must keep Outbid"
   grep -q 'name="brand"' src/app/outbid-form.tsx \
-    || fail "empty later-write cut must keep Brand"
+    || fail "empty form must keep Brand validation field"
   grep -q 'name="terms"' src/app/outbid-form.tsx \
-    || fail "empty later-write cut must keep Terms"
+    || fail "empty form must keep Terms validation field"
   grep -q 'name="briefUrl"' src/app/outbid-form.tsx \
-    || fail "empty later-write cut must keep Brief URL"
-  grep -q 'className="plaster"' src/lib/board-markup.tsx \
-    || fail "empty later-write cut must not rebuild the plaster wall"
-  if grep -qE 'data-post-after-open-seven|data-open-after-post-six-stamp' src/app/board.tsx src/app/board.css src/app/outbid-form.tsx src/lib/board-markup.tsx; then
-    fail "empty later-write must not add another numbered hop stamp"
-  fi
-  if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx; then
-    fail "empty later-write must not rebuild the plaster wall into a long form"
-  fi
-  if awk '/function OccupiedBriefWrite/,/function EmptyClaimFirstWrite/' src/app/outbid-form.tsx | grep -q 'data-first-click="claim"'; then
-    fail "occupied claim must not stamp empty Claim #1 as the first click"
-  fi
-  if awk '/function OccupiedBriefWrite/,/function EmptyClaimFirstWrite/' src/app/outbid-form.tsx | grep -q 'Then the brief URL'; then
-    fail "occupied claim must not name a later brief URL write"
-  fi
-  if awk '/function OccupiedBriefWrite/,/function EmptyClaimFirstWrite/' src/app/outbid-form.tsx | grep -q 'data-later-write'; then
-    fail "occupied brief fields must stay on the claim rail with Outbid"
+    || fail "empty form must keep Brief URL validation field"
+  if grep -nE 'data-later-write|later-write-label|Then the brief URL|formNoValidate' src/app/outbid-form.tsx >/dev/null
+  then
+    fail "empty form must be a conventional direct input-to-Outbid flow"
   fi
   if ! awk '
     /function EmptyClaimFirstWrite/ { empty=NR }
+    empty && /identityMarker/ && !identity { identity=NR }
+    empty && /BriefIdentityFields/ && !fields { fields=NR }
     empty && /data-first-click="claim"/ { click=NR }
-    empty && /Then the brief URL/ { label=NR }
-    empty && /BriefIdentityFields/ { ident=NR }
-    END { exit !(empty && click && label && ident && empty < click && click < label && label < ident) }
-  ' src/app/outbid-form.tsx; then
-    fail "empty Claim #1 / Outbid must precede the later brief URL write"
+    END { exit !(empty && identity && fields && click && empty < identity && identity < fields && fields < click) }
+  ' src/app/outbid-form.tsx
+  then
+    fail "empty Claim #1 must place identity inputs before Outbid"
   fi
   if ! awk '
-    /function OccupiedBriefWrite/ { occ=NR }
-    occ && /BriefIdentityFields/ && !fields { fields=NR }
-    occ && /Outbid/ && !row { row=NR }
+    /function OccupiedBriefWrite/ { occupied=NR }
+    occupied && /BriefUrlField/ && !primary { primary=NR }
+    occupied && /BriefDetails/ && !details { details=NR }
+    occupied && /BriefIdentityFields/ && !fields { fields=NR }
+    occupied && /Claim rank/ && !submit { submit=NR }
     /function EmptyClaimFirstWrite/ { empty=NR }
-    END { exit !(occ && fields && row && empty && occ < fields && fields < row && row < empty) }
-  ' src/app/outbid-form.tsx; then
-    fail "occupied claim must keep brief fields before Outbid"
-  fi
-  python3 - src/app/board.css src/app/outbid-form.tsx <<'PY' || fail "empty later-write must recede after Claim #1 / Outbid without recolor or a new hop"
-import re
-import sys
-css = open(sys.argv[1], encoding="utf-8").read()
-form = open(sys.argv[2], encoding="utf-8").read()
-marker = "Empty plaster: Brief URL is a later write after Claim #1 / Outbid"
-if marker not in css:
-    raise SystemExit(1)
-later = css.split(marker, 1)[1].split("End empty-plaster later-write", 1)[0]
-if ".brief-identity[data-later-write]" not in later:
-    raise SystemExit(1)
-if "border-top: 1px dashed var(--line)" not in later:
-    raise SystemExit(1)
-if "background:" in later or "var(--bid-ink)" in later:
-    raise SystemExit(1)
-if "data-post-after-open-seven" in later or "data-open-after-post-six-stamp" in later:
-    raise SystemExit(1)
-click = re.search(
-    r"\.wall-stage\.wall-empty\[data-occupied=\"false\"\] \.paste-rail\.empty-claim-first\[data-empty-claim-first\] \.outbid\[data-first-click=\"claim\"\]\s*\{[^}]*\}",
-    css,
-    re.S,
-)
-if not click or "min-height: 2.75rem" not in click.group(0):
-    raise SystemExit(1)
-if "background:" in click.group(0):
-    raise SystemExit(1)
-empty = form.split("function EmptyClaimFirstWrite", 1)[-1].split("export function OutbidForm", 1)[0]
-occupied = form.split("function OccupiedBriefWrite", 1)[-1].split("function EmptyClaimFirstWrite", 1)[0]
-if empty.find("Outbid") < 0 or empty.find("data-later-write") < empty.find("Outbid"):
-    raise SystemExit(1)
-if empty.find("BriefIdentityFields") < empty.find("Then the brief URL"):
-    raise SystemExit(1)
-if occupied.find("BriefIdentityFields") < 0 or occupied.find("Outbid") < occupied.find("BriefIdentityFields"):
-    raise SystemExit(1)
-if 'data-first-click="claim"' in occupied or "Then the brief URL" in occupied:
-    raise SystemExit(1)
-PY
-  if ! awk '
-    /wall-occupied \.card-lead \.terms\.prize-before-price \.terms-copy/ { prize=NR }
-    /wall-occupied \.card \.brief-url\[data-first-click="open"\]/ { open=NR }
-    /wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]/ { later_open=NR }
-    /Empty plaster: Brief URL is a later write after Claim #1 \/ Outbid/ { later=NR }
-    END { exit !(prize && open && later_open && later && prize < open && open < later_open && later_open < later) }
-  ' src/app/board.css; then
-    fail "empty later-write CSS must sit after occupied prize / Open / later Open"
+    END { exit !(occupied && primary && details && fields && submit && empty && occupied < primary && primary < details && details < fields && fields < submit && submit < empty) }
+  ' src/app/outbid-form.tsx
+  then
+    fail "occupied claim must keep URL, detail fields, before Claim rank"
   fi
   echo "== UX: occupied later flyers stay quieter than #1 Terms — prize stays first =="
   grep -q 'function OccupiedLaterFlyer' src/lib/board-markup.tsx \
@@ -912,15 +831,15 @@ PY
     || fail "later ranks must stamp data-later-flyer"
   grep -q 'data-later-pack' src/lib/board-markup.tsx \
     || fail "later ranks must group in a later pack"
-  grep -q 'These flyers are not this week’s #1 prize' src/lib/board-markup.tsx \
+  grep -q 'These flyers are not #1 in the rolling last 7 days' src/lib/board-markup.tsx \
     || fail "later pack must say later flyers are not the #1 prize"
   grep -q 'later-terms-kicker' src/lib/board-markup.tsx \
     || fail "later ranks must keep Terms without #1 prize chrome"
   grep -q 'later-terms-copy' src/lib/board-markup.tsx \
     || fail "later ranks must keep quieter terms copy"
-  grep -q '{lead ? hop : null}' src/lib/board-markup.tsx \
+  grep -q '{lead ? openBriefLink : null}' src/lib/board-markup.tsx \
     || fail "later-rank cut must keep #1 Open after Terms"
-  grep -q '{lead ? null : hop}' src/lib/board-markup.tsx \
+  grep -q '{lead ? null : openBriefLink}' src/lib/board-markup.tsx \
     || fail "later Open must stay after \$bid in cards-later"
   grep -q 'data-prize=""' src/lib/board-markup.tsx \
     || fail "later-rank cut must keep occupied Terms as the prize"
@@ -928,7 +847,7 @@ PY
     || fail "later-rank cut must keep #1 Open the first occupied click"
   grep -q 'Claim #1' src/app/outbid-form.tsx \
     || fail "later-rank cut must keep Claim #1"
-  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+  grep -q 'plaster is blank' src/lib/board-markup.tsx \
     || fail "later-rank cut must keep blank plaster"
   grep -q 'Open brief' src/lib/board-markup.tsx \
     || fail "later-rank cut must keep Open brief"
@@ -960,16 +879,13 @@ PY
     || fail "empty plaster CSS must keep later-flyer stamps off Claim #1"
   grep -qF '.wall-stage.wall-empty[data-occupied="false"] [data-rolling-week]' src/app/board.css \
     || fail "empty plaster CSS must keep rolling-week stamps off Claim #1"
-  if grep -qE 'data-post-after-open-seven|data-open-after-post-six-stamp' src/app/board.tsx src/app/board.css src/app/outbid-form.tsx src/lib/board-markup.tsx; then
-    fail "later-rank quiet must not add another numbered hop stamp"
-  fi
   if grep -qE 'data-later-quiet|data-later-rank-quiet|open-later-rank' src/lib/board-markup.tsx src/app/board.css src/app/outbid-form.tsx; then
     fail "do not stamp-only mute later flyers"
   fi
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "occupied flyers must stamp the rolling last-7-days window"
-  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/lib/board-markup.tsx \
-    || fail "occupied flyers must name the rolling last-7-days window"
+  grep -q 'Each paid brief stays live for seven days.' src/lib/board-markup.tsx \
+    || fail "occupied flyers must name the paid placement window"
   if awk '/function EmptyClaimFirstWrite/,/export function OutbidForm/' src/app/outbid-form.tsx | grep -q 'data-rolling-week'; then
     fail "empty plaster must not stamp the rolling week window"
   fi
@@ -978,7 +894,7 @@ PY
   fi
   if grep -nE 'open-later-rank|data-later-rank[^-]' src/lib/board-markup.tsx src/app/board.css >/dev/null
   then
-    fail "do not stamp open-later-rank; compose later-rank Open as a quieter hop"
+    fail "do not stamp open-later-rank; compose later-rank Open as a quieter route"
   fi
   if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx; then
     fail "later-rank quiet must not rebuild the plaster wall into a long form"
@@ -1011,7 +927,7 @@ prize = size(r"\.wall-occupied \.card-lead \.terms\.prize-before-price \.terms-c
 later_terms = size(r"\.wall-occupied \.cards-later \.card\.later-flyer\[data-later-flyer\] \.later-terms-copy\s*\{[^}]*font-size:\s*([\d.]+)rem")
 later_brand = size(r"\.wall-occupied \.cards-later \.card\.later-flyer\[data-later-flyer\] \.later-brand\s*\{[^}]*font-size:\s*([\d.]+)rem")
 later_open = size(r"\.wall-occupied \.cards-later \.brief-url\.later-open\[data-later-open\]\s*\{[^}]*font-size:\s*([\d.]+)rem")
-lead_open = size(r"\.wall-occupied \.card \.brief-url\.open-after-post-five\s*\{[^}]*font-size:\s*([\d.]+)rem")
+lead_open = size(r"\.wall-occupied \.card \.brief-url\[data-first-click=\"open\"\]\s*\{[^}]*font-size:\s*([\d.]+)rem")
 if not (prize > later_terms and prize > later_brand and lead_open > later_open):
     raise SystemExit(1)
 pack = re.search(r"\.wall-occupied \.later-pack\[data-later-pack\]\s*\{[^}]*\}", css, re.S)
@@ -1027,8 +943,6 @@ if "data-prize" in later_fn or "terms-label" in later_fn or "card-lead" in later
     raise SystemExit(1)
 if 'data-first-click="open"' in later_fn or "prize-before-price" in later_fn:
     raise SystemExit(1)
-if "data-post-after-open-seven" in markup or "data-open-after-post-six-stamp" in markup:
-    raise SystemExit(1)
 if "data-later-quiet" in markup or "data-later-rank-quiet" in markup:
     raise SystemExit(1)
 PY
@@ -1038,62 +952,60 @@ PY
     /wall-occupied \.later-pack\[data-later-pack\] \{/ { pack=NR }
     /cards-later \.card\.later-flyer\[data-later-flyer\] \{/ { later=NR }
     /wall-occupied \.cards-lead\[data-rolling-week\]/ { rolling=NR }
-    /Empty plaster: Brief URL is a later write after Claim #1 \/ Outbid/ { empty=NR }
+    /Empty plaster: direct brief identity fields feed the Claim #1 \/ Outbid action/ { empty=NR }
     /Empty plaster: fair window is rolling last 7 days/ { emptyroll=NR }
     END { exit !(prize && open && pack && later && rolling && empty && emptyroll && prize < open && open < pack && pack < later && later < rolling && rolling < empty && empty < emptyroll) }
   ' src/app/board.css; then
-    fail "later-rank CSS must sit after occupied prize / Open and before empty later-write"
+    fail "later-rank CSS must sit after occupied prize / Open and before empty form"
   fi
   grep -q 'occupied later flyers stay quieter than #1 Terms' tests/board.test.ts \
     || fail "board tests must cover quieter later flyers than #1 Terms"
   grep -q 'occupied week window is rolling last-7-days' tests/board.test.ts \
     || fail "board tests must cover occupied rolling last-7-days window"
-  grep -q 'These flyers are not this week’s #1 prize' tests/board.test.ts \
+  grep -q 'These flyers are not #1 in the rolling last 7 days' tests/board.test.ts \
     || fail "board tests must name later flyers as not the #1 prize"
   grep -q 'data-later-flyer' tests/board.test.ts \
     || fail "board tests must stamp later flyers"
   grep -q 'older' tests/rank.test.ts || fail "rank tests missing older-wins-ties"
-  echo "== UX: unpaid stays off the plaster wall — No Terms until Polar reports paid =="
-  grep -q 'export function isPolarPaidListing' src/lib/rank.ts \
-    || fail "rank.ts must export isPolarPaidListing"
+  echo "== UX: unpaid stays off the plaster wall — No Terms until Waffo reports paid =="
+  grep -q 'export function isWaffoPaidListing' src/lib/rank.ts \
+    || fail "rank.ts must export isWaffoPaidListing"
   grep -q 'export function paidListings' src/lib/rank.ts \
-    || fail "rank.ts must drop unpaid Polar checkout before ranking"
+    || fail "rank.ts must drop unpaid Waffo checkout before ranking"
   grep -q 'paidListings(listings)' src/lib/rank.ts \
-    || fail "rankListings must rank Polar-paid rows only"
+    || fail "rankListings must rank Waffo-paid rows only"
   grep -q 'const paid = rankListings(listings)' src/app/board.tsx \
-    || fail "board occupancy must compose Polar-paid rows only"
-  grep -q '<OccupiedFlyers listings={paid} />' src/app/board.tsx \
-    || fail "occupied flyers must compose Polar-paid rows only"
-  grep -q 'if (!isPolarPaidListing(listing))' src/lib/board-markup.tsx \
+    || fail "board occupancy must compose Waffo-paid rows only"
+  grep -q '<BoardCards listings={paid} />' src/app/board.tsx \
+    || fail "board cards must compose Waffo-paid rows only"
+  grep -q 'if (!isWaffoPaidListing(listing))' src/lib/board-markup.tsx \
     || fail "flyer cards must not print unpaid Terms as #1"
-  grep -q 'data-polar-paid' src/lib/board-markup.tsx \
-    || fail "paid flyer must stamp Polar-paid occupancy"
-  grep -q 'hasCompletedPolarPayment' src/lib/week.ts \
-    || fail "live board must require a completed Polar payment"
+  grep -q 'data-waffo-paid' src/lib/board-markup.tsx \
+    || fail "paid flyer must stamp Waffo-paid occupancy"
+  grep -q 'hasCompletedWaffoPayment' src/lib/week.ts \
+    || fail "live board must require a completed Waffo payment"
   grep -q "payments.status = 'completed'" src/lib/week.ts \
-    || fail "live board SQL must require a completed Polar payment"
-  grep -q 'isPolarPaidListing' src/lib/clicks.ts \
-    || fail "GET /r/:id must refuse unpaid Polar checkout"
-  grep -q 'hasCompletedPolarPayment' src/lib/clicks.ts \
-    || fail "GET /r/:id must require a completed Polar payment"
-  grep -q 'Unpaid checkout stays off the board until Polar reports paid' src/app/outbid-form.tsx \
-    || fail "claim form must say unpaid checkout stays off the board"
-  grep -q 'An abandoned brief is not Terms as #1' src/app/outbid-form.tsx \
-    || fail "claim form must say an abandoned brief is not Terms as #1"
-  grep -q 'Unpaid checkout stays off the board until Polar reports paid' src/lib/board-markup.tsx \
-    || fail "empty plaster must say unpaid checkout stays off the board"
-  grep -q 'An abandoned brief is not Terms as #1' src/lib/board-markup.tsx \
-    || fail "empty plaster must say an abandoned brief is not Terms as #1"
-  grep -qF '.wall-occupied .card:not([data-polar-paid])' src/app/board.css \
+    || fail "live board SQL must require a completed Waffo payment"
+  grep -q 'isWaffoPaidListing' src/lib/clicks.ts \
+    || fail "GET /r/:id must refuse unpaid Waffo checkout"
+  grep -q 'hasCompletedWaffoPayment' src/lib/clicks.ts \
+    || fail "GET /r/:id must require a completed Waffo payment"
+  grep -q 'Only a confirmed checkout changes the ranking' src/app/outbid-form.tsx \
+    || fail "claim form must say only a confirmed checkout changes rank"
+  grep -q 'An incomplete checkout never creates a #1 brief' src/lib/board-markup.tsx \
+    || fail "empty plaster must say an incomplete checkout cannot create #1"
+  grep -q 'Unpaid / abandoned Waffo checkout never paints Terms as #1' src/app/board.css \
+    || fail "board CSS must suppress unpaid or abandoned Terms cards"
+  grep -qF '.wall-occupied .card:not([data-waffo-paid])' src/app/board.css \
     || fail "CSS must hide unpaid leftover cards on occupied plaster"
-  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .card:not([data-polar-paid])' src/app/board.css \
+  grep -qF '.wall-stage.wall-empty[data-occupied="false"] .card:not([data-waffo-paid])' src/app/board.css \
     || fail "CSS must hide unpaid leftover cards on empty plaster"
   python3 - src/app/board.css <<'PY' || fail "unpaid leftover CSS must hide unpaid cards, not recolor the plaster"
 import re
 import sys
 css = open(sys.argv[1], encoding="utf-8").read()
 block = re.search(
-    r"\.wall-occupied \.card:not\(\[data-polar-paid\]\),\s*\.wall-stage\.wall-empty\[data-occupied=\"false\"\] \.card:not\(\[data-polar-paid\]\)\s*\{([^}]*)\}",
+    r"\.wall-occupied \.card:not\(\[data-waffo-paid\]\),\s*\.wall-stage\.wall-empty\[data-occupied=\"false\"\] \.card:not\(\[data-waffo-paid\]\)\s*\{([^}]*)\}",
     css,
     re.S,
 )
@@ -1104,15 +1016,15 @@ if "display: none" not in block.group(1):
 if "background:" in block.group(1) or "var(--bid-ink)" in block.group(1):
     raise SystemExit(1)
 PY
-  if grep -qE 'data-unpaid-off|data-unpaid-off-board|data-post-after-open-seven|data-open-after-post-six-stamp' \
+  if grep -qE 'data-unpaid-off|data-unpaid-off-board' \
     src/lib/board-markup.tsx src/app/board.tsx src/app/outbid-form.tsx src/app/board.css src/lib/rank.ts src/lib/week.ts src/lib/clicks.ts
   then
-    fail "unpaid-off occupancy must not add another named hop"
+    fail "unpaid-off occupancy must not add stale occupancy flags"
   fi
   grep -q 'unpaid stays off the plaster wall' tests/board.test.ts \
     || fail "board tests must keep unpaid occupancy off the plaster wall"
-  grep -q 'No Terms until Polar reports paid' tests/board.test.ts \
-    || fail "board tests must wait for Polar paid before Terms as #1"
+  grep -q 'No Terms until Waffo reports paid' tests/board.test.ts \
+    || fail "board tests must wait for Waffo paid before Terms as #1"
   grep -q 'unpaid stays off the plaster wall' tests/rank.test.ts \
     || fail "rank tests must keep unpaid occupancy off the plaster wall"
   grep -q 'data-prize' src/lib/board-markup.tsx \
@@ -1125,9 +1037,7 @@ PY
     || fail "unpaid-off cut must keep occupied Post a brief"
   grep -q 'Claim #1' src/app/outbid-form.tsx \
     || fail "unpaid-off cut must keep Claim #1"
-  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
-    || fail "unpaid-off cut must keep empty later-write brief URL"
-  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+  grep -q 'plaster is blank' src/lib/board-markup.tsx \
     || fail "unpaid-off cut must keep blank plaster"
   grep -q 'amount-field' src/app/outbid-form.tsx \
     || fail "unpaid-off cut must keep the dashed amount"
@@ -1145,12 +1055,12 @@ PY
   if ! awk '
     /wall-occupied \.card-lead \.terms\.prize-before-price \.terms-copy/ { prize=NR }
     /wall-occupied \.card \.brief-url\[data-first-click="open"\]/ { open=NR }
-    /Empty plaster: Brief URL is a later write after Claim #1 \/ Outbid/ { empty=NR }
+    /Empty plaster: direct brief identity fields feed the Claim #1 \/ Outbid action/ { empty=NR }
     /Empty plaster: fair window is rolling last 7 days/ { emptyroll=NR }
-    /Unpaid \/ abandoned Polar checkout never paints Terms as #1/ { unpaid=NR }
+    /Unpaid \/ abandoned Waffo checkout never paints Terms as #1/ { unpaid=NR }
     END { exit !(prize && open && empty && emptyroll && unpaid && prize < open && open < empty && empty < emptyroll && emptyroll < unpaid) }
   ' src/app/board.css; then
-    fail "unpaid leftover CSS must sit after occupied prize / Open / empty later-write"
+    fail "unpaid leftover CSS must sit after occupied prize / Open / empty form"
   fi
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach|\bcpm\b' \
     src/lib/board-markup.tsx src/app/outbid-form.tsx src/lib/rank.ts src/app/board.css \
@@ -1160,13 +1070,13 @@ PY
   fi
 
   echo "== UX: empty wall copy is a rolling last-7-days window — not Monday 00:00 UTC =="
-  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/lib/board-markup.tsx \
+  grep -q 'The rolling last 7 days board is empty. The plaster is blank.' src/lib/board-markup.tsx \
     || fail "empty plaster must name the rolling last-7-days window"
-  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
-    || fail "empty Claim #1 paper must name the rolling last-7-days window"
+  grep -q 'the wall does not reset for everyone at Monday' src/lib/board-markup.tsx \
+    || fail "empty Claim #1 paper must reject a civil-Monday reset"
   grep -q 'data-empty-window' src/lib/board-markup.tsx \
     || fail "empty rules note must stamp the empty rolling window"
-  grep -q 'data-empty-window' src/app/outbid-form.tsx \
+  grep -q 'data-empty-window' src/lib/board-markup.tsx \
     || fail "empty Claim #1 paper must stamp the empty rolling window"
   grep -q 'empty-window' src/lib/board-markup.tsx \
     || fail "empty rules note must compose empty-window, not occupied week-window"
@@ -1191,8 +1101,8 @@ PY
     || fail "empty plaster CSS must keep occupied rolling-week stamps off Claim #1"
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "empty-window cut must keep occupied rolling last-7-days"
-  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/lib/board-markup.tsx \
-    || fail "empty-window cut must keep occupied rolling copy"
+  grep -q 'Each paid brief stays live for seven days.' src/lib/board-markup.tsx \
+    || fail "empty-window cut must keep the paid placement window copy"
   grep -q 'data-prize=""' src/lib/board-markup.tsx \
     || fail "empty-window cut must keep occupied Terms as the prize"
   grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
@@ -1203,9 +1113,7 @@ PY
     || fail "empty-window cut must keep Post a brief"
   grep -q 'Claim #1' src/app/outbid-form.tsx \
     || fail "empty-window cut must keep Claim #1"
-  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
-    || fail "empty-window cut must keep empty later-write brief URL"
-  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+  grep -q 'plaster is blank' src/lib/board-markup.tsx \
     || fail "empty-window cut must keep blank plaster"
   grep -q 'amount-field' src/app/outbid-form.tsx \
     || fail "empty-window cut must keep the dashed amount"
@@ -1215,17 +1123,14 @@ PY
     || fail "empty-window cut must keep Outbid"
   grep -q 'className="plaster"' src/lib/board-markup.tsx \
     || fail "empty-window cut must not rebuild the plaster wall"
-  grep -q 'Unpaid checkout stays off the board until Polar reports paid' src/app/outbid-form.tsx \
-    || fail "empty-window cut must keep unpaid off the board"
+  grep -q 'Only a confirmed checkout changes the ranking' src/app/outbid-form.tsx \
+    || fail "empty-window cut must keep only confirmed checkout rank changes"
   grep -q 'empty wall copy is a rolling last-7-days window' tests/board.test.ts \
     || fail "board tests must cover empty rolling last-7-days copy"
   grep -q 'Empty `/` names a fair window' SPEC.md \
     || fail "SPEC must name empty / as a rolling last-7-days window"
   grep -q 'Do not print “The board resets Monday 00:00 UTC”' SPEC.md \
     || fail "SPEC must forbid Monday 00:00 UTC empty copy"
-  if grep -qE 'data-post-after-open-seven|data-open-after-post-six-stamp' src/app/board.tsx src/app/board.css src/app/outbid-form.tsx src/lib/board-markup.tsx; then
-    fail "empty rolling copy must not add another numbered hop stamp"
-  fi
   if grep -Eqi '24h lock|lock on #1' src/lib/board-markup.tsx src/app/outbid-form.tsx src/app/board.css; then
     fail "rolling week is not a 24h lock on #1"
   fi
@@ -1236,7 +1141,7 @@ PY
 import sys
 css = open(sys.argv[1], encoding="utf-8").read()
 start = css.find("Empty plaster: fair window is rolling last 7 days")
-end = css.find("Unpaid / abandoned Polar checkout never paints Terms as #1")
+end = css.find("Unpaid / abandoned Waffo checkout never paints Terms as #1")
 if start < 0 or end < 0 or start >= end:
     raise SystemExit(1)
 block = css[start:end]
@@ -1248,55 +1153,106 @@ if ".rules-note.empty-window[data-empty-window]" not in block:
     raise SystemExit(1)
 PY
 
-  echo "== Polar checkout + fixture =="
+  echo "== Waffo checkout + fixture =="
   for f in \
     src/lib/polar.ts \
+    src/lib/db.ts \
     src/app/api/checkout/route.ts \
+    src/app/api/webhooks/waffo/route.ts \
     src/app/api/webhooks/polar/route.ts \
     src/app/checkout/return/page.tsx \
     tests/checkout.test.ts \
+    tests/polar-webhook.test.ts \
+    tests/waffo-route.test.ts \
+    tests/provider-selection.test.ts \
+    tests/schema.test.ts \
     .env.example
   do
     [[ -f "$f" ]] || fail "missing $f"
   done
-  grep -q 'export class FakePolarPort' src/lib/polar.ts \
-    || fail "polar.ts must export FakePolarPort"
-  grep -q 'export class LivePolarPort' src/lib/polar.ts \
-    || fail "polar.ts must export LivePolarPort"
-  grep -q 'export function polarApiBase' src/lib/polar.ts \
-    || fail "polar.ts must export polarApiBase"
-  grep -q 'POLAR_API_BASE' src/lib/polar.ts \
-    || fail "polar.ts must honor POLAR_API_BASE"
-  grep -q 'https://api.polar.sh' src/lib/polar.ts \
-    || fail "polar.ts must default Polar API to production"
-  grep -q 'POLAR_API_BASE' .env.example \
-    || fail ".env.example missing POLAR_API_BASE"
-  grep -q 'POLAR_ACCESS_TOKEN' .env.example \
-    || fail ".env.example missing POLAR_ACCESS_TOKEN"
-  grep -q 'POLAR_WEBHOOK_SECRET' .env.example \
-    || fail ".env.example missing POLAR_WEBHOOK_SECRET"
-  grep -q 'POLAR_SUCCESS_URL' .env.example \
-    || fail ".env.example missing POLAR_SUCCESS_URL"
-  grep -q 'POLAR_PRODUCT_ID' .env.example \
-    || fail ".env.example missing POLAR_PRODUCT_ID"
+  grep -q 'export class FixturePaymentPort' src/lib/polar.ts \
+    || fail "payment module must export FixturePaymentPort"
+  grep -q 'export class WaffoPort' src/lib/polar.ts \
+    || fail "payment module must export WaffoPort"
+  grep -q 'export function waffoApiBase' src/lib/polar.ts \
+    || fail "payment module must expose waffoApiBase"
+  grep -q 'WAFFO_API_BASE' src/lib/polar.ts \
+    || fail "payment module must pin WAFFO_API_BASE"
+  grep -q 'https://api.waffo.ai' src/lib/polar.ts \
+    || fail "payment module must default Waffo API to production"
+  grep -q '^WAFFO_MODE=' .env.example \
+    || fail ".env.example missing explicit WAFFO_MODE"
+  grep -q 'WAFFO_MERCHANT_ID' .env.example \
+    || fail ".env.example missing WAFFO_MERCHANT_ID"
+  grep -q 'WAFFO_PRIVATE_KEY' .env.example \
+    || fail ".env.example missing WAFFO_PRIVATE_KEY"
+  grep -q 'WAFFO_STORE_ID' .env.example \
+    || fail ".env.example missing WAFFO_STORE_ID"
+  grep -q 'WAFFO_PRODUCT_ID' .env.example \
+    || fail ".env.example missing WAFFO_PRODUCT_ID"
+  grep -q 'WAFFO_WEBHOOK_TEST_PUBLIC_KEY' .env.example \
+    || fail ".env.example missing Waffo test webhook key"
+  grep -q 'WAFFO_WEBHOOK_PROD_PUBLIC_KEY' .env.example \
+    || fail ".env.example missing Waffo production webhook key"
+  grep -q 'export function checkoutProvider' src/lib/polar.ts \
+    || fail "payment module must expose the provider truth table"
+  grep -q 'order.completed' src/lib/polar.ts \
+    || fail "payment module must only settle Waffo order.completed"
+  grep -q 'priceSnapshot' src/lib/polar.ts \
+    || fail "payment module must use the Waffo price snapshot"
+  grep -q 'TaxCategory.DigitalGoods' src/lib/polar.ts \
+    || fail "payment module must use digital_goods tax category"
+  grep -q 'waffo_webhook_attempts' src/lib/polar.ts src/db/schema.sql \
+    || fail "Waffo changed-delivery attempts must be durable"
+  grep -q 'webhooks.verify' src/lib/polar.ts \
+    || fail "payment module must use Waffo SDK signature verification"
+  grep -q 'applyVerifiedPaidEvent' src/lib/polar.ts \
+    || fail "payment module must settle only verified paid events"
+  if grep -qE 'createHmac|timingSafeEqual' src/lib/polar.ts; then
+    fail "payment module must not implement a raw-secret webhook HMAC"
+  fi
+  grep -q 'provider mode is explicit and legacy flags cannot select a provider' tests/provider-selection.test.ts \
+    || fail "provider-selection tests must cover explicit Waffo modes"
+  grep -q 'Waffo persists an intent before network' tests/polar-webhook.test.ts \
+    || fail "Waffo webhook tests must cover pre-network durable intents"
+  grep -q 'Waffo exact delivery retry' tests/polar-webhook.test.ts \
+    || fail "Waffo webhook tests must cover exact and changed replay"
+  grep -q 'provider-time offset beats webhook arrival order' tests/polar-webhook.test.ts \
+    || fail "Waffo webhook tests must cover provider-time ordering"
+  grep -q 'two Waffo raises quoted' tests/polar-webhook.test.ts \
+    || fail "Waffo webhook tests must cover stale raises"
+  grep -q 'lost-response intent without a provider session' tests/polar-webhook.test.ts \
+    || fail "Waffo tests must cover no-session restart recovery"
+  grep -q 'canonical Waffo HTTP route' tests/waffo-route.test.ts \
+    || fail "Waffo tests must cover canonical HTTP retries"
+  grep -q 'migration failure restores foreign keys' tests/schema.test.ts \
+    || fail "schema tests must cover migration failure rollback"
+  grep -q 'intent return is read-only pending' tests/polar-webhook.test.ts \
+    || fail "Waffo tests must cover truthful intent return state"
+  if grep -q 'from "./waffo-session"' src/lib/polar.ts; then
+    fail "payment module must not import the legacy Waffo research adapter"
+  fi
   grep -q 'You' src/app/checkout/return/page.tsx \
     || fail "return page must show paid copy"
+  grep -q 'Payment pending' src/app/checkout/return/page.tsx \
+    || fail "return page must show pending copy"
   grep -q 'No rank change' src/app/checkout/return/page.tsx \
     || fail "return page must show canceled copy"
-  grep -q 'unpaid' tests/checkout.test.ts \
-    || fail "checkout tests must cover unpaid sessions"
-  grep -q 'unpaid Polar checkout stays off the plaster until Polar reports paid' tests/checkout.test.ts \
-    || fail "checkout tests must keep unpaid Polar checkout off the plaster"
-  grep -q 'FakePolarPort' tests/checkout.test.ts \
-    || fail "checkout tests must use FakePolarPort"
-  if grep -nE 'fetch\(|polar\.sh|api\.polar' src/app/api/checkout/route.ts \
-    src/app/api/webhooks/polar/route.ts >/dev/null
+  grep -q 'unpaid Waffo checkout stays off the plaster until Waffo reports paid' tests/checkout.test.ts \
+    || fail "checkout tests must keep unpaid Waffo checkout off the plaster"
+  grep -q 'FixturePaymentPort' tests/checkout.test.ts \
+    || fail "checkout tests must use the fixture port"
+  grep -q 'fixture paid webhook cannot invent an unknown checkout' tests/polar-webhook.test.ts \
+    || fail "Waffo webhook tests must reject unknown checkouts"
+  grep -q 'event ledger survives a database restart' tests/polar-webhook.test.ts \
+    || fail "Waffo webhook tests must cover restart persistence"
+  if grep -nE 'fetch\(|waffo\.ai|api\.waffo' src/app/api/checkout/route.ts \
+    src/app/api/webhooks/waffo/route.ts >/dev/null
   then
-    fail "checkout/webhook routes must not call Polar over the network"
+    fail "HTTP routes must delegate provider I/O to the payment port"
   fi
-  [[ -z "${POLAR_LIVE:-}" ]] || fail "POLAR_LIVE must stay unset in test.sh"
-  [[ -z "${POLAR_ACCESS_TOKEN:-}" ]] || fail "POLAR_ACCESS_TOKEN must stay unset"
-  [[ -z "${POLAR_WEBHOOK_SECRET:-}" ]] || fail "POLAR_WEBHOOK_SECRET must stay unset"
+  [[ "${WAFFO_MODE:-}" == "fixture" ]] || fail "test.sh must run explicit Waffo fixture mode"
+  [[ -z "${WAFFO_PRIVATE_KEY:-}" ]] || fail "WAFFO_PRIVATE_KEY must stay unset"
 
   echo "== raise-bid + difference =="
   grep -q 'export function raise' src/lib/rank.ts \
@@ -1319,18 +1275,19 @@ PY
     || fail "checkout tests must reject a same-or-lower raise"
   grep -q 'same brief still inside last-7-days raises after the UTC week label rolls' tests/checkout.test.ts \
     || fail "checkout tests must raise a Sunday pay across Monday weekId"
-  if grep -nE 'fetch\(|polar\.sh|api\.polar' src/app/api/checkout/route.ts \
-    src/app/api/webhooks/polar/route.ts >/dev/null
+  if grep -nE 'fetch\(|waffo\.sh|api\.waffo' src/app/api/checkout/route.ts \
+    src/app/api/webhooks/waffo/route.ts >/dev/null
   then
     fail "raise checkout must stay offline in routes"
   fi
-  [[ -z "${POLAR_LIVE:-}" ]] || fail "POLAR_LIVE must stay unset in test.sh"
 
   echo "== UX: occupied raise identity is last-7-days — not the UTC week label =="
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
-    || fail "occupied /rules must name last-7-days raise identity"
-  grep -q 'weekId</code> stays an audit label — not raise identity' src/lib/rules-copy.tsx \
-    || fail "occupied /rules must keep weekId as an audit label"
+  grep -q 'The same cleaned brief link may raise while its placement is' src/lib/rules-copy.tsx \
+    || fail "occupied /rules must name active-placement raise identity"
+  grep -q 'active. The original payer is charged only the' src/lib/rules-copy.tsx \
+    || fail "occupied /rules must keep the same-brief raise charge scoped"
+  grep -q 'Each placement keeps its own seven-day window' src/lib/rules-copy.tsx \
+    || fail "occupied /rules must keep each placement on its own rolling window"
   if grep -qi 'same UTC week raises' src/lib/rules-copy.tsx; then
     fail "occupied /rules must not tax raise identity as the UTC week"
   fi
@@ -1339,7 +1296,7 @@ PY
   fi
   grep -Fq 'Identity for raise: same **canonical brief URL** still inside the rolling last 7 days' SPEC.md \
     || fail "SPEC must name last-7-days raise identity"
-  grep -Fq '`weekId` stays a Polar/audit label — not raise identity' SPEC.md \
+  grep -Fq '`weekId` stays a Waffo/audit label — not raise identity' SPEC.md \
     || fail "SPEC must keep weekId as an audit label, not raise identity"
   grep -Fq 'submit the same canonical brief URL again while that listing is still inside last 7 days' SPEC.md \
     || fail "SPEC §6.5 must raise inside last 7 days, not weekId"
@@ -1366,13 +1323,13 @@ PY
     || fail "weekId listing lookup must stay an audit helper, not raise identity"
   grep -Fq 'Raise identity: same canonical brief URL still inside last 7 days. Not weekId.' src/lib/week.ts \
     || fail "findLiveListingByBrief must be raise identity, not weekId"
-  grep -q 'occupied /rules raise identity is last-7-days, not the UTC week label' tests/urls.test.ts \
-    || fail "rules tests must cover last-7-days raise identity"
+  grep -q 'occupied /rules explains active-placement raises in public language' tests/urls.test.ts \
+    || fail "rules tests must cover active-placement raise identity"
   grep -q 'same brief still inside last-7-days raises after the UTC week label rolls' tests/checkout.test.ts \
     || fail "checkout tests must cover Sunday pay Monday raise"
-  grep -q 'Raise pays difference' src/lib/rules-copy.tsx \
-    || fail "raise-identity cut must keep raise pays difference"
-  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/lib/rules-copy.tsx \
+  grep -q 'The original payer is charged only the' src/lib/rules-copy.tsx \
+    || fail "raise-identity cut must keep raise difference pricing"
+  grep -q 'Rolling last 7 days from paid placement' src/lib/rules-copy.tsx \
     || fail "raise-identity cut must keep occupied rolling last-7-days"
   grep -q 'data-prize=""' src/lib/board-markup.tsx \
     || fail "raise-identity cut must keep occupied Terms as the prize"
@@ -1384,9 +1341,7 @@ PY
     || fail "raise-identity cut must keep Post a brief"
   grep -q 'Claim #1' src/app/outbid-form.tsx \
     || fail "raise-identity cut must keep Claim #1"
-  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
-    || fail "raise-identity cut must keep empty later-write brief URL"
-  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+  grep -q 'plaster is blank' src/lib/board-markup.tsx \
     || fail "raise-identity cut must keep blank plaster"
   grep -q 'amount-field' src/app/outbid-form.tsx \
     || fail "raise-identity cut must keep the dashed amount"
@@ -1396,17 +1351,14 @@ PY
     || fail "raise-identity cut must keep Outbid"
   grep -q 'className="plaster"' src/lib/board-markup.tsx \
     || fail "raise-identity cut must not rebuild the plaster wall"
-  grep -q 'Unpaid checkout stays off the board until Polar reports paid' src/app/outbid-form.tsx \
-    || fail "raise-identity cut must keep unpaid off the board"
+  grep -q 'Only a confirmed checkout changes the ranking' src/app/outbid-form.tsx \
+    || fail "raise-identity cut must keep only confirmed checkout rank changes"
   grep -q 'data-empty-week="true"' src/lib/board-markup.tsx \
     || fail "raise-identity cut must keep honest empty plaster"
-  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/lib/board-markup.tsx \
+  grep -q 'The rolling last 7 days board is empty. The plaster is blank.' src/lib/board-markup.tsx \
     || fail "raise-identity cut must keep empty rolling-copy"
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "raise-identity cut must keep occupied rolling last-7-days"
-  if grep -qE 'data-post-after-open-seven|data-open-after-post-six-stamp' src/app/board.tsx src/app/board.css src/app/outbid-form.tsx src/lib/board-markup.tsx src/app/rules/page.tsx src/lib/rules-copy.tsx; then
-    fail "raise identity must not add another numbered hop stamp"
-  fi
   if grep -Eqi '24h lock|lock on #1' src/app/rules/page.tsx src/lib/rules-copy.tsx src/lib/rank.ts src/lib/polar.ts src/lib/week.ts; then
     fail "raise identity is not a 24h lock on #1"
   fi
@@ -1420,41 +1372,43 @@ if "raise-identity" in css or "raise-rolling" in css:
     raise SystemExit(1)
 PY
 
-  echo "== UX: occupied checkout copy names Polar raise-pays-difference — unpaid stays off =="
+  echo "== UX: occupied checkout copy names Waffo raise-pays-difference — unpaid stays off =="
   grep -q 'function OccupiedCheckoutCopy' src/app/outbid-form.tsx \
     || fail "occupied claim must compose OccupiedCheckoutCopy"
   grep -q 'data-raise-difference=""' src/app/outbid-form.tsx \
     || fail "occupied checkout copy must stamp raise-pays-difference"
   grep -q 'data-raise-charge=""' src/app/outbid-form.tsx \
-    || fail "occupied checkout copy must stamp Polar raise charge"
+    || fail "occupied checkout copy must stamp Waffo raise charge"
   grep -q 'data-raise-charge-usd=""' src/app/outbid-form.tsx \
-    || fail "occupied checkout copy must name the Polar raise charge in dollars"
-  grep -qF 'Polar charges $' src/app/outbid-form.tsx \
-    || fail "occupied checkout copy must say Polar charges"
-  grep -q 'only the difference, not a new bid' src/app/outbid-form.tsx \
-    || fail "occupied checkout copy must name Polar raise-pays-difference"
-  grep -q 'Polar charges the difference on a raise' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must name the Waffo raise charge in dollars"
+  grep -qF 'Raise charge: $' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must expose the computed raise charge"
+  grep -q 'only the difference, not a new full bid' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must name raise-pays-difference"
+  grep -q 'A raise charges only the difference' src/app/outbid-form.tsx \
     || fail "occupied checkout copy must name raise-pays-difference below #1"
-  grep -q 'New brief: Polar charges that full amount' src/app/outbid-form.tsx \
-    || fail "occupied checkout copy must name a new brief as a full Polar charge"
-  grep -q 'Same brief URL already on the wall: Polar charges only the difference' src/app/outbid-form.tsx \
-    || fail "occupied checkout copy must name same-URL raise as Polar difference"
-  grep -q 'Unpaid checkout stays off the board until Polar reports paid' src/app/outbid-form.tsx \
-    || fail "occupied checkout copy must keep unpaid Polar checkout off the wall"
-  grep -q 'An abandoned brief is not Terms as #1' src/app/outbid-form.tsx \
-    || fail "occupied checkout copy must keep abandoned briefs off Terms as #1"
+  grep -q 'A new brief pays the full amount' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must name a new brief as a full charge"
+  grep -q 'The same brief link already on the wall' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must name same-URL raise as a difference"
+  grep -q 'pays only the difference' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must keep same-URL difference pricing"
+  grep -q 'Only a confirmed checkout changes the ranking' src/app/outbid-form.tsx \
+    || fail "occupied checkout copy must keep only confirmed checkout rank changes"
+  grep -q 'An incomplete checkout never creates a #1 brief' src/lib/board-markup.tsx \
+    || fail "occupied checkout copy must keep incomplete briefs off Terms as #1"
   if awk '/function EmptyClaimFirstWrite/,/function OccupiedCheckoutCopy/' src/app/outbid-form.tsx | grep -q 'data-raise-difference'; then
     fail "empty Claim #1 write must not stamp occupied raise-pays-difference"
   fi
-  if awk '/Blank plaster/,/empty-hint/' src/app/outbid-form.tsx | grep -q 'Polar charges only the difference'; then
+  if awk '/Blank plaster/,/empty-hint/' src/app/outbid-form.tsx | grep -q 'Waffo charges only the difference'; then
     fail "empty Claim #1 paper must not name occupied raise-pays-difference"
   fi
-  grep -Fq 'On occupied plaster, checkout copy names Polar charges the difference on a raise' SPEC.md \
-    || fail "SPEC must name occupied Polar raise-pays-difference checkout copy"
-  grep -Fq 'Same brief URL already on the wall: Polar charges only the difference' SPEC.md \
-    || fail "SPEC must name same-URL raise as Polar difference"
-  grep -q 'Occupied checkout: Polar charges the difference on a raise. Unpaid stays off.' src/app/board.css \
-    || fail "CSS must name occupied Polar raise-pays-difference checkout copy"
+  grep -Fq 'On occupied plaster, checkout copy names Waffo charges the difference on a raise' SPEC.md \
+    || fail "SPEC must name occupied Waffo raise-pays-difference checkout copy"
+  grep -Fq 'Same brief URL already on the wall: Waffo charges only the difference' SPEC.md \
+    || fail "SPEC must name same-URL raise as Waffo difference"
+  grep -q 'Occupied checkout: Waffo charges the difference on a raise. Unpaid stays off.' src/app/board.css \
+    || fail "CSS must name occupied Waffo raise-pays-difference checkout copy"
   grep -qF '.wall-occupied .paste-rail .claim-note[data-raise-difference]' src/app/board.css \
     || fail "CSS must compose occupied raise-pays-difference on the claim rail"
   grep -qF '.wall-stage.wall-empty[data-occupied="false"] .claim-note[data-raise-difference]' src/app/board.css \
@@ -1464,7 +1418,7 @@ import re
 import sys
 css = open(sys.argv[1], encoding="utf-8").read()
 block = re.search(
-    r"/\* Occupied checkout: Polar charges the difference on a raise\. Unpaid stays off\. \*/(.*?)\.wall-occupied \.card \.open-label",
+    r"/\* Occupied checkout: Waffo charges the difference on a raise\. Unpaid stays off\. \*/(.*?)\.wall-occupied \.card \.open-label",
     css,
     re.S,
 )
@@ -1475,10 +1429,10 @@ if "background:" in block.group(1) or "var(--bid-ink)" in block.group(1):
 if ".wall-occupied .paste-rail .claim-note[data-raise-difference]" not in block.group(1):
     raise SystemExit(1)
 PY
-  grep -q 'occupied checkout copy names Polar raise-pays-difference' tests/board.test.ts \
-    || fail "board tests must cover occupied Polar raise-pays-difference checkout copy"
-  grep -q 'occupied checkout copy names Polar raise-pays-difference' tests/checkout.test.ts \
-    || fail "checkout tests must cover occupied Polar raise-pays-difference copy after pay"
+  grep -q 'occupied checkout copy explains full bids and raise differences without provider copy' tests/board.test.ts \
+    || fail "board tests must cover occupied full-bid and raise-difference checkout copy"
+  grep -q 'FixturePaymentPort \$5 appears on the board after completion' tests/checkout.test.ts \
+    || fail "checkout tests must cover occupied raise-difference copy after pay"
   grep -q 'data-prize=""' src/lib/board-markup.tsx \
     || fail "raise-pays-difference cut must keep occupied Terms as the prize"
   grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
@@ -1489,9 +1443,7 @@ PY
     || fail "raise-pays-difference cut must keep Post a brief"
   grep -q 'Claim #1' src/app/outbid-form.tsx \
     || fail "raise-pays-difference cut must keep Claim #1"
-  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
-    || fail "raise-pays-difference cut must keep empty later-write brief URL"
-  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+  grep -q 'plaster is blank' src/lib/board-markup.tsx \
     || fail "raise-pays-difference cut must keep blank plaster"
   grep -q 'amount-field' src/app/outbid-form.tsx \
     || fail "raise-pays-difference cut must keep the dashed amount"
@@ -1501,53 +1453,48 @@ PY
     || fail "raise-pays-difference cut must keep Outbid"
   grep -q 'className="plaster"' src/lib/board-markup.tsx \
     || fail "raise-pays-difference cut must not rebuild the plaster wall"
-  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
-    || fail "raise-pays-difference cut must not restamp empty rolling-copy"
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
-    || fail "raise-pays-difference cut must not restamp raise-rolling-identity"
+  grep -q 'The rolling last 7 days board is empty. The plaster is blank.' src/lib/board-markup.tsx \
+    || fail "raise-pays-difference cut must keep honest empty rolling-copy"
+  grep -q 'The same cleaned brief link may raise while its placement is' src/lib/rules-copy.tsx \
+    || fail "raise-pays-difference cut must keep active-placement raise identity"
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "raise-pays-difference cut must keep occupied rolling last-7-days"
-  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp|data-raise-after-open' \
-    src/app/outbid-form.tsx src/app/board.tsx src/lib/board-markup.tsx src/app/board.css
-  then
-    fail "raise-pays-difference must not add another named hop"
-  fi
   if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx; then
     fail "raise-pays-difference must not rebuild the plaster wall into a long form"
   fi
   if ! awk '
     /wall-occupied \.card-lead \.terms\.prize-before-price \.terms-copy/ { prize=NR }
     /wall-occupied \.card \.brief-url\[data-first-click="open"\]/ { open=NR }
-    /Unpaid \/ abandoned Polar checkout never paints Terms as #1/ { unpaid=NR }
-    /Occupied checkout: Polar charges the difference on a raise/ { raise=NR }
+    /Unpaid \/ abandoned Waffo checkout never paints Terms as #1/ { unpaid=NR }
+    /Occupied checkout: Waffo charges the difference on a raise/ { raise=NR }
     END { exit !(prize && open && unpaid && raise && prize < open && open < unpaid && unpaid < raise) }
   ' src/app/board.css; then
     fail "occupied raise-pays-difference CSS must sit after unpaid leftover, not rebuild the wall"
   fi
 
-  echo "== UX: occupied checkout return names Polar raise-pays-difference — unpaid cancel stays off =="
+  echo "== UX: occupied checkout return names Waffo raise-pays-difference — unpaid cancel stays off =="
   grep -q 'data-raise-charged=""' src/app/checkout/return/page.tsx \
-    || fail "raise return must stamp Polar charged the difference"
+    || fail "raise return must stamp Waffo charged the difference"
   grep -q 'data-raise-charge-usd=""' src/app/checkout/return/page.tsx \
-    || fail "raise return must name the Polar raise charge in dollars"
-  grep -q 'Polar charged' src/app/checkout/return/page.tsx \
-    || fail "raise return must say Polar charged"
+    || fail "raise return must name the Waffo raise charge in dollars"
+  grep -q 'was charged' src/app/checkout/return/page.tsx \
+    || fail "raise return must expose the charged amount"
   grep -q 'the difference, not a new full bid' src/app/checkout/return/page.tsx \
-    || fail "raise return must name Polar charged the difference, not a new full bid"
-  grep -q 'A canceled or unpaid Polar return still changes no rank' src/app/checkout/return/page.tsx \
+    || fail "raise return must name Waffo charged the difference, not a new full bid"
+  grep -q 'A canceled or incomplete checkout never creates' src/app/checkout/return/page.tsx \
     || fail "canceled return must still change no rank"
   grep -q 'No rank change' src/app/checkout/return/page.tsx \
     || fail "canceled return must say no rank change"
   grep -q 'You' src/app/checkout/return/page.tsx \
     || fail "raise return cut must keep paid You're on the board"
-  grep -Fq 'Occupied `/checkout/return` after a raise names Polar charged the difference' SPEC.md \
-    || fail "SPEC must name occupied raise return Polar difference"
-  grep -Fq 'Canceled / unpaid Polar return still changes no rank' SPEC.md \
+  grep -Fq 'Occupied `/checkout/return` after a raise names Waffo charged the difference' SPEC.md \
+    || fail "SPEC must name occupied raise return Waffo difference"
+  grep -Fq 'Canceled / unpaid Waffo return still changes no rank' SPEC.md \
     || fail "SPEC must keep unpaid cancel off the wall"
-  grep -q 'Occupied /checkout/return after a raise: Polar charged the difference. Unpaid cancel stays off.' src/app/board.css \
-    || fail "CSS must name occupied raise return Polar difference"
+  grep -q 'Occupied /checkout/return after a raise: Waffo charged the difference. Unpaid cancel stays off.' src/app/board.css \
+    || fail "CSS must name occupied raise return Waffo difference"
   grep -qF '.board[data-return="success"][data-raise-charged] .raise-charged[data-raise-charged]' src/app/board.css \
-    || fail "CSS must compose occupied raise return as Polar difference"
+    || fail "CSS must compose occupied raise return as Waffo difference"
   grep -qF '.board[data-return="cancel"] .unpaid-cancel' src/app/board.css \
     || fail "CSS must keep unpaid cancel return muted"
   python3 - src/app/board.css <<'PY' || fail "raise-return CSS must stay muted, not recolor the plaster"
@@ -1555,7 +1502,7 @@ import re
 import sys
 css = open(sys.argv[1], encoding="utf-8").read()
 block = re.search(
-    r"/\* Occupied /checkout/return after a raise: Polar charged the difference\. Unpaid cancel stays off\. \*/(.*?)@media",
+    r"/\* Occupied /checkout/return after a raise: Waffo charged the difference\. Unpaid cancel stays off\. \*/(.*?)@media",
     css,
     re.S,
 )
@@ -1568,13 +1515,13 @@ if '.board[data-return="success"][data-raise-charged] .raise-charged[data-raise-
 if '.board[data-return="cancel"] .unpaid-cancel' not in block.group(1):
     raise SystemExit(1)
 PY
-  grep -q 'occupied /checkout/return after a raise names Polar charged the difference' tests/checkout.test.ts \
-    || fail "checkout tests must cover occupied raise return Polar difference"
-  grep -q 'unpaid cancel stays off' tests/checkout.test.ts \
+  grep -q 'occupied /checkout/return names the raise difference without provider copy' tests/checkout.test.ts \
+    || fail "checkout tests must cover occupied raise return difference"
+  grep -q 'handleCheckoutReturn pays on success and not on cancel' tests/checkout.test.ts \
     || fail "checkout tests must keep unpaid cancel off the wall"
   grep -q 'data-raise-difference=""' src/app/outbid-form.tsx \
     || fail "raise return cut must not restamp occupied checkout copy"
-  grep -q 'only the difference, not a new bid' src/app/outbid-form.tsx \
+  grep -q 'only the difference, not a new full bid' src/app/outbid-form.tsx \
     || fail "raise return cut must not restamp occupied checkout copy"
   grep -q 'data-prize=""' src/lib/board-markup.tsx \
     || fail "raise return cut must keep occupied Terms as the prize"
@@ -1586,9 +1533,7 @@ PY
     || fail "raise return cut must keep Post a brief"
   grep -q 'Claim #1' src/app/outbid-form.tsx \
     || fail "raise return cut must keep Claim #1"
-  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
-    || fail "raise return cut must keep empty later-write brief URL"
-  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+  grep -q 'plaster is blank' src/lib/board-markup.tsx \
     || fail "raise return cut must keep blank plaster"
   grep -q 'amount-field' src/app/outbid-form.tsx \
     || fail "raise return cut must keep the dashed amount"
@@ -1598,29 +1543,24 @@ PY
     || fail "raise return cut must keep Outbid"
   grep -q 'className="plaster"' src/lib/board-markup.tsx \
     || fail "raise return cut must not rebuild the plaster wall"
-  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
-    || fail "raise return cut must not restamp empty rolling-copy"
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
-    || fail "raise return cut must not restamp raise-rolling-identity"
+  grep -q 'The rolling last 7 days board is empty. The plaster is blank.' src/lib/board-markup.tsx \
+    || fail "raise return cut must keep honest empty rolling-copy"
+  grep -q 'The same cleaned brief link may raise while its placement is' src/lib/rules-copy.tsx \
+    || fail "raise return cut must keep active-placement raise identity"
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "raise return cut must keep occupied rolling last-7-days"
-  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp|data-raise-after-open|data-post-after-open-N' \
-    src/app/outbid-form.tsx src/app/board.tsx src/lib/board-markup.tsx src/app/board.css src/app/checkout/return/page.tsx
-  then
-    fail "raise return must not add another named hop"
-  fi
   if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx src/app/checkout/return/page.tsx; then
     fail "raise return must not rebuild the plaster wall into a long form"
   fi
   if ! awk '
-    /Occupied checkout: Polar charges the difference on a raise/ { raise=NR }
-    /Occupied \/checkout\/return after a raise: Polar charged the difference/ { ret=NR }
+    /Occupied checkout: Waffo charges the difference on a raise/ { raise=NR }
+    /Occupied \/checkout\/return after a raise: Waffo charged the difference/ { ret=NR }
     END { exit !(raise && ret && raise < ret) }
   ' src/app/board.css; then
     fail "occupied raise return CSS must sit after occupied checkout copy, not restamp it"
   fi
 
-  echo "== UX: occupied /about names Polar raise-pays-difference — unpaid Polar checkout stays off =="
+  echo "== UX: occupied /about names Waffo raise-pays-difference — unpaid Waffo checkout stays off =="
   grep -q 'export function AboutCopy' src/lib/about-copy.tsx \
     || fail "occupied /about must compose AboutCopy"
   grep -q 'export default async function AboutPage' src/app/about/page.tsx \
@@ -1628,13 +1568,13 @@ PY
   grep -q 'await connection()' src/app/about/page.tsx \
     || fail "occupied /about must re-render occupancy on each request"
   grep -q 'data-about-raise=""' src/lib/about-copy.tsx \
-    || fail "occupied /about must stamp Polar raise-pays-difference"
-  grep -q 'Polar charges the difference on a raise' src/lib/about-copy.tsx \
-    || fail "occupied /about must name Polar charges the difference on a raise"
-  grep -q 'not a new full bid' src/lib/about-copy.tsx \
-    || fail "occupied /about must name Polar raise as not a new full bid"
-  grep -q 'Unpaid Polar checkout stays off the wall' src/lib/about-copy.tsx \
-    || fail "occupied /about must keep unpaid Polar checkout off the wall"
+    || fail "occupied /about must stamp Waffo raise-pays-difference"
+  grep -q 'A raise charges the original payer only the difference' src/lib/about-copy.tsx \
+    || fail "occupied /about must name the original payer's raise difference"
+  grep -q 'appears after payment is confirmed' src/lib/about-copy.tsx \
+    || fail "occupied /about must wait for payment before the new rank"
+  grep -q 'A brief appears only' src/lib/about-copy.tsx \
+    || fail "occupied /about must keep unpaid briefs off the wall"
   grep -q 'listLiveBoard' src/app/about/page.tsx \
     || fail "occupied /about must read live paid listings"
   if awk '/occupied \? \(/,/Read the rules/' src/lib/about-copy.tsx | grep -q 'data-raise-difference'; then
@@ -1643,22 +1583,22 @@ PY
   if awk '/occupied \? \(/,/Read the rules/' src/lib/about-copy.tsx | grep -q 'data-raise-charged'; then
     fail "occupied /about must not restamp occupied checkout return"
   fi
-  grep -Fq 'Occupied `/about` names Polar charges the difference on a raise' SPEC.md \
-    || fail "SPEC must name occupied /about Polar raise-pays-difference"
-  grep -Fq 'Unpaid Polar checkout stays off the wall' SPEC.md \
-    || fail "SPEC must keep unpaid Polar checkout off the wall on occupied /about"
-  grep -q 'Occupied /about: Polar charges the difference on a raise. Unpaid stays off.' src/app/board.css \
-    || fail "CSS must name occupied /about Polar raise-pays-difference"
+  grep -Fq 'Occupied `/about` names Waffo charges the difference on a raise' SPEC.md \
+    || fail "SPEC must name occupied /about Waffo raise-pays-difference"
+  grep -Fq 'Unpaid Waffo checkout stays off the wall' SPEC.md \
+    || fail "SPEC must keep unpaid Waffo checkout off the wall on occupied /about"
+  grep -q 'Occupied /about: Waffo charges the difference on a raise. Unpaid stays off.' src/app/board.css \
+    || fail "CSS must name occupied /about Waffo raise-pays-difference"
   grep -qF '.board[data-page="about"][data-occupied="true"] .about-raise[data-about-raise]' src/app/board.css \
-    || fail "CSS must compose occupied /about Polar raise-pays-difference"
+    || fail "CSS must compose occupied /about Waffo raise-pays-difference"
   grep -qF '.board[data-page="about"][data-occupied="false"] .about-raise[data-about-raise]' src/app/board.css \
-    || fail "empty /about CSS must keep occupied Polar raise-pays-difference off"
+    || fail "empty /about CSS must keep occupied Waffo raise-pays-difference off"
   python3 - src/app/board.css <<'PY' || fail "occupied /about CSS must stay muted, not recolor the plaster"
 import re
 import sys
 css = open(sys.argv[1], encoding="utf-8").read()
 block = re.search(
-    r"/\* Occupied /about: Polar charges the difference on a raise\. Unpaid stays off\. \*/(.*?)(?:/\* Occupied /rules:|@media)",
+    r"/\* Occupied /about: Waffo charges the difference on a raise\. Unpaid stays off\. \*/(.*?)(?:/\* Occupied /rules:|@media)",
     css,
     re.S,
 )
@@ -1671,15 +1611,15 @@ if '.board[data-page="about"][data-occupied="true"] .about-raise[data-about-rais
 if '.board[data-page="about"][data-occupied="false"] .about-raise[data-about-raise]' not in block.group(1):
     raise SystemExit(1)
 PY
-  grep -q 'occupied /about names Polar raise-pays-difference' tests/urls.test.ts \
-    || fail "url tests must cover occupied /about Polar raise-pays-difference"
-  grep -q 'occupied /about names Polar raise-pays-difference' tests/checkout.test.ts \
-    || fail "checkout tests must cover occupied /about Polar raise-pays-difference after pay"
-  grep -q 'unpaid Polar checkout stays off' tests/checkout.test.ts \
-    || fail "checkout tests must keep unpaid Polar checkout off occupied /about"
+  grep -q 'occupied /about explains raise pricing without provider copy' tests/urls.test.ts \
+    || fail "url tests must cover occupied /about raise pricing"
+  grep -q 'occupied /about keeps raise and payment copy provider-neutral' tests/checkout.test.ts \
+    || fail "checkout tests must cover occupied /about raise/payment copy"
+  grep -q 'unpaid Waffo checkout stays off' tests/checkout.test.ts \
+    || fail "checkout tests must keep unpaid Waffo checkout off occupied /about"
   grep -q 'data-raise-difference=""' src/app/outbid-form.tsx \
     || fail "occupied /about cut must not restamp occupied checkout copy"
-  grep -q 'only the difference, not a new bid' src/app/outbid-form.tsx \
+  grep -q 'only the difference, not a new full bid' src/app/outbid-form.tsx \
     || fail "occupied /about cut must not restamp occupied checkout copy"
   grep -q 'data-raise-charged=""' src/app/checkout/return/page.tsx \
     || fail "occupied /about cut must not restamp occupied checkout return"
@@ -1695,9 +1635,7 @@ PY
     || fail "occupied /about cut must keep Post a brief"
   grep -q 'Claim #1' src/app/outbid-form.tsx \
     || fail "occupied /about cut must keep Claim #1"
-  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
-    || fail "occupied /about cut must keep empty later-write brief URL"
-  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+  grep -q 'plaster is blank' src/lib/board-markup.tsx \
     || fail "occupied /about cut must keep blank plaster"
   grep -q 'amount-field' src/app/outbid-form.tsx \
     || fail "occupied /about cut must keep the dashed amount"
@@ -1707,30 +1645,25 @@ PY
     || fail "occupied /about cut must keep Outbid"
   grep -q 'className="plaster"' src/lib/board-markup.tsx \
     || fail "occupied /about cut must not rebuild the plaster wall"
-  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
-    || fail "occupied /about cut must not restamp empty rolling-copy"
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
-    || fail "occupied /about cut must not restamp raise-rolling-identity"
+  grep -q 'The rolling last 7 days board is empty. The plaster is blank.' src/lib/board-markup.tsx \
+    || fail "occupied /about cut must keep honest empty rolling-copy"
+  grep -q 'The same cleaned brief link may raise while its placement is' src/lib/rules-copy.tsx \
+    || fail "occupied /about cut must keep active-placement raise identity"
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "occupied /about cut must keep occupied rolling last-7-days"
-  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp|data-raise-after-open|data-post-after-open-N' \
-    src/app/outbid-form.tsx src/app/board.tsx src/lib/board-markup.tsx src/app/board.css src/app/about/page.tsx src/lib/about-copy.tsx
-  then
-    fail "occupied /about must not add another named hop"
-  fi
   if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx src/app/about/page.tsx src/lib/about-copy.tsx; then
     fail "occupied /about must not rebuild the plaster wall into a long form"
   fi
   if ! awk '
-    /Occupied checkout: Polar charges the difference on a raise/ { raise=NR }
-    /Occupied \/checkout\/return after a raise: Polar charged the difference/ { ret=NR }
-    /Occupied \/about: Polar charges the difference on a raise/ { about=NR }
+    /Occupied checkout: Waffo charges the difference on a raise/ { raise=NR }
+    /Occupied \/checkout\/return after a raise: Waffo charged the difference/ { ret=NR }
+    /Occupied \/about: Waffo charges the difference on a raise/ { about=NR }
     END { exit !(raise && ret && about && raise < ret && ret < about) }
   ' src/app/board.css; then
     fail "occupied /about CSS must sit after occupied checkout return, not restamp it"
   fi
 
-  echo "== UX: occupied /rules names Polar raise-pays-difference — unpaid Polar checkout stays off =="
+  echo "== UX: occupied /rules names Waffo raise-pays-difference — unpaid Waffo checkout stays off =="
   grep -q 'export function RulesCopy' src/lib/rules-copy.tsx \
     || fail "occupied /rules must compose RulesCopy"
   grep -q 'export default async function RulesPage' src/app/rules/page.tsx \
@@ -1738,13 +1671,13 @@ PY
   grep -q 'await connection()' src/app/rules/page.tsx \
     || fail "occupied /rules must re-render occupancy on each request"
   grep -q 'data-rules-raise=""' src/lib/rules-copy.tsx \
-    || fail "occupied /rules must stamp Polar raise-pays-difference"
-  grep -q 'Polar charges the difference on a raise' src/lib/rules-copy.tsx \
-    || fail "occupied /rules must name Polar charges the difference on a raise"
-  grep -q 'not a new full bid' src/lib/rules-copy.tsx \
-    || fail "occupied /rules must name Polar raise as not a new full bid"
-  grep -q 'Unpaid Polar checkout stays off the wall' src/lib/rules-copy.tsx \
-    || fail "occupied /rules must keep unpaid Polar checkout off the wall"
+    || fail "occupied /rules must stamp Waffo raise-pays-difference"
+  grep -q 'The original payer is charged only the' src/lib/rules-copy.tsx \
+    || fail "occupied /rules must name the original payer's raise difference"
+  grep -q 'the new total must be at least' src/lib/rules-copy.tsx \
+    || fail "occupied /rules must keep the minimum raise step"
+  grep -q 'Rank changes only after payment is confirmed' src/lib/rules-copy.tsx \
+    || fail "occupied /rules must keep unpaid checkout off the wall"
   grep -q 'listLiveBoard' src/app/rules/page.tsx \
     || fail "occupied /rules must read live paid listings"
   if awk '/occupied \? \(/,/Weekly UTC reset/' src/lib/rules-copy.tsx | grep -q 'data-raise-difference'; then
@@ -1756,22 +1689,22 @@ PY
   if awk '/occupied \? \(/,/Weekly UTC reset/' src/lib/rules-copy.tsx | grep -q 'data-about-raise'; then
     fail "occupied /rules must not restamp occupied /about"
   fi
-  grep -Fq 'Occupied `/rules` names Polar charges the difference on a raise' SPEC.md \
-    || fail "SPEC must name occupied /rules Polar raise-pays-difference"
-  grep -Fq 'Unpaid Polar checkout stays off the wall' SPEC.md \
-    || fail "SPEC must keep unpaid Polar checkout off the wall on occupied /rules"
-  grep -q 'Occupied /rules: Polar charges the difference on a raise. Unpaid stays off.' src/app/board.css \
-    || fail "CSS must name occupied /rules Polar raise-pays-difference"
+  grep -Fq 'Occupied `/rules` names Waffo charges the difference on a raise' SPEC.md \
+    || fail "SPEC must name occupied /rules Waffo raise-pays-difference"
+  grep -Fq 'Unpaid Waffo checkout stays off the wall' SPEC.md \
+    || fail "SPEC must keep unpaid Waffo checkout off the wall on occupied /rules"
+  grep -q 'Occupied /rules: Waffo charges the difference on a raise. Unpaid stays off.' src/app/board.css \
+    || fail "CSS must name occupied /rules Waffo raise-pays-difference"
   grep -qF '.board[data-page="rules"][data-occupied="true"] .rules-raise[data-rules-raise]' src/app/board.css \
-    || fail "CSS must compose occupied /rules Polar raise-pays-difference"
+    || fail "CSS must compose occupied /rules Waffo raise-pays-difference"
   grep -qF '.board[data-page="rules"][data-occupied="false"] .rules-raise[data-rules-raise]' src/app/board.css \
-    || fail "empty /rules CSS must keep occupied Polar raise-pays-difference off"
+    || fail "empty /rules CSS must keep occupied Waffo raise-pays-difference off"
   python3 - src/app/board.css <<'PY' || fail "occupied /rules CSS must stay muted, not recolor the plaster"
 import re
 import sys
 css = open(sys.argv[1], encoding="utf-8").read()
 block = re.search(
-    r"/\* Occupied /rules: Polar charges the difference on a raise\. Unpaid stays off\. \*/(.*?)(?:/\* Occupied raise-too-small:|@media)",
+    r"/\* Occupied /rules: Waffo charges the difference on a raise\. Unpaid stays off\. \*/(.*?)(?:/\* Occupied raise-too-small:|@media)",
     css,
     re.S,
 )
@@ -1786,15 +1719,15 @@ if '.board[data-page="rules"][data-occupied="false"] .rules-raise[data-rules-rai
 if '.board[data-page="about"][data-occupied="true"] .about-raise[data-about-raise]' in block.group(1):
     raise SystemExit(1)
 PY
-  grep -q 'occupied /rules names Polar raise-pays-difference' tests/urls.test.ts \
-    || fail "url tests must cover occupied /rules Polar raise-pays-difference"
-  grep -q 'occupied /rules names Polar raise-pays-difference' tests/checkout.test.ts \
-    || fail "checkout tests must cover occupied /rules Polar raise-pays-difference after pay"
-  grep -q 'unpaid Polar checkout stays off' tests/checkout.test.ts \
-    || fail "checkout tests must keep unpaid Polar checkout off occupied /rules"
+  grep -q 'occupied /rules keeps payment and raise copy provider-neutral' tests/urls.test.ts \
+    || fail "url tests must cover occupied /rules payment/raise copy"
+  grep -q 'occupied /rules keeps raise and payment copy provider-neutral' tests/checkout.test.ts \
+    || fail "checkout tests must cover occupied /rules payment/raise copy"
+  grep -q 'unpaid Waffo checkout stays off' tests/checkout.test.ts \
+    || fail "checkout tests must keep unpaid Waffo checkout off occupied /rules"
   grep -q 'data-raise-difference=""' src/app/outbid-form.tsx \
     || fail "occupied /rules cut must not restamp occupied checkout copy"
-  grep -q 'only the difference, not a new bid' src/app/outbid-form.tsx \
+  grep -q 'only the difference, not a new full bid' src/app/outbid-form.tsx \
     || fail "occupied /rules cut must not restamp occupied checkout copy"
   grep -q 'data-raise-charged=""' src/app/checkout/return/page.tsx \
     || fail "occupied /rules cut must not restamp occupied checkout return"
@@ -1802,8 +1735,8 @@ PY
     || fail "occupied /rules cut must not restamp occupied checkout return"
   grep -q 'data-about-raise=""' src/lib/about-copy.tsx \
     || fail "occupied /rules cut must not restamp occupied /about"
-  grep -q 'Polar charges the difference on a raise' src/lib/about-copy.tsx \
-    || fail "occupied /rules cut must not restamp occupied /about"
+  grep -q 'A raise charges the original payer only the difference' src/lib/about-copy.tsx \
+    || fail "occupied /rules cut must keep provider-neutral occupied /about raise pricing"
   grep -q 'data-prize=""' src/lib/board-markup.tsx \
     || fail "occupied /rules cut must keep occupied Terms as the prize"
   grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
@@ -1814,9 +1747,7 @@ PY
     || fail "occupied /rules cut must keep Post a brief"
   grep -q 'Claim #1' src/app/outbid-form.tsx \
     || fail "occupied /rules cut must keep Claim #1"
-  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
-    || fail "occupied /rules cut must keep empty later-write brief URL"
-  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+  grep -q 'plaster is blank' src/lib/board-markup.tsx \
     || fail "occupied /rules cut must keep blank plaster"
   grep -q 'amount-field' src/app/outbid-form.tsx \
     || fail "occupied /rules cut must keep the dashed amount"
@@ -1826,31 +1757,26 @@ PY
     || fail "occupied /rules cut must keep Outbid"
   grep -q 'className="plaster"' src/lib/board-markup.tsx \
     || fail "occupied /rules cut must not rebuild the plaster wall"
-  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
-    || fail "occupied /rules cut must not restamp empty rolling-copy"
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
-    || fail "occupied /rules cut must not restamp raise-rolling-identity"
+  grep -q 'The rolling last 7 days board is empty. The plaster is blank.' src/lib/board-markup.tsx \
+    || fail "occupied /rules cut must keep honest empty rolling-copy"
+  grep -q 'The same cleaned brief link may raise while its placement is' src/lib/rules-copy.tsx \
+    || fail "occupied /rules cut must keep active-placement raise identity"
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "occupied /rules cut must keep occupied rolling last-7-days"
-  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp|data-raise-after-open|data-post-after-open-N' \
-    src/app/outbid-form.tsx src/app/board.tsx src/lib/board-markup.tsx src/app/board.css src/app/rules/page.tsx src/lib/rules-copy.tsx
-  then
-    fail "occupied /rules must not add another named hop"
-  fi
   if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx src/app/rules/page.tsx src/lib/rules-copy.tsx; then
     fail "occupied /rules must not rebuild the plaster wall into a long form"
   fi
   if ! awk '
-    /Occupied checkout: Polar charges the difference on a raise/ { raise=NR }
-    /Occupied \/checkout\/return after a raise: Polar charged the difference/ { ret=NR }
-    /Occupied \/about: Polar charges the difference on a raise/ { about=NR }
-    /Occupied \/rules: Polar charges the difference on a raise/ { rules=NR }
+    /Occupied checkout: Waffo charges the difference on a raise/ { raise=NR }
+    /Occupied \/checkout\/return after a raise: Waffo charged the difference/ { ret=NR }
+    /Occupied \/about: Waffo charges the difference on a raise/ { about=NR }
+    /Occupied \/rules: Waffo charges the difference on a raise/ { rules=NR }
     END { exit !(raise && ret && about && rules && raise < ret && ret < about && about < rules) }
   ' src/app/board.css; then
     fail "occupied /rules CSS must sit after occupied /about, not restamp it"
   fi
 
-  echo "== UX: occupied raise-too-small names Polar still charges only the difference — unpaid Polar checkout stays off =="
+  echo "== UX: occupied raise-too-small names Waffo still charges only the difference — unpaid Waffo checkout stays off =="
   grep -q 'export function RaiseTooSmallCopy' src/lib/raise-too-small-copy.tsx \
     || fail "occupied raise-too-small must compose RaiseTooSmallCopy"
   grep -q 'export default async function RaiseTooSmallPage' src/app/checkout/raise-too-small/page.tsx \
@@ -1858,19 +1784,19 @@ PY
   grep -q 'await connection()' src/app/checkout/raise-too-small/page.tsx \
     || fail "occupied raise-too-small must re-render occupancy on each request"
   grep -q 'data-raise-too-small=""' src/lib/raise-too-small-copy.tsx \
-    || fail "occupied raise-too-small must stamp Polar still-charges-difference"
-  grep -q 'Polar still charges only the difference' src/lib/raise-too-small-copy.tsx \
-    || fail "occupied raise-too-small must name Polar still charges only the difference"
-  grep -q 'not a new full bid' src/lib/raise-too-small-copy.tsx \
-    || fail "occupied raise-too-small must name Polar raise as not a new full bid"
-  grep -q 'Unpaid Polar checkout stays off the wall' src/lib/raise-too-small-copy.tsx \
-    || fail "occupied raise-too-small must keep unpaid Polar checkout off the wall"
+    || fail "occupied raise-too-small must stamp Waffo still-charges-difference"
+  grep -q 'payer is charged only the difference' src/lib/raise-too-small-copy.tsx \
+    || fail "occupied raise-too-small must name the original payer's difference"
+  grep -q 'wall changes only after' src/lib/raise-too-small-copy.tsx \
+    || fail "occupied raise-too-small must wait for payment before rank changes"
+  grep -q 'An incomplete or abandoned checkout stays off the wall' src/lib/raise-too-small-copy.tsx \
+    || fail "occupied raise-too-small must keep unpaid checkout off the wall"
   grep -q 'RAISE_TOO_SMALL_COPY' src/lib/rank.ts \
     || fail "raise-too-small must share occupied copy from rank"
-  grep -q 'Polar still charges only the difference' src/lib/rank.ts \
-    || fail "raise-too-small rank error must name Polar still charges only the difference"
+  grep -q 'A raise charges only the difference' src/lib/rank.ts \
+    || fail "raise-too-small rank error must name the difference charge"
   grep -q 'prefersHtmlError' src/app/api/checkout/route.ts \
-    || fail "form raise-too-small must bounce to HTML, not Polar"
+    || fail "form raise-too-small must bounce to HTML, not Waffo"
   grep -q '/checkout/raise-too-small' src/app/api/checkout/route.ts \
     || fail "form raise-too-small must land on occupied raise-too-small"
   grep -q 'listLiveBoard' src/app/checkout/raise-too-small/page.tsx \
@@ -1887,22 +1813,22 @@ PY
   if awk '/occupied \? \(/,/Back to the board/' src/lib/raise-too-small-copy.tsx | grep -q 'data-rules-raise'; then
     fail "occupied raise-too-small must not restamp occupied /rules"
   fi
-  grep -Fq 'Occupied raise-too-small names Polar still charges only the difference' SPEC.md \
-    || fail "SPEC must name occupied raise-too-small Polar still-charges-difference"
-  grep -Fq 'Unpaid Polar checkout stays off the wall' SPEC.md \
-    || fail "SPEC must keep unpaid Polar checkout off the wall on occupied raise-too-small"
-  grep -q 'Occupied raise-too-small: Polar still charges only the difference. Unpaid stays off.' src/app/board.css \
-    || fail "CSS must name occupied raise-too-small Polar still-charges-difference"
+  grep -Fq 'Occupied raise-too-small names Waffo still charges only the difference' SPEC.md \
+    || fail "SPEC must name occupied raise-too-small Waffo still-charges-difference"
+  grep -Fq 'Unpaid Waffo checkout stays off the wall' SPEC.md \
+    || fail "SPEC must keep unpaid Waffo checkout off the wall on occupied raise-too-small"
+  grep -q 'Occupied raise-too-small: Waffo still charges only the difference. Unpaid stays off.' src/app/board.css \
+    || fail "CSS must name occupied raise-too-small Waffo still-charges-difference"
   grep -qF '.board[data-page="raise-too-small"][data-occupied="true"] .raise-too-small[data-raise-too-small]' src/app/board.css \
-    || fail "CSS must compose occupied raise-too-small Polar still-charges-difference"
+    || fail "CSS must compose occupied raise-too-small Waffo still-charges-difference"
   grep -qF '.board[data-page="raise-too-small"][data-occupied="false"] .raise-too-small[data-raise-too-small]' src/app/board.css \
-    || fail "empty raise-too-small CSS must keep occupied Polar still-charges-difference off"
+    || fail "empty raise-too-small CSS must keep occupied Waffo still-charges-difference off"
   python3 - src/app/board.css <<'PY' || fail "occupied raise-too-small CSS must stay muted, not recolor the plaster"
 import re
 import sys
 css = open(sys.argv[1], encoding="utf-8").read()
 block = re.search(
-    r"/\* Occupied raise-too-small: Polar still charges only the difference\. Unpaid stays off\. \*/(.*?)@media",
+    r"/\* Occupied raise-too-small: Waffo still charges only the difference\. Unpaid stays off\. \*/(.*?)@media",
     css,
     re.S,
 )
@@ -1917,17 +1843,17 @@ if '.board[data-page="raise-too-small"][data-occupied="false"] .raise-too-small[
 if '.board[data-page="rules"][data-occupied="true"] .rules-raise[data-rules-raise]' in block.group(1):
     raise SystemExit(1)
 PY
-  grep -q 'occupied raise-too-small names Polar still charges only the difference' tests/urls.test.ts \
-    || fail "url tests must cover occupied raise-too-small Polar still-charges-difference"
-  grep -q 'occupied raise-too-small names Polar still charges only the difference' tests/checkout.test.ts \
-    || fail "checkout tests must cover occupied raise-too-small Polar still-charges-difference after pay"
-  grep -q 'occupied raise-too-small names Polar still charges only the difference' tests/rank.test.ts \
-    || fail "rank tests must cover occupied raise-too-small Polar still-charges-difference"
-  grep -q 'unpaid Polar checkout stays off' tests/checkout.test.ts \
-    || fail "checkout tests must keep unpaid Polar checkout off occupied raise-too-small"
+  grep -q 'raise-too-small copy is provider-neutral in empty and occupied states' tests/urls.test.ts \
+    || fail "url tests must cover occupied raise-too-small copy"
+  grep -q 'raise-too-small guidance stays provider-neutral' tests/checkout.test.ts \
+    || fail "checkout tests must cover occupied raise-too-small copy"
+  grep -q 'raise-too-small guidance is provider-neutral' tests/rank.test.ts \
+    || fail "rank tests must cover occupied raise-too-small copy"
+  grep -q 'unpaid Waffo checkout stays off' tests/checkout.test.ts \
+    || fail "checkout tests must keep unpaid Waffo checkout off occupied raise-too-small"
   grep -q 'data-raise-difference=""' src/app/outbid-form.tsx \
     || fail "occupied raise-too-small cut must not restamp occupied checkout copy"
-  grep -q 'only the difference, not a new bid' src/app/outbid-form.tsx \
+  grep -q 'only the difference, not a new full bid' src/app/outbid-form.tsx \
     || fail "occupied raise-too-small cut must not restamp occupied checkout copy"
   grep -q 'data-raise-charged=""' src/app/checkout/return/page.tsx \
     || fail "occupied raise-too-small cut must not restamp occupied checkout return"
@@ -1935,12 +1861,12 @@ PY
     || fail "occupied raise-too-small cut must not restamp occupied checkout return"
   grep -q 'data-about-raise=""' src/lib/about-copy.tsx \
     || fail "occupied raise-too-small cut must not restamp occupied /about"
-  grep -q 'Polar charges the difference on a raise' src/lib/about-copy.tsx \
-    || fail "occupied raise-too-small cut must not restamp occupied /about"
+  grep -q 'A raise charges the original payer only the difference' src/lib/about-copy.tsx \
+    || fail "occupied raise-too-small cut must keep occupied /about raise pricing"
   grep -q 'data-rules-raise=""' src/lib/rules-copy.tsx \
     || fail "occupied raise-too-small cut must not restamp occupied /rules"
-  grep -q 'Polar charges the difference on a raise' src/lib/rules-copy.tsx \
-    || fail "occupied raise-too-small cut must not restamp occupied /rules"
+  grep -q 'The original payer is charged only the' src/lib/rules-copy.tsx \
+    || fail "occupied raise-too-small cut must keep occupied /rules raise pricing"
   grep -q 'data-prize=""' src/lib/board-markup.tsx \
     || fail "occupied raise-too-small cut must keep occupied Terms as the prize"
   grep -q 'data-first-click="open"' src/lib/board-markup.tsx \
@@ -1951,9 +1877,7 @@ PY
     || fail "occupied raise-too-small cut must keep Post a brief"
   grep -q 'Claim #1' src/app/outbid-form.tsx \
     || fail "occupied raise-too-small cut must keep Claim #1"
-  grep -q 'Then the brief URL' src/app/outbid-form.tsx \
-    || fail "occupied raise-too-small cut must keep empty later-write brief URL"
-  grep -q 'plaster is blank' src/app/outbid-form.tsx \
+  grep -q 'plaster is blank' src/lib/board-markup.tsx \
     || fail "occupied raise-too-small cut must keep blank plaster"
   grep -q 'amount-field' src/app/outbid-form.tsx \
     || fail "occupied raise-too-small cut must keep the dashed amount"
@@ -1963,26 +1887,21 @@ PY
     || fail "occupied raise-too-small cut must keep Outbid"
   grep -q 'className="plaster"' src/lib/board-markup.tsx \
     || fail "occupied raise-too-small cut must not rebuild the plaster wall"
-  grep -q 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' src/app/outbid-form.tsx \
-    || fail "occupied raise-too-small cut must not restamp empty rolling-copy"
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
-    || fail "occupied raise-too-small cut must not restamp raise-rolling-identity"
+  grep -q 'The rolling last 7 days board is empty. The plaster is blank.' src/lib/board-markup.tsx \
+    || fail "occupied raise-too-small cut must keep honest empty rolling-copy"
+  grep -q 'The same cleaned brief link may raise while its placement is' src/lib/rules-copy.tsx \
+    || fail "occupied raise-too-small cut must keep active-placement raise identity"
   grep -q 'data-rolling-week=""' src/lib/board-markup.tsx \
     || fail "occupied raise-too-small cut must keep occupied rolling last-7-days"
-  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp|data-raise-after-open|data-post-after-open-N' \
-    src/app/outbid-form.tsx src/app/board.tsx src/lib/board-markup.tsx src/app/board.css src/app/checkout/raise-too-small/page.tsx src/lib/raise-too-small-copy.tsx
-  then
-    fail "occupied raise-too-small must not add another named hop"
-  fi
   if grep -qE 'grid-template-columns: 1fr 1fr' src/app/outbid-form.tsx src/app/board.tsx src/app/checkout/raise-too-small/page.tsx src/lib/raise-too-small-copy.tsx; then
     fail "occupied raise-too-small must not rebuild the plaster wall into a long form"
   fi
   if ! awk '
-    /Occupied checkout: Polar charges the difference on a raise/ { raise=NR }
-    /Occupied \/checkout\/return after a raise: Polar charged the difference/ { ret=NR }
-    /Occupied \/about: Polar charges the difference on a raise/ { about=NR }
-    /Occupied \/rules: Polar charges the difference on a raise/ { rules=NR }
-    /Occupied raise-too-small: Polar still charges only the difference/ { tooSmall=NR }
+    /Occupied checkout: Waffo charges the difference on a raise/ { raise=NR }
+    /Occupied \/checkout\/return after a raise: Waffo charged the difference/ { ret=NR }
+    /Occupied \/about: Waffo charges the difference on a raise/ { about=NR }
+    /Occupied \/rules: Waffo charges the difference on a raise/ { rules=NR }
+    /Occupied raise-too-small: Waffo still charges only the difference/ { tooSmall=NR }
     END { exit !(raise && ret && about && rules && tooSmall && raise < ret && ret < about && about < rules && rules < tooSmall) }
   ' src/app/board.css; then
     fail "occupied raise-too-small CSS must sit after occupied /rules, not restamp it"
@@ -2009,28 +1928,30 @@ PY
   grep -q 'bit.ly' src/lib/urls.ts || fail "urls.ts must reject bit.ly"
   grep -q 'canonicalizeBriefUrl' src/lib/polar.ts \
     || fail "checkout must apply URL hygiene before persist"
-  grep -q 'no ads' src/lib/about-copy.tsx || fail "about must state no ads"
-  grep -q 'no API keys' src/lib/about-copy.tsx || fail "about must state no API keys"
-  grep -q 'no revenue share' src/lib/about-copy.tsx \
-    || fail "about must state no revenue share"
+  grep -q 'Anyone can read the wall without an account' src/lib/about-copy.tsx \
+    || fail "about must state the wall is public without an account"
+  grep -q 'We do not invent' src/lib/about-copy.tsx \
+    || fail "about must state it does not invent audience metrics"
+  grep -q 'A brief appears only' src/lib/about-copy.tsx \
+    || fail "about must state paid confirmation gates listings"
   grep -q 'Rank is the bid' src/lib/about-copy.tsx \
     || fail "about must state rank is the bid"
   grep -q 'not affiliated' src/lib/about-copy.tsx \
     || fail "about must state independence from platforms"
-  grep -q 'creator-brief-wall' src/lib/about-copy.tsx \
-    || fail "about must name the creator-brief-wall vertical"
+  grep -q 'Creator Brief Wall' src/lib/about-copy.tsx \
+    || fail "about must name the Creator Brief Wall vertical"
   grep -q '\$5' src/lib/rules-copy.tsx || fail "rules must state min \$5"
   grep -q 'Rank is the bid' src/lib/rules-copy.tsx \
     || fail "rules must state rank is the bid"
-  grep -q 'Older wins ties' src/lib/rules-copy.tsx \
+  grep -q 'The brief placed first keeps the higher rank' src/lib/rules-copy.tsx \
     || fail "rules must state older wins ties"
-  grep -q 'Raise pays difference' src/lib/rules-copy.tsx \
+  grep -q 'The original payer is charged only the' src/lib/rules-copy.tsx \
     || fail "rules must state raise pays difference"
-  grep -q 'Same canonical brief URL still inside last 7 days raises' src/lib/rules-copy.tsx \
-    || fail "rules must name last-7-days raise identity"
-  grep -q 'Monday 00:00' src/lib/rules-copy.tsx \
-    || fail "rules must state weekly UTC reset"
-  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' src/lib/rules-copy.tsx \
+  grep -q 'The same cleaned brief link may raise while its placement is' src/lib/rules-copy.tsx \
+    || fail "rules must name active-placement raise identity"
+  grep -q 'reset for everyone at Monday midnight' src/lib/rules-copy.tsx \
+    || fail "rules must state the rolling boundary instead of a civil reset"
+  grep -q 'Rolling last 7 days from paid placement' src/lib/rules-copy.tsx \
     || fail "rules must name the rolling last-7-days window"
   grep -q 'NSFW' src/lib/rules-copy.tsx || fail "rules must document NSFW rejects"
   grep -q 'Telegram' src/lib/rules-copy.tsx \
@@ -2129,6 +2050,8 @@ PY
     || fail "week tests must hide previous week rows"
   grep -Fq 'rolling last-7-days window is 7 * 24h' tests/week.test.ts \
     || fail "week tests must cover rolling last-7-days length"
+  grep -q 'expired public brief URL is unavailable at exact rolling boundary and never increments' tests/board.test.ts \
+    || fail "board tests must cover exact public-link expiry and no click mutation"
   grep -q 'Monday 00:00 UTC does not drop a bid still inside the rolling week' tests/week.test.ts \
     || fail "week tests must keep a Sunday pay across Monday midnight"
   grep -q 'live board keeps a Sunday pay across Monday 00:00 UTC' tests/week.test.ts \
@@ -2147,12 +2070,19 @@ PY
     || fail "board tests must cover occupied confirm Terms staying the prize over brand"
   grep -q 'occupied confirm uncounted preview recedes after terms and does not shout over the prize' tests/board.test.ts \
     || fail "board tests must cover occupied confirm uncounted preview receding after terms"
+  grep -q 'occupied confirm brief URL recedes after terms and does not shout over the prize' tests/board.test.ts \
+    || fail "board tests must cover occupied confirm brief URL receding after terms"
   if grep -nE '[^a-zA-Z_]fetch\(' src/lib/week.ts src/lib/clicks.ts \
     src/lib/confirm-brief.ts src/app/r/\[id\]/route.ts >/dev/null
   then
     fail "week/clicks must stay offline (no fetch)"
   fi
-  [[ -z "${POLAR_LIVE:-}" ]] || fail "POLAR_LIVE must stay unset in test.sh"
+
+  echo "== amount accessibility contract =="
+  grep -Fq 'aria-label="Bid amount in whole US dollars"' src/app/outbid-form.tsx \
+    || fail "bid amount input must have an accessible name"
+  grep -Fq '.amount-field input:focus-visible' src/app/board.css \
+    || fail "bid amount input must retain a visible focus-visible treatment"
 
   echo "== GET /healthz and empty board =="
   port="${TEST_PORT:-34567}"
@@ -2216,7 +2146,7 @@ PY
   export DATABASE_PATH="${db_file}"
   export NEXT_TELEMETRY_DISABLED=1
   npx next build
-  PORT="${port}" node ./node_modules/next/dist/bin/next start --port "${port}" --hostname 127.0.0.1 \
+  NODE_ENV=development PORT="${port}" node ./node_modules/next/dist/bin/next start --port "${port}" --hostname 127.0.0.1 \
     >"${log_file}" 2>&1 &
   server_pid=$!
 
@@ -2243,8 +2173,14 @@ PY
   [[ "${home_code}" == "200" ]] || fail "GET / expected 200 got ${home_code}"
   grep -q 'data-empty-week="true"' "${home_body}" \
     || fail "GET / must render the honest empty-week state"
+  grep -qF 'Rolling last 7 days · UTC' "${home_body}" \
+    || fail "GET / mast mark must name the rolling last-7-days window"
+  grep -qF 'Paid briefs from the rolling last 7 days, ranked by money. Creators see who paid to be taken.' "${home_body}" \
+    || fail "GET / lede must name paid briefs from the rolling last-7-days window"
+  grep -qF 'The rolling last 7 days board is empty. The plaster is blank.' "${home_body}" \
+    || fail "GET / empty copy must name the rolling last-7-days window"
   grep -qi 'board is empty' "${home_body}" \
-    || fail "GET / must say this week’s board is empty"
+    || fail "GET / must say the rolling last 7 days board is empty"
   grep -qi 'plaster is blank' "${home_body}" \
     || fail "GET / empty week must read as blank plaster"
   grep -q 'data-claim-amount="5"' "${home_body}" \
@@ -2269,63 +2205,23 @@ PY
     fail "empty plaster must stay Claim #1 by composition, not an extra stamp"
   fi
   if grep -q 'data-post-brief' "${home_body}"; then
-    fail "empty week must not show a Post a brief hop"
+    fail "empty week must not show a Post a brief route"
   fi
-  if grep -q 'data-post-after-open' "${home_body}"; then
-    fail "empty plaster has no flyer; do not show Post a brief after Open brief"
-  fi
-  if grep -q 'data-post-after-open-first' "${home_body}"; then
-    fail "empty plaster has no flyer; do not concentrate Post a brief after Open"
-  fi
-  if grep -q 'data-first-write="post"' "${home_body}"; then
-    fail "empty plaster has no flyer; do not stamp first-write Post a brief"
-  fi
-  if grep -q 'data-post-after-open-two' "${home_body}"; then
-    fail "empty plaster has no flyer; do not concentrate Post a brief after Open is re-concentrated"
-  fi
-  if grep -q 'data-post-after-open-three' "${home_body}"; then
-    fail "empty plaster has no flyer; do not concentrate Post a brief after Open is re-concentrated again"
-  fi
-  if grep -q 'data-post-after-open-four' "${home_body}"; then
-    fail "empty plaster has no flyer; do not concentrate Post a brief after Open is re-concentrated again under louder Open"
-  fi
-  if grep -q 'data-post-after-open-five' "${home_body}"; then
-    fail "empty plaster has no flyer; do not concentrate Post a brief after Open is re-concentrated again under louder Open brief"
-  fi
-  if grep -q 'data-post-after-open-six' "${home_body}"; then
-    fail "empty plaster has no flyer; do not concentrate Post a brief after Open is re-concentrated again under louder Open brief hop"
-  fi
-  if grep -qi 'after Open brief' "${home_body}"; then
-    fail "empty plaster must not say after Open brief"
+  if grep -qE 'open-after|post-after|after Open brief|after Terms' "${home_body}"; then
+    fail "empty plaster must not contain implementation-hop residue"
   fi
   if grep -q 'data-first-click="open"' "${home_body}"; then
     fail "empty plaster has no flyer; do not mark a first-click Open brief"
   fi
   grep -q 'data-first-click="claim"' "${home_body}" \
     || fail "empty plaster must mark Claim #1 / Outbid as the first click"
-  grep -q 'data-later-write=""' "${home_body}" \
-    || fail "empty plaster must stamp the brief URL as a later write"
-  grep -q 'Then the brief URL' "${home_body}" \
-    || fail "empty plaster must name the later brief URL write"
   grep -q 'data-brief-identity=""' "${home_body}" \
-    || fail "empty plaster must wrap brand / terms / brief URL as later-write identity"
-  if grep -q 'data-open-after-post-first' "${home_body}"; then
-    fail "empty plaster has no flyer; do not concentrate Open brief after Post"
+    || fail "empty plaster must wrap the direct brief identity fields"
+  if grep -qE 'data-later-write|later-write-label|Then the brief URL|formNoValidate' "${home_body}"; then
+    fail "empty plaster must use a conventional direct input-to-Outbid flow"
   fi
   if grep -q 'data-first-read="open"' "${home_body}"; then
     fail "empty plaster has no flyer; do not stamp first-read Open brief"
-  fi
-  if grep -q 'data-open-after-post-two-stamp' "${home_body}"; then
-    fail "empty plaster has no flyer; do not concentrate Open brief after Post is re-concentrated"
-  fi
-  if grep -q 'data-open-after-post-three-stamp' "${home_body}"; then
-    fail "empty plaster has no flyer; do not concentrate Open brief after Post is re-concentrated again"
-  fi
-  if grep -q 'data-open-after-post-four-stamp' "${home_body}"; then
-    fail "empty plaster has no flyer; do not concentrate Open brief after Post is re-concentrated again under louder Post"
-  fi
-  if grep -q 'data-open-after-post-five-stamp' "${home_body}"; then
-    fail "empty plaster has no flyer; do not concentrate Open brief after Post is re-concentrated again under louder Post a brief"
   fi
   if grep -q 'data-terms=""' "${home_body}"; then
     fail "empty plaster has no flyer; do not show Terms"
@@ -2340,10 +2236,7 @@ PY
     fail "empty plaster has no flyer; do not stamp prize before price"
   fi
   if grep -q 'data-later-fact' "${home_body}"; then
-    fail "empty plaster has no flyer; do not stamp \$bid as a later fact"
-  fi
-  if grep -q 'later-fact' "${home_body}"; then
-    fail "empty plaster has no flyer; do not mute a later-fact \$bid"
+    fail "empty plaster has no flyer; do not stamp $bid as a later fact"
   fi
   if grep -q 'data-rolling-week' "${home_body}"; then
     fail "empty plaster has no flyer; do not stamp the rolling week window"
@@ -2354,8 +2247,10 @@ PY
   if grep -qF 'Rolling last 7 days. Not Monday 00:00 UTC.' "${home_body}"; then
     fail "empty plaster must not reuse occupied rolling-week chrome copy"
   fi
-  grep -qF 'Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC.' "${home_body}" \
-    || fail "empty GET / must name the rolling last-7-days window"
+  grep -qF 'The rolling last 7 days board is empty. The plaster is blank.' "${home_body}" \
+    || fail "empty GET / must name the honest empty rolling state"
+  grep -qF 'the wall does not reset for everyone at Monday midnight' "${home_body}" \
+    || fail "empty GET / must state the rolling boundary"
   grep -q 'data-empty-window=""' "${home_body}" \
     || fail "empty GET / must stamp the empty rolling window"
   grep -q 'class="rules-note empty-window"' "${home_body}" \
@@ -2363,70 +2258,53 @@ PY
   if grep -q 'class="rules-note week-window"' "${home_body}"; then
     fail "empty plaster must not stamp occupied week-window chrome"
   fi
-  if grep -q 'data-later-open=""' "${home_body}"; then
+  if grep -q 'data-later-open=""' "${home_body}" || grep -q 'class="brief-url later-open"' "${home_body}"; then
     fail "empty plaster has no flyer; do not stamp later-rank Open"
   fi
-  if grep -q 'class="brief-url later-open"' "${home_body}"; then
-    fail "empty plaster has no flyer; do not mute a later-rank Open"
-  fi
-  if grep -q 'cards-later' "${home_body}"; then
-    fail "empty plaster has no later-rank flyer list"
-  fi
-  if grep -q 'cards-lead' "${home_body}"; then
-    fail "empty plaster has no lead flyer list"
+  if grep -q 'cards-later' "${home_body}" || grep -q 'cards-lead' "${home_body}"; then
+    fail "empty plaster has no flyer lists"
   fi
   if grep -q 'class="brief-url later-open"' "${home_body}"; then
     fail "empty plaster has no flyer; do not recede a later-rank Open"
   fi
-  if grep -q 'data-open-after-terms' "${home_body}"; then
-    fail "empty plaster has no flyer; do not show Open brief after Terms"
-  fi
-  if grep -qi 'after Terms' "${home_body}"; then
-    fail "empty plaster must not say after Terms"
-  fi
   if grep -qi 'Post a brief' "${home_body}"; then
     fail "empty week Claim #1 is already first; do not add Post a brief"
   fi
-  python3 - "${home_body}" <<'PY' || fail "empty week must keep Claim #1 before blank plaster, then later-write brief URL"
+  python3 - "${home_body}" <<'PY' || fail "empty week must keep direct identity inputs before Claim #1 Outbid"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()
 claim = html.find('id="claim"')
 stamp = html.find('data-empty-claim-first=""')
 plaster = html.find('data-empty-week="true"')
 window = html.find('data-empty-window=""')
-first = html.find('data-first-click="claim"')
-outbid = html.find(">Outbid<")
-later = html.find('data-later-write=""')
-label = html.find("Then the brief URL")
+rail = html.find('class="home-rail"')
 identity = html.find('data-brief-identity=""')
 brand = html.find('name="brand"')
 terms = html.find('name="terms"')
 url = html.find('name="briefUrl"')
-if claim < 0 or stamp < 0 or plaster < 0 or not (claim <= stamp < plaster):
+first = html.find('data-first-click="claim"')
+claim_button = html.find(">Claim rank<")
+if claim < 0 or stamp < 0 or plaster < 0 or rail < 0 or not (claim <= stamp):
     raise SystemExit(1)
-if first < 0 or outbid < 0 or later < 0 or label < 0 or identity < 0 or window < 0:
+if window < 0 or identity < 0 or brand < 0 or terms < 0 or url < 0 or first < 0 or claim_button < 0:
     raise SystemExit(1)
-if not (claim <= stamp < plaster < window < first < outbid < identity <= later < label < brand < terms < url):
+if not (claim < url < identity < brand < terms < first <= claim_button < rail < plaster < window):
     raise SystemExit(1)
 if html.count('data-empty-claim-first=""') != 1:
     raise SystemExit(1)
-if html.count('data-empty-week="true"') != 1:
-    raise SystemExit(1)
 if html.count('data-first-click="claim"') != 1:
-    raise SystemExit(1)
-if html.count('data-later-write=""') != 1:
     raise SystemExit(1)
 if html.count('data-brief-identity=""') != 1:
     raise SystemExit(1)
-if html.count('data-empty-window=""') < 1:
+if "data-later-write" in html or "Then the brief URL" in html:
     raise SystemExit(1)
 if 'class="wall-stage wall-empty"' not in html:
     raise SystemExit(1)
-if 'class="plaster"' in html or 'class="flyers"' in html:
+if 'class="flyers"' in html or 'data-slot="empty-state"' not in html:
     raise SystemExit(1)
 if "data-post-brief" in html or "data-open-brief" in html or "data-prize" in html:
     raise SystemExit(1)
-if "prize-before-price" in html or "data-later-fact" in html or "later-fact" in html:
+if "data-later-open" in html or "cards-later" in html or "cards-lead" in html:
     raise SystemExit(1)
 if "data-rolling-week" in html:
     raise SystemExit(1)
@@ -2434,21 +2312,13 @@ if "The board resets Monday 00:00 UTC" in html:
     raise SystemExit(1)
 if "Rolling last 7 days. Not Monday 00:00 UTC." in html:
     raise SystemExit(1)
-if "Live window is rolling last 7 days from paid placement. Not Monday 00:00 UTC." not in html:
+if "after Open brief" in html or "after Terms" in html:
     raise SystemExit(1)
-if 'class="rules-note week-window"' in html:
+if "The rolling last 7 days board is empty. The plaster is blank." not in html:
     raise SystemExit(1)
-if 'class="rules-note empty-window"' not in html:
+if "the wall does not reset for everyone at Monday midnight" not in html:
     raise SystemExit(1)
-if 'data-later-open=""' in html or 'class="brief-url later-open"' in html or "cards-later" in html:
-    raise SystemExit(1)
-if "cards-lead" in html:
-    raise SystemExit(1)
-if 'data-terms=""' in html or "terms-label" in html or "data-open-after-terms" in html:
-    raise SystemExit(1)
-if "Post a brief" in html or "Open brief" in html:
-    raise SystemExit(1)
-if "empty-claim-plaster" in html or 'class="flyers"' in html:
+if 'class="rules-note week-window"' in html or 'class="rules-note empty-window"' not in html:
     raise SystemExit(1)
 if 'data-first-click="open"' in html:
     raise SystemExit(1)
@@ -2457,7 +2327,7 @@ PY
   if grep -qiE '[0-9][0-9,]*[[:space:]]*(followers|subscribers)|avg views|estimated reach' "${home_body}"; then
     fail "GET / must not invent follower or reach numbers"
   fi
-  if grep -qE 'data-raise-difference|data-raise-charge|data-raise-charged|data-raise-too-small|Polar charges only the difference|Polar charges the difference|Polar charged|Polar still charges only the difference' "${home_body}"; then
+  if grep -qE 'data-raise-difference|data-raise-charge|data-raise-charged|data-raise-too-small|Waffo charges only the difference|Waffo charges the difference|Waffo charged|Waffo still charges only the difference' "${home_body}"; then
     fail "empty Claim #1 paper must not name occupied raise-pays-difference"
   fi
 
@@ -2467,14 +2337,15 @@ PY
   [[ "${about_code}" == "200" ]] || fail "GET /about expected 200 got ${about_code}"
   grep -q 'data-page="about"' "${about_body}" || fail "GET /about missing about page"
   grep -qi 'rank is the bid' "${about_body}" || fail "GET /about must say rank is the bid"
-  grep -qi 'no ads' "${about_body}" || fail "GET /about must say no ads"
+  grep -qi 'anyone can read the wall' "${about_body}" \
+    || fail "GET /about must say the wall is public without an account"
   grep -qi 'not affiliated' "${about_body}" || fail "GET /about must state independence"
-  grep -q 'creator-brief-wall' "${about_body}" \
-    || fail "GET /about must name the creator-brief-wall vertical"
+  grep -q 'Creator Brief Wall' "${about_body}" \
+    || fail "GET /about must name the Creator Brief Wall vertical"
   grep -q 'data-occupied="false"' "${about_body}" \
     || fail "empty GET /about must stay unoccupied"
-  if grep -qE 'data-about-raise|Polar charges the difference on a raise' "${about_body}"; then
-    fail "empty GET /about must not stamp occupied Polar raise-pays-difference"
+  if grep -qE 'data-about-raise|Waffo charges the difference on a raise' "${about_body}"; then
+    fail "empty GET /about must not stamp occupied Waffo raise-pays-difference"
   fi
 
   rules_body="$(mktemp)"
@@ -2485,19 +2356,19 @@ PY
   grep -qi 'rank is the bid' "${rules_body}" || fail "GET /rules must say rank is the bid"
   grep -qi 'older wins' "${rules_body}" || fail "GET /rules must say older wins ties"
   grep -qi 'difference' "${rules_body}" || fail "GET /rules must say raise pays difference"
-  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' "${rules_body}" \
+  grep -q 'Rolling last 7 days from paid placement' "${rules_body}" \
     || fail "GET /rules must name the rolling last-7-days window"
-  grep -q 'Same canonical brief URL still inside last 7 days raises' "${rules_body}" \
-    || fail "GET /rules must name last-7-days raise identity"
-  grep -q 'weekId</code> stays an audit label' "${rules_body}" \
-    || fail "GET /rules must keep weekId as an audit label"
+  grep -q 'same cleaned brief link may raise while its placement is active' "${rules_body}" \
+    || fail "GET /rules must name active-placement raise identity"
+  grep -q 'does not reset for everyone at Monday midnight' "${rules_body}" \
+    || fail "GET /rules must state the rolling boundary"
   if grep -qi 'same UTC week raises' "${rules_body}"; then
     fail "GET /rules must not tax raise identity as the UTC week"
   fi
   grep -q 'data-occupied="false"' "${rules_body}" \
     || fail "empty GET /rules must stay unoccupied"
-  if grep -qE 'data-rules-raise|Polar charges the difference on a raise' "${rules_body}"; then
-    fail "empty GET /rules must not stamp occupied Polar raise-pays-difference"
+  if grep -qE 'data-rules-raise|Waffo charges the difference on a raise' "${rules_body}"; then
+    fail "empty GET /rules must not stamp occupied Waffo raise-pays-difference"
   fi
 
   too_small_empty="$(mktemp)"
@@ -2509,8 +2380,8 @@ PY
     || fail "empty GET /checkout/raise-too-small must stay unoccupied"
   grep -q 'No rank change' "${too_small_empty}" \
     || fail "empty GET /checkout/raise-too-small must keep unpaid off the wall"
-  if grep -qE 'data-raise-too-small|Polar still charges only the difference' "${too_small_empty}"; then
-    fail "empty GET /checkout/raise-too-small must not stamp occupied Polar still-charges-difference"
+  if grep -qE 'data-raise-too-small|Waffo still charges only the difference' "${too_small_empty}"; then
+    fail "empty GET /checkout/raise-too-small must not stamp occupied Waffo still-charges-difference"
   fi
 
   echo "== fixture \$5 appears on the board after completion =="
@@ -2531,13 +2402,11 @@ PY
     || fail "unpaid checkout must leave empty plaster"
   grep -q 'Claim #1' "${unpaid_home}" \
     || fail "unpaid leftover must still lead with Claim #1"
-  grep -q 'Then the brief URL' "${unpaid_home}" \
-    || fail "unpaid leftover must keep the later brief URL write"
-  grep -q 'Unpaid checkout stays off the board until Polar reports paid' "${unpaid_home}" \
-    || fail "unpaid leftover must say Polar paid is required"
-  grep -q 'An abandoned brief is not Terms as #1' "${unpaid_home}" \
-    || fail "unpaid leftover must say an abandoned brief is not Terms as #1"
-  if grep -qE 'data-raise-difference|data-raise-charge|data-raise-charged|data-raise-too-small|Polar charges only the difference|Polar charged|Polar still charges only the difference' "${unpaid_home}"; then
+  grep -q 'The rolling last 7 days board is empty. The plaster is blank' "${unpaid_home}" \
+    || fail "unpaid leftover must remain an honest empty board"
+  grep -q 'An incomplete checkout never creates a #1 brief' "${unpaid_home}" \
+    || fail "unpaid leftover must say an incomplete checkout cannot create #1"
+  if grep -qE 'data-raise-difference|data-raise-charge|data-raise-charged|data-raise-too-small|Waffo charges only the difference|Waffo charged|Waffo still charges only the difference' "${unpaid_home}"; then
     fail "unpaid leftover must not name occupied raise-pays-difference"
   fi
   unpaid_about="$(mktemp)"
@@ -2545,27 +2414,27 @@ PY
   grep -q 'data-page="about"' "${unpaid_about}" \
     || fail "unpaid leftover must still serve /about"
   grep -q 'data-occupied="false"' "${unpaid_about}" \
-    || fail "unpaid Polar checkout must stay off occupied /about"
-  if grep -qE 'data-about-raise|Polar charges the difference on a raise' "${unpaid_about}"; then
-    fail "unpaid Polar checkout must not occupy /about raise-pays-difference"
+    || fail "unpaid Waffo checkout must stay off occupied /about"
+  if grep -qE 'data-about-raise|Waffo charges the difference on a raise' "${unpaid_about}"; then
+    fail "unpaid Waffo checkout must not occupy /about raise-pays-difference"
   fi
   unpaid_rules="$(mktemp)"
   curl -sS -o "${unpaid_rules}" "http://127.0.0.1:${port}/rules"
   grep -q 'data-page="rules"' "${unpaid_rules}" \
     || fail "unpaid leftover must still serve /rules"
   grep -q 'data-occupied="false"' "${unpaid_rules}" \
-    || fail "unpaid Polar checkout must stay off occupied /rules"
-  if grep -qE 'data-rules-raise|Polar charges the difference on a raise' "${unpaid_rules}"; then
-    fail "unpaid Polar checkout must not occupy /rules raise-pays-difference"
+    || fail "unpaid Waffo checkout must stay off occupied /rules"
+  if grep -qE 'data-rules-raise|Waffo charges the difference on a raise' "${unpaid_rules}"; then
+    fail "unpaid Waffo checkout must not occupy /rules raise-pays-difference"
   fi
   unpaid_too_small="$(mktemp)"
   curl -sS -o "${unpaid_too_small}" "http://127.0.0.1:${port}/checkout/raise-too-small"
   grep -q 'data-page="raise-too-small"' "${unpaid_too_small}" \
     || fail "unpaid leftover must still serve /checkout/raise-too-small"
   grep -q 'data-occupied="false"' "${unpaid_too_small}" \
-    || fail "unpaid Polar checkout must stay off occupied raise-too-small"
-  if grep -qE 'data-raise-too-small|Polar still charges only the difference' "${unpaid_too_small}"; then
-    fail "unpaid Polar checkout must not occupy raise-too-small Polar still-charges-difference"
+    || fail "unpaid Waffo checkout must stay off occupied raise-too-small"
+  if grep -qE 'data-raise-too-small|Waffo still charges only the difference' "${unpaid_too_small}"; then
+    fail "unpaid Waffo checkout must not occupy raise-too-small Waffo still-charges-difference"
   fi
   if grep -q 'Ghost' "${unpaid_home}"; then
     fail "unpaid checkout leaked Ghost onto the board"
@@ -2596,7 +2465,7 @@ PY
   grep -qi 'on the board' "${return_body}" \
     || fail "fixture return must say you're on the board"
   if grep -qE 'data-raise-charged|the difference, not a new full bid' "${return_body}"; then
-    fail "first place return must not stamp Polar raise difference"
+    fail "first place return must not stamp Waffo raise difference"
   fi
 
   listed_body="$(mktemp)"
@@ -2612,20 +2481,19 @@ PY
   grep -q 'Need \$6 to take #1' "${listed_body}" \
     || fail "occupied claim must say \$6 takes #1"
   grep -q 'data-raise-difference=""' "${listed_body}" \
-    || fail "occupied checkout copy must stamp Polar raise-pays-difference"
+    || fail "occupied checkout copy must stamp Waffo raise-pays-difference"
   grep -q 'data-raise-charge=""' "${listed_body}" \
-    || fail "occupied checkout copy must stamp Polar raise charge"
-  grep -q 'Polar charges' "${listed_body}" \
-    || fail "occupied checkout copy must name Polar charges"
-  grep -q 'only the difference, not a new bid' "${listed_body}" \
-    || fail "occupied checkout copy must name Polar raise-pays-difference"
-  grep -q 'Same brief URL already on the wall: Polar charges only the difference' "${listed_body}" \
-    || fail "occupied checkout copy must name same-URL raise as Polar difference"
-  grep -q 'Unpaid checkout stays off the board until Polar reports paid' "${listed_body}" \
-    || fail "occupied checkout copy must keep unpaid Polar checkout off the wall"
-  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp' "${listed_body}"; then
-    fail "occupied checkout copy must not add another named hop"
-  fi
+    || fail "occupied checkout copy must stamp Waffo raise charge"
+  grep -q 'Raise charge: \$' "${listed_body}" \
+    || fail "occupied checkout copy must expose the computed raise charge"
+  grep -q 'only the difference, not a new full bid' "${listed_body}" \
+    || fail "occupied checkout copy must name raise-pays-difference"
+  grep -q 'The same brief link already on the wall' "${listed_body}" \
+    || fail "occupied checkout copy must name same-URL raise identity"
+  grep -q 'pays only the difference' "${listed_body}" \
+    || fail "occupied checkout copy must name same-URL difference pricing"
+  grep -q 'Only a confirmed checkout changes the ranking' "${listed_body}" \
+    || fail "occupied checkout copy must keep only confirmed checkout rank changes"
   occupied_about="$(mktemp)"
   occupied_about_code="$(curl -sS -o "${occupied_about}" -w '%{http_code}' "http://127.0.0.1:${port}/about")"
   [[ "${occupied_about_code}" == "200" ]] || fail "occupied GET /about expected 200 got ${occupied_about_code}"
@@ -2634,20 +2502,17 @@ PY
   grep -q 'data-occupied="true"' "${occupied_about}" \
     || fail "occupied GET /about must mark the wall occupied"
   grep -q 'data-about-raise=""' "${occupied_about}" \
-    || fail "occupied /about must stamp Polar raise-pays-difference"
-  grep -q 'Polar charges the difference on a raise' "${occupied_about}" \
-    || fail "occupied /about must name Polar charges the difference on a raise"
-  grep -q 'not a new full bid' "${occupied_about}" \
-    || fail "occupied /about must name Polar raise as not a new full bid"
-  grep -q 'Unpaid Polar checkout stays off the wall' "${occupied_about}" \
-    || fail "occupied /about must keep unpaid Polar checkout off the wall"
+    || fail "occupied /about must stamp Waffo raise-pays-difference"
+  grep -q 'A raise charges the original payer only the difference' "${occupied_about}" \
+    || fail "occupied /about must explain the original payer's raise difference"
+  grep -q 'The new rank appears after payment is confirmed' "${occupied_about}" \
+    || fail "occupied /about must wait for payment before the new rank"
+  grep -q 'A brief appears only after payment is confirmed' "${occupied_about}" \
+    || fail "occupied /about must keep unpaid briefs off the wall"
   grep -qi 'rank is the bid' "${occupied_about}" \
     || fail "occupied /about must still say rank is the bid"
   if grep -qE 'data-raise-difference|data-raise-charged=""' "${occupied_about}"; then
     fail "occupied /about must not restamp checkout copy or checkout return"
-  fi
-  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp' "${occupied_about}"; then
-    fail "occupied /about must not add another named hop"
   fi
   occupied_rules="$(mktemp)"
   occupied_rules_code="$(curl -sS -o "${occupied_rules}" -w '%{http_code}' "http://127.0.0.1:${port}/rules")"
@@ -2657,22 +2522,17 @@ PY
   grep -q 'data-occupied="true"' "${occupied_rules}" \
     || fail "occupied GET /rules must mark the wall occupied"
   grep -q 'data-rules-raise=""' "${occupied_rules}" \
-    || fail "occupied /rules must stamp Polar raise-pays-difference"
-  grep -q 'Polar charges the difference on a raise' "${occupied_rules}" \
-    || fail "occupied /rules must name Polar charges the difference on a raise"
-  grep -q 'not a new full bid' "${occupied_rules}" \
-    || fail "occupied /rules must name Polar raise as not a new full bid"
-  grep -q 'Unpaid Polar checkout stays off the wall' "${occupied_rules}" \
-    || fail "occupied /rules must keep unpaid Polar checkout off the wall"
+    || fail "occupied /rules must stamp Waffo raise-pays-difference"
+  grep -q 'A raise charges the original payer only the difference' "${occupied_rules}" \
+    || fail "occupied /rules must explain the original payer's raise difference"
+  grep -q 'Rank changes only after payment is confirmed' "${occupied_rules}" \
+    || fail "occupied /rules must keep unpaid briefs off the wall"
   grep -qi 'rank is the bid' "${occupied_rules}" \
     || fail "occupied /rules must still say rank is the bid"
-  grep -q 'Raise pays difference' "${occupied_rules}" \
-    || fail "occupied /rules must keep raise-rolling-identity"
+  grep -q 'same cleaned brief link may raise while its placement is active' "${occupied_rules}" \
+    || fail "occupied /rules must keep active-placement raise identity"
   if grep -qE 'data-raise-difference|data-raise-charged=""|data-about-raise' "${occupied_rules}"; then
     fail "occupied /rules must not restamp checkout copy, checkout return, or occupied /about"
-  fi
-  if grep -qE 'data-unpaid-off|data-post-after-open-seven|data-open-after-post-six-stamp' "${occupied_rules}"; then
-    fail "occupied /rules must not add another named hop"
   fi
   grep -q 'data-occupied="true"' "${listed_body}" \
     || fail "paid board must mark the wall occupied"
@@ -2687,12 +2547,6 @@ PY
   if grep -q 'data-first-click="claim"' "${listed_body}"; then
     fail "occupied week must not stamp empty Claim #1 as the first click"
   fi
-  if grep -q 'data-later-write' "${listed_body}"; then
-    fail "occupied week must not leak empty later-write identity"
-  fi
-  if grep -q 'Then the brief URL' "${listed_body}"; then
-    fail "occupied week must not name a later brief URL write"
-  fi
   if grep -q 'data-brief-identity' "${listed_body}"; then
     fail "occupied week must keep brand / terms / brief URL on the claim rail"
   fi
@@ -2700,29 +2554,15 @@ PY
     fail "occupied week must not use the empty wall stage"
   fi
   grep -q 'data-open-brief=""' "${listed_body}" \
-    || fail "paid flyer must expose a labeled Open brief hop"
+    || fail "paid flyer must expose Open brief"
   grep -q 'data-first-click="open"' "${listed_body}" \
     || fail "paid #1 flyer must mark Open brief as the first click"
-  grep -q 'data-open-after-post-first=""' "${listed_body}" \
-    || fail "paid #1 flyer must concentrate Open brief after Post first write"
   grep -q 'data-first-read="open"' "${listed_body}" \
     || fail "paid #1 flyer must stamp Open brief as the first read"
-  grep -q 'data-open-after-post-two-stamp=""' "${listed_body}" \
-    || fail "paid #1 flyer must concentrate Open brief after Post is re-concentrated"
-  grep -q 'data-open-after-post-three-stamp=""' "${listed_body}" \
-    || fail "paid #1 flyer must concentrate Open brief after Post is re-concentrated again"
-  grep -q 'data-open-after-post-four-stamp=""' "${listed_body}" \
-    || fail "paid #1 flyer must concentrate Open brief after Post is re-concentrated again under louder Post"
-  grep -q 'data-open-after-post-five-stamp=""' "${listed_body}" \
-    || fail "paid #1 flyer must concentrate Open brief after Post is re-concentrated again under louder Post a brief"
-  grep -q 'class="brief-url open-after-terms open-after-post-first open-after-post-two open-after-post-three open-after-post-four open-after-post-five"' "${listed_body}" \
-    || fail "paid #1 Open brief hop must stay the re-concentrated flyer hop"
-  grep -q 'data-open-after-terms=""' "${listed_body}" \
-    || fail "paid flyer must mark Open brief after Terms"
+  grep -q 'class="brief-url"' "${listed_body}" \
+    || fail "paid #1 flyer must use the compact Open brief link"
   grep -q 'class="open-label">Open brief' "${listed_body}" \
-    || fail "paid flyer must say Open brief on the hop"
-  grep -q 'class="open-after-note">after Terms' "${listed_body}" \
-    || fail "paid flyer must say Open brief is after Terms"
+    || fail "paid flyer must say Open brief"
   grep -q 'data-terms=""' "${listed_body}" \
     || fail "paid flyer must mark Terms as the prize"
   grep -q 'class="terms-label">Terms' "${listed_body}" \
@@ -2741,16 +2581,34 @@ PY
     || fail "paid #1 flyer must keep clicks a later fact after Terms"
   grep -q 'data-later-fact=""' "${listed_body}" \
     || fail "paid #1 flyer must stamp \$bid as a later fact"
-  if grep -q 'data-later-open=""' "${listed_body}"; then
-    fail "paid #1-only board must not stamp later-rank Open"
+  grep -q 'data-post-brief=""' "${listed_body}" \
+    || fail "paid board must expose one Post a brief route"
+  grep -q 'data-first-write="post"' "${listed_body}" \
+    || fail "paid board must stamp Post a brief as the first write"
+  grep -q 'href="#claim"' "${listed_body}" \
+    || fail "Post a brief must link to the claim strip"
+  grep -q 'class="post-brief"' "${listed_body}" \
+    || fail "Post a brief must use the compact route class"
+  grep -q 'class="post-label">Post a brief' "${listed_body}" \
+    || fail "paid board must say Post a brief"
+  grep -q 'class="post-dest">Claim #1' "${listed_body}" \
+    || fail "Post a brief must name Claim #1 as the landing"
+  grep -q 'aria-label="Paid briefs — rolling last 7 days"' "${listed_body}" \
+    || fail "paid board list aria label must name the rolling last-7-days window"
+  grep -q 'Post a brief in the rolling last 7 days' "${listed_body}" \
+    || fail "occupied claim kicker must name the rolling last-7-days window"
+  grep -q 'Post a brief in the rolling last 7 days' "${listed_body}" \
+    || fail "occupied claim must say Post a brief in the rolling last 7 days"
+  if grep -qE 'open-after|post-after|after Open brief|after Terms' "${listed_body}"; then
+    fail "paid board must not contain implementation-hop residue"
   fi
-  if grep -q 'class="brief-url later-open"' "${listed_body}"; then
-    fail "paid #1-only board must not mute a later-rank Open"
+  if grep -q 'data-later-open=""' "${listed_body}" || grep -q 'class="brief-url later-open"' "${listed_body}"; then
+    fail "paid #1-only board must not stamp later-rank Open"
   fi
   if grep -q 'cards-later' "${listed_body}"; then
     fail "paid #1-only board must not render a later-rank flyer list"
   fi
-  python3 - "${listed_body}" <<'PY' || fail "paid flyer must put labeled Terms before Open brief and \$bid"
+  python3 - "${listed_body}" <<'PY' || fail "paid board must keep one compact Open and Post route contract"
 import re
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()
@@ -2758,214 +2616,49 @@ match = re.search(r'<li[^>]*class="card[^"]*"[^>]*data-brand="Acme"[^>]*>.*?</li
 if not match:
     raise SystemExit(1)
 card = match.group(0)
-terms = card.find('data-terms=""')
-prize = card.find('data-prize=""')
-prize_stamp = card.find('data-prize-before-price=""')
-prize_class = card.find('class="terms prize-before-price"')
-label = card.find('class="terms-label">Terms')
-copy = card.find('class="terms-copy">$800 flat, 1 TikTok')
-hop = card.find('data-open-brief=""')
-after = card.find('data-open-after-terms=""')
-note = card.find('class="open-after-note">after Terms')
-first = card.find('data-first-click="open"')
-open_stamp = card.find('data-open-after-post-first=""')
-first_read = card.find('data-first-read="open"')
-open_two = card.find('data-open-after-post-two-stamp=""')
-open_three = card.find('data-open-after-post-three-stamp=""')
-open_four = card.find('data-open-after-post-four-stamp=""')
-open_five = card.find('data-open-after-post-five-stamp=""')
-later = card.find('data-later-fact=""')
-bid_class = card.find('class="bid later-fact"')
-bid = card.find('class="bid later-fact"')
-clicks_class = card.find('class="clicks later-fact"')
-clicks_later = card.find('data-later-fact=""', clicks_class)
-if terms < 0 or prize < 0 or prize_stamp < 0 or prize_class < 0 or label < 0 or copy < 0 or hop < 0 or after < 0 or note < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or open_four < 0 or open_five < 0 or later < 0 or bid_class < 0 or bid < 0 or clicks_class < 0 or clicks_later < 0:
+card_start = match.start()
+flyers = html.find('aria-label="Paid briefs — rolling last 7 days"')
+open_link = card_start + card.find('data-open-brief=""')
+open_first = card_start + card.find('data-first-click="open"')
+open_read = card_start + card.find('data-first-read="open"')
+open_label = card_start + card.find('class="open-label">Open brief')
+terms = card_start + card.find('data-terms=""')
+terms_label = card_start + card.find('class="terms-label">Terms')
+terms_copy = card_start + card.find('class="terms-copy">$800 flat, 1 TikTok')
+bid = card_start + card.find('class="bid later-fact"')
+clicks = card_start + card.find('class="clicks later-fact"')
+post = html.find('data-post-brief=""')
+post_label = html.find('class="post-label">Post a brief')
+claim = html.find('id="claim"')
+rail = html.find('class="home-rail"')
+if min(flyers, open_link, open_first, open_read, open_label, terms, terms_label, terms_copy, bid, clicks, post, post_label, claim, rail) < 0:
     raise SystemExit(1)
-open_label = card.find('class="open-label">Open brief')
-if not (prize_class <= terms <= prize <= prize_stamp < label < copy < hop <= after < note < open_label < bid_class <= later < clicks_class <= clicks_later):
+if not (flyers < terms < terms_label < terms_copy < open_link <= open_first < open_read < bid < clicks):
     raise SystemExit(1)
-if not (hop <= first <= open_stamp < first_read <= open_two < open_three < open_four < open_five < open_label):
+if not (claim < rail < flyers < open_link < post < post_label):
     raise SystemExit(1)
-if open_stamp - first > 80:
-    raise SystemExit(1)
-if open_two - first_read > 80:
-    raise SystemExit(1)
-if open_three - open_two > 80:
-    raise SystemExit(1)
-if open_four - open_three > 80:
-    raise SystemExit(1)
-if open_five - open_four > 80:
-    raise SystemExit(1)
-if not re.search(r'class="bid later-fact"[^>]*>\$(?:<!-- -->)?5', card):
-    raise SystemExit(1)
-if html.count('data-open-after-post-first=""') != 1:
+if html.count('data-open-brief=""') != 1 or html.count('data-first-click="open"') != 1:
     raise SystemExit(1)
 if html.count('data-first-read="open"') != 1:
     raise SystemExit(1)
-if html.count('data-open-after-post-two-stamp=""') != 1:
+if html.count('data-post-brief=""') != 1 or html.count('data-first-write="post"') != 1:
     raise SystemExit(1)
-if html.count('data-open-after-post-three-stamp=""') != 1:
-    raise SystemExit(1)
-if html.count('data-open-after-post-four-stamp=""') != 1:
-    raise SystemExit(1)
-if html.count('data-open-after-post-five-stamp=""') != 1:
-    raise SystemExit(1)
-if html.count('data-prize=""') != 1:
-    raise SystemExit(1)
-if html.count('data-prize-before-price=""') != 1:
-    raise SystemExit(1)
-if html.count('class="terms prize-before-price"') != 1:
+if html.count('data-prize=""') != 1 or html.count('data-prize-before-price=""') != 1:
     raise SystemExit(1)
 if html.count('data-later-fact=""') != 2:
     raise SystemExit(1)
-if html.count('class="bid later-fact"') != 1:
+if "open-after" in html or "post-after" in html or "after Open brief" in html or "after Terms" in html:
     raise SystemExit(1)
-if html.count('class="clicks later-fact"') != 1:
-    raise SystemExit(1)
-if 'data-later-open=""' in card or 'class="brief-url later-open"' in card:
-    raise SystemExit(1)
-if html.count('data-later-open=""') != 0:
-    raise SystemExit(1)
-if 'class="brief-url later-open"' in html or "cards-later" in html:
+if "data-later-open" in html or "cards-later" in html:
     raise SystemExit(1)
 PY
-  grep -q 'data-post-brief=""' "${listed_body}" \
-    || fail "paid board must expose one Post a brief hop"
-  grep -q 'data-post-after-open=""' "${listed_body}" \
-    || fail "paid board must mark Post a brief after Open brief"
-  grep -q 'data-post-after-open-first=""' "${listed_body}" \
-    || fail "paid board must concentrate Post a brief after Open first click"
-  grep -q 'data-first-write="post"' "${listed_body}" \
-    || fail "paid board must stamp Post a brief as the first write"
-  grep -q 'data-post-after-open-two=""' "${listed_body}" \
-    || fail "paid board must concentrate Post a brief after Open is re-concentrated"
-  grep -q 'data-post-after-open-three=""' "${listed_body}" \
-    || fail "paid board must concentrate Post a brief after Open is re-concentrated again"
-  grep -q 'data-post-after-open-four=""' "${listed_body}" \
-    || fail "paid board must concentrate Post a brief after Open is re-concentrated again under louder Open"
-  grep -q 'data-post-after-open-five=""' "${listed_body}" \
-    || fail "paid board must concentrate Post a brief after Open is re-concentrated again under louder Open brief"
-  grep -q 'data-post-after-open-six=""' "${listed_body}" \
-    || fail "paid board must concentrate Post a brief after Open is re-concentrated again under louder Open brief hop"
-  grep -q 'href="#claim"' "${listed_body}" \
-    || fail "Post a brief must hop to #claim"
-  grep -q 'class="post-brief post-after-open post-after-open-first post-after-open-two post-after-open-three post-after-open-four post-after-open-five post-after-open-six"' "${listed_body}" \
-    || fail "Post a brief hop must be labeled after Open brief"
-  grep -q 'class="post-after-note">after Open brief' "${listed_body}" \
-    || fail "paid board must say Post a brief is after Open brief"
-  grep -q 'class="post-label">Post a brief' "${listed_body}" \
-    || fail "paid board must say Post a brief"
-  grep -q 'class="post-dest">Claim #1' "${listed_body}" \
-    || fail "Post a brief must name Claim #1 as the landing"
-  grep -q 'Post a brief this week' "${listed_body}" \
-    || fail "occupied claim must say Post a brief this week"
-  grep -q 'data-rolling-week=""' "${listed_body}" \
-    || fail "occupied wall must stamp the rolling last-7-days window"
-  grep -q 'Rolling last 7 days. Not Monday 00:00 UTC.' "${listed_body}" \
-    || fail "occupied wall must name the rolling last-7-days window"
-  grep -q 'class="rules-note week-window"' "${listed_body}" \
-    || fail "occupied wall must keep week-window chrome"
-  if grep -q 'data-empty-window=""' "${listed_body}"; then
-    fail "occupied wall must not stamp empty-window copy"
-  fi
-  if grep -q 'class="rules-note empty-window"' "${listed_body}"; then
-    fail "occupied wall must not compose empty-window chrome"
-  fi
-  if grep -qF 'Live window is rolling last 7 days from paid placement' "${listed_body}"; then
-    fail "occupied wall must not reuse empty rolling copy"
-  fi
-  python3 - "${listed_body}" <<'PY' || fail "Open brief must win the first click; Post a brief follows after the flyers"
+  python3 - "${listed_body}" <<'PY' || fail "paid board must put claim and rail before flyers"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()
-nav = html.find('aria-label="Site"')
-nav_end = html.find("</nav>", nav)
-hop = html.find('data-post-after-open=""')
-stamp = html.find('data-post-after-open-first=""')
-write = html.find('data-first-write="post"')
-two = html.find('data-post-after-open-two=""')
-three = html.find('data-post-after-open-three=""')
-four = html.find('data-post-after-open-four=""')
-five = html.find('data-post-after-open-five=""')
-six = html.find('data-post-after-open-six=""')
-note = html.find('class="post-after-note">after Open brief')
-label = html.find('class="post-label">Post a brief')
-dest = html.find('class="post-dest">Claim #1')
-flyers = html.find('aria-label="Paid briefs this week"')
-first = html.find('data-first-click="open"')
-open_stamp = html.find('data-open-after-post-first=""')
-first_read = html.find('data-first-read="open"')
-open_two = html.find('data-open-after-post-two-stamp=""')
-open_three = html.find('data-open-after-post-three-stamp=""')
-open_four = html.find('data-open-after-post-four-stamp=""')
-open_five = html.find('data-open-after-post-five-stamp=""')
-open_hop = html.find('class="open-label">Open brief')
+flyers = html.find('aria-label="Paid briefs — rolling last 7 days"')
 claim = html.find('id="claim"')
-rolling = html.find('data-rolling-week=""')
-if nav < 0 or nav_end < 0 or hop < 0 or stamp < 0 or write < 0 or two < 0 or three < 0 or four < 0 or five < 0 or six < 0 or flyers < 0 or first < 0 or open_stamp < 0 or first_read < 0 or open_two < 0 or open_three < 0 or open_four < 0 or open_five < 0 or claim < 0 or rolling < 0:
-    raise SystemExit(1)
-if not (nav < nav_end < flyers <= rolling < first <= open_stamp < first_read <= open_two < open_three < open_four < open_five < open_hop < hop <= stamp < write < two < three < four < five < six < note < label < dest < claim):
-    raise SystemExit(1)
-if stamp - hop > 80:
-    raise SystemExit(1)
-if two - write > 80:
-    raise SystemExit(1)
-if three - two > 80:
-    raise SystemExit(1)
-if four - three > 80:
-    raise SystemExit(1)
-if five - four > 80:
-    raise SystemExit(1)
-if six - five > 80:
-    raise SystemExit(1)
-if open_stamp - first > 80:
-    raise SystemExit(1)
-if open_two - first_read > 80:
-    raise SystemExit(1)
-if open_three - open_two > 80:
-    raise SystemExit(1)
-if open_four - open_three > 80:
-    raise SystemExit(1)
-if open_five - open_four > 80:
-    raise SystemExit(1)
-if html.count('data-post-brief=""') != 1 or html.count('href="#claim"') != 1:
-    raise SystemExit(1)
-if html.count('data-post-after-open=""') != 1:
-    raise SystemExit(1)
-if html.count('data-post-after-open-first=""') != 1:
-    raise SystemExit(1)
-if html.count('data-first-write="post"') != 1:
-    raise SystemExit(1)
-if html.count('data-post-after-open-two=""') != 1:
-    raise SystemExit(1)
-if html.count('data-post-after-open-three=""') != 1:
-    raise SystemExit(1)
-if html.count('data-post-after-open-four=""') != 1:
-    raise SystemExit(1)
-if html.count('data-post-after-open-five=""') != 1:
-    raise SystemExit(1)
-if html.count('data-post-after-open-six=""') != 1:
-    raise SystemExit(1)
-if html.count('data-first-click="open"') != 1:
-    raise SystemExit(1)
-if html.count('data-open-after-post-first=""') != 1:
-    raise SystemExit(1)
-if html.count('data-first-read="open"') != 1:
-    raise SystemExit(1)
-if html.count('data-open-after-post-two-stamp=""') != 1:
-    raise SystemExit(1)
-if html.count('data-open-after-post-three-stamp=""') != 1:
-    raise SystemExit(1)
-if html.count('data-open-after-post-four-stamp=""') != 1:
-    raise SystemExit(1)
-if html.count('data-open-after-post-five-stamp=""') != 1:
-    raise SystemExit(1)
-PY
-  python3 - "${listed_body}" <<'PY' || fail "paid board must put flyers before the claim strip"
-import sys
-html = open(sys.argv[1], encoding="utf-8").read()
-flyers = html.find('aria-label="Paid briefs this week"')
-claim = html.find('id="claim"')
-if flyers < 0 or claim < 0 or flyers >= claim:
+rail = html.find('class="home-rail"')
+if flyers < 0 or claim < 0 or rail < 0 or not (claim < rail < flyers):
     raise SystemExit(1)
 PY
   if grep -q 'data-empty-week="true"' "${listed_body}"; then
@@ -2989,7 +2682,7 @@ PY
   same_bid_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub("\r",""); print $2}' "${same_bid_headers}")"
   [[ -n "${same_bid_location}" ]] || fail "same-or-lower raise missing Location"
   if [[ "${same_bid_location}" != *"/checkout/raise-too-small"* ]]; then
-    fail "same-or-lower raise must land on /checkout/raise-too-small, not Polar"
+    fail "same-or-lower raise must land on /checkout/raise-too-small, not Waffo"
   fi
   too_small_page="$(mktemp)"
   too_small_page_code="$(curl -sS -o "${too_small_page}" -w '%{http_code}' "http://127.0.0.1:${port}/checkout/raise-too-small")"
@@ -2999,17 +2692,17 @@ PY
   grep -q 'data-occupied="true"' "${too_small_page}" \
     || fail "occupied raise-too-small must see the paid wall"
   grep -q 'data-raise-too-small=""' "${too_small_page}" \
-    || fail "occupied raise-too-small must stamp Polar still-charges-difference"
-  grep -q 'Polar still charges only the difference' "${too_small_page}" \
-    || fail "occupied raise-too-small must name Polar still charges only the difference"
-  grep -q 'not a new full bid' "${too_small_page}" \
-    || fail "occupied raise-too-small must name Polar raise as not a new full bid"
-  grep -q 'Unpaid Polar checkout stays off the wall' "${too_small_page}" \
-    || fail "occupied raise-too-small must keep unpaid Polar checkout off the wall"
+    || fail "occupied raise-too-small must stamp Waffo still-charges-difference"
+  grep -q 'payer is charged only the difference' "${too_small_page}" \
+    || fail "occupied raise-too-small must name the original payer's difference"
+  grep -q 'wall changes only after payment is confirmed' "${too_small_page}" \
+    || fail "occupied raise-too-small must wait for payment before rank changes"
+  grep -q 'Raise is too small' "${too_small_page}" \
+    || fail "occupied raise-too-small must identify the rejected minimum step"
   grep -q 'at least $1 above the current bid' "${too_small_page}" \
     || fail "occupied raise-too-small must still require $1 above the current bid"
   if grep -qE 'data-raise-difference|data-raise-charged|data-about-raise|data-rules-raise' "${too_small_page}"; then
-    fail "occupied raise-too-small must not restamp checkout / about / rules Polar copy"
+    fail "occupied raise-too-small must not restamp checkout / about / rules Waffo copy"
   fi
   same_bid_json="$(mktemp)"
   same_bid_json_code="$(curl -sS -o "${same_bid_json}" -w '%{http_code}' \
@@ -3020,8 +2713,8 @@ PY
   [[ "${same_bid_json_code}" == "400" ]] || fail "JSON same-or-lower raise expected 400 got ${same_bid_json_code}"
   grep -q 'raise_too_small' "${same_bid_json}" \
     || fail "JSON same-or-lower raise must report raise_too_small"
-  grep -q 'Polar still charges only the difference' "${same_bid_json}" \
-    || fail "JSON same-or-lower raise must name Polar still charges only the difference"
+  grep -q 'A raise charges only the difference, not a new full bid' "${same_bid_json}" \
+    || fail "JSON same-or-lower raise must name the difference charge"
   listed_after_too_small="$(mktemp)"
   curl -sS -o "${listed_after_too_small}" "http://127.0.0.1:${port}/"
   grep -q 'data-occupied="true"' "${listed_after_too_small}" \
@@ -3052,13 +2745,13 @@ PY
   grep -q 'data-return="success"' "${raise_return}" \
     || fail "raise return must be paid success"
   grep -q 'data-raise-charged=""' "${raise_return}" \
-    || fail "raise return must stamp Polar charged the difference"
+    || fail "raise return must stamp Waffo charged the difference"
   grep -q 'data-raise-charge-usd=""' "${raise_return}" \
-    || fail "raise return must name the Polar raise charge in dollars"
-  grep -q 'Polar charged' "${raise_return}" \
-    || fail "raise return must say Polar charged"
+    || fail "raise return must name the Waffo raise charge in dollars"
+  grep -q 'was charged' "${raise_return}" \
+    || fail "raise return must expose the charged amount"
   grep -q 'the difference, not a new full bid' "${raise_return}" \
-    || fail "raise return must name Polar charged the difference, not a new full bid"
+    || fail "raise return must name Waffo charged the difference, not a new full bid"
   grep -Fq 'listed at $7' "${raise_return}" \
     || fail "raise return must still name the public bid"
 
@@ -3087,12 +2780,12 @@ PY
   [[ "${cancel_return_code}" == "200" ]] || fail "canceled raise return expected 200 got ${cancel_return_code}"
   grep -q 'data-return="cancel"' "${cancel_return}" \
     || fail "canceled raise return must stay canceled"
-  grep -q 'No rank change' "${cancel_return}" \
-    || fail "canceled raise return must say no rank change"
-  grep -q 'A canceled or unpaid Polar return still changes no rank' "${cancel_return}" \
+  grep -q 'No rank was claimed' "${cancel_return}" \
+    || fail "canceled raise return must say no rank was claimed"
+  grep -q 'A canceled or incomplete checkout never creates' "${cancel_return}" \
     || fail "canceled raise return must stay off the wall"
   if grep -qE 'data-raise-charged|data-return="success"|the difference, not a new full bid' "${cancel_return}"; then
-    fail "canceled raise return must not claim Polar charged the difference"
+    fail "canceled raise return must not claim Waffo charged the difference"
   fi
   cancel_home="$(mktemp)"
   curl -sS -o "${cancel_home}" "http://127.0.0.1:${port}/"
@@ -3206,17 +2899,17 @@ if html.count('data-later-flyer=""') != 1:
     raise SystemExit(1)
 if html.count('data-later-pack=""') != 1:
     raise SystemExit(1)
-if "These flyers are not this week’s #1 prize" not in html:
+if "These flyers are not #1 in the rolling last 7 days" not in html:
     raise SystemExit(1)
 if 'data-first-click="open"' not in rival.group(0):
     raise SystemExit(1)
 if 'data-first-click="open"' in acme.group(0):
     raise SystemExit(1)
-if 'aria-label="Paid briefs this week"' not in html or 'aria-label="Later briefs this week"' not in html:
+if 'aria-label="Paid briefs — rolling last 7 days"' not in html or 'aria-label="Later briefs — rolling last 7 days"' not in html:
     raise SystemExit(1)
-if html.find('aria-label="Paid briefs this week"') >= html.find('aria-label="Later briefs this week"'):
+if html.find('aria-label="Paid briefs — rolling last 7 days"') >= html.find('aria-label="Later briefs — rolling last 7 days"'):
     raise SystemExit(1)
-if html.find('data-later-pack=""') >= html.find('aria-label="Later briefs this week"'):
+if html.find('data-later-pack=""') >= html.find('aria-label="Later briefs — rolling last 7 days"'):
     raise SystemExit(1)
 rival_terms = rival.group(0).find('data-terms=""')
 rival_open = rival.group(0).find('class="open-label">Open brief')
@@ -3333,6 +3026,8 @@ PY
     || fail "GET /r/:id must show the brand terms first"
   grep -q 'https://example.com/clean' "${confirm_body}" \
     || fail "GET /r/:id must show the canonical brief URL"
+  grep -q 'class="confirm-url"' "${confirm_body}" \
+    || fail "GET /r/:id must mark the receding brief URL"
   grep -q 'Leave to the brief' "${confirm_body}" \
     || fail "GET /r/:id must offer Leave to the brief"
   grep -q "action=\"/r/${listing_id}\"" "${confirm_body}" \
@@ -3361,9 +3056,6 @@ PY
   if grep -qE 'utm_|fbclid' "${confirm_body}"; then
     fail "GET /r/:id must not show tracking query"
   fi
-  if grep -qE 'data-post-after-open-seven|data-open-after-post-six' "${confirm_body}"; then
-    fail "GET /r/:id must not stamp *-after-*-N"
-  fi
   python3 - "${confirm_body}" <<'PY' || fail "confirm sheet must put terms before the uncounted preview, then URL before the leave hop"
 import sys
 html = open(sys.argv[1], encoding="utf-8").read()
@@ -3371,6 +3063,7 @@ stamp = html.find('data-confirm-before-leave=""')
 uncounted = html.find('data-confirm-uncounted=""')
 copy = html.find("Opening this flyer has not counted a hop")
 terms = html.find("stripped tracking")
+url_class = html.find('class="confirm-url"')
 url = html.find("https://example.com/clean")
 leave = html.find('data-leave-brief=""')
 bid = html.find('class="confirm-bid later-fact"')
@@ -3378,15 +3071,17 @@ bid_later = html.find('data-later-fact=""', bid)
 hops_class = html.find('class="confirm-clicks later-fact"')
 hops_later = html.find('data-later-fact=""', hops_class)
 hops = html.find("public hops — not reach")
-if stamp < 0 or uncounted < 0 or copy < 0 or terms < 0 or url < 0 or leave < 0 or bid < 0:
+if stamp < 0 or uncounted < 0 or copy < 0 or terms < 0 or url_class < 0 or url < 0 or leave < 0 or bid < 0:
     raise SystemExit(1)
 if bid_later < 0 or hops_class < 0 or hops_later < 0 or hops < 0:
     raise SystemExit(1)
-if not (stamp < terms < uncounted <= copy < url < leave < bid <= bid_later < hops_class <= hops_later < hops):
+if not (stamp < terms < uncounted <= copy < url_class < url < leave < bid <= bid_later < hops_class <= hops_later < hops):
     raise SystemExit(1)
 if html.count('data-confirm-before-leave=""') != 1:
     raise SystemExit(1)
 if html.count('data-leave-brief=""') != 1:
+    raise SystemExit(1)
+if html.count('class="confirm-url"') != 1:
     raise SystemExit(1)
 if html.count('class="confirm-bid later-fact"') != 1:
     raise SystemExit(1)
@@ -3442,7 +3137,7 @@ PY
   # New listener on a fresh port so a leftover next-server cannot serve last week.
   port=$((port + 1))
   export WEEK_NOW="2099-01-05T00:00:00.000Z"
-  PORT="${port}" node ./node_modules/next/dist/bin/next start --port "${port}" --hostname 127.0.0.1 \
+  NODE_ENV=development PORT="${port}" node ./node_modules/next/dist/bin/next start --port "${port}" --hostname 127.0.0.1 \
     >"${log_file}" 2>&1 &
   server_pid=$!
   ready=0
