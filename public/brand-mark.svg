@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Creator Brief Wall flyer</title>
+  <rect x="2" y="2" width="60" height="60" rx="10" fill="#c9b79a"/>
+  <path d="M14 15h36v37l-5-3-5 3-5-3-5 3-5-3-5 3-6-3V15Z" fill="#f6edd8" stroke="#3a2d20" stroke-width="2"/>
+  <path d="M24 10h18v10H24z" fill="#d9c27a" transform="rotate(-4 33 15)"/>
+  <path d="M21 28h22M21 36h16M21 44h20" stroke="#8a1f14" stroke-width="3" stroke-linecap="round"/>
+</svg>

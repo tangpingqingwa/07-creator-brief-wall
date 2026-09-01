@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: "About · Creator Brief Wall",
   description:
     "Brands pay to place their briefs in front of creators. Rank is the bid.",
+  alternates: { canonical: "/about" },
 };
 
 export const runtime = "nodejs";

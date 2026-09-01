@@ -313,6 +313,14 @@ export function BoardChrome({
           href="/"
           aria-label="Creator Brief Wall home"
         >
+          <img
+            className="brand-mark"
+            src="/brand-mark.svg"
+            width="28"
+            height="28"
+            alt=""
+            aria-hidden="true"
+          />
           Creator Brief Wall
         </a>
         <p className="mast-mark">Rolling last 7 days · UTC</p>

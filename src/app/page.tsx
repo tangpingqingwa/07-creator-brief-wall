@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { unstable_noStore as noStore } from "next/cache";
 import { headers } from "next/headers";
 import { connection } from "next/server";
@@ -9,6 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
+export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 export default async function HomePage() {
   noStore();

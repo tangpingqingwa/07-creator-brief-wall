@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: "Rules · Creator Brief Wall",
   description:
     "Min $5. Rank is the bid. Older wins ties. Raise pays the difference. Rolling last 7 days. No chat or NSFW.",
+  alternates: { canonical: "/rules" },
 };
 
 export const runtime = "nodejs";
