@@ -94,6 +94,12 @@ test("server and client reject obfuscated schemes, relative paths, and private t
     "https://[::1]/brief",
     "https://[fd00::1]/brief",
     "https://[fe80::1]/brief",
+    "https://[fec0::1]/brief",
+    "https://[fedf::1]/brief",
+    "https://[feff::1]/brief",
+    "https://[::ffff:127.0.0.1]/brief",
+    "https://[::ffff:10.0.0.1]/brief",
+    "https://[::ffff:192.168.1.1]/brief",
   ];
 
   for (const raw of invalid) {

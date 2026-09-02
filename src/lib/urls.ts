@@ -351,6 +351,7 @@ function isPublicIpv6(host: string): boolean {
   if (
     (first & 0xfe00) === 0xfc00 || // fc00::/7, unique local
     (first & 0xffc0) === 0xfe80 || // fe80::/10, link local
+    (first & 0xffc0) === 0xfec0 || // fec0::/10, deprecated site local
     (first & 0xff00) === 0xff00 // ff00::/8, multicast
   ) {
     return false;
