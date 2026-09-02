@@ -369,6 +369,17 @@ function isPublicIpv6(host: string): boolean {
     );
   }
 
+  const compatibleIpv4 = words.slice(0, 6).every((word) => word === 0);
+  if (compatibleIpv4) {
+    const firstOctet = words[6] >> 8;
+    const secondOctet = words[6] & 0xff;
+    const thirdOctet = words[7] >> 8;
+    const fourthOctet = words[7] & 0xff;
+    return isPublicIpv4(
+      `${firstOctet}.${secondOctet}.${thirdOctet}.${fourthOctet}`,
+    );
+  }
+
   return true;
 }
 
