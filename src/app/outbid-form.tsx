@@ -2,6 +2,7 @@
 
 import React, { useRef, useState } from "react";
 import { MAX_BID_USD, MIN_BID_USD } from "../lib/rank";
+import { canonicalizeBriefUrl, normalizeBriefUrlInput } from "../lib/urls";
 
 function clampAmount(value: number): number {
   if (!Number.isFinite(value)) return MIN_BID_USD;
@@ -22,10 +23,12 @@ function BriefUrlField({
       Brief URL
       <input
         name="briefUrl"
-        type="url"
+        type="text"
+        inputMode="url"
         required
-        placeholder="https://"
+        placeholder="example.com/brief"
         autoComplete="url"
+        spellCheck={false}
         onChange={(event) => onFieldChange("briefUrl", event.target.value)}
       />
     </label>
@@ -131,12 +134,13 @@ function OccupiedBriefWrite({
       <button
         className="outbid"
         data-slot="claim-button"
+        data-auction-action="Outbid"
         type="submit"
         disabled={!ready}
         aria-disabled={!ready}
+        aria-label="Claim rank"
       >
-        <span className="outbid-label">Outbid</span>
-        <span className="sr-only">Claim rank</span>
+        <span className="outbid-label">Claim rank</span>
       </button>
     </>
   );
@@ -164,13 +168,14 @@ function EmptyClaimFirstWrite({
       <button
         className="outbid"
         data-slot="claim-button"
+        data-auction-action="Outbid"
         type="submit"
         data-first-click="claim"
         disabled={!ready}
         aria-disabled={!ready}
+        aria-label="Claim rank"
       >
-        <span className="outbid-label">Outbid</span>
-        <span className="sr-only">Claim rank</span>
+        <span className="outbid-label">Claim rank</span>
       </button>
     </>
   );
@@ -213,6 +218,18 @@ function OccupiedCheckoutCopy({
   );
 }
 
+/** Keep the disabled state in lockstep with the server's URL hygiene rules. */
+export function isBriefUrlReady(raw: string): boolean {
+  try {
+    const normalized = normalizeBriefUrlInput(raw);
+    if (!normalized) return false;
+    canonicalizeBriefUrl(normalized);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function OutbidForm({
   defaultAmount = MIN_BID_USD,
   topBidUsd,
@@ -230,13 +247,7 @@ export function OutbidForm({
   const formReady =
     brand.trim().length > 0 &&
     terms.trim().length > 0 &&
-    (() => {
-      try {
-        return new URL(briefUrl).protocol === "https:";
-      } catch {
-        return false;
-      }
-    })();
+    isBriefUrlReady(briefUrl);
   const onFieldChange: BriefFieldChange = (field, value) => {
     if (field === "brand") setBrand(value);
     if (field === "terms") setTerms(value);
@@ -281,6 +292,7 @@ export function OutbidForm({
               max={MAX_BID_USD}
               step={1}
               value={amount}
+              style={{ width: `${Math.max(2, String(amount).length)}ch` }}
               onChange={(event) => {
                 const next = Number(event.target.value.replace(/[^\d]/g, ""));
                 setAmount(clampAmount(next || MIN_BID_USD));

@@ -93,7 +93,9 @@ test("creator wall uses the ordinary plaster-flyer identity", () => {
   assert.match(html, /class="bid later-fact"/);
   assert.match(html, /class="clicks later-fact"/);
   assert.match(html, /class="post-brief"/);
-  assert.match(html, /class="outbid-label">Outbid/);
+  assert.match(html, /class="outbid-label">Claim rank/);
+  assert.match(html, /data-auction-action="Outbid"/);
+  assert.match(html, /aria-label="Claim rank"/);
   assert.match(html, />Claim rank</);
   assert.doesNotMatch(html, /home-board|home-window-tab|home-find|home-theme|today-ranking|latest-activity/);
   assert.doesNotMatch(html, /picks\.daily|DTC Picks|Morning edition|online|visitors|Choose category/);
@@ -116,7 +118,9 @@ test("empty creator wall stays blank and starts with Claim #1", () => {
   assert.match(html, /Blank plaster/);
   assert.match(html, /\$5 pastes the first flyer at #1/);
   assert.match(html, /data-first-click="claim"/);
-  assert.match(html, /class="outbid-label">Outbid/);
+  assert.match(html, /class="outbid-label">Claim rank/);
+  assert.match(html, /data-auction-action="Outbid"/);
+  assert.match(html, /aria-label="Claim rank"/);
   assert.doesNotMatch(html, /data-open-brief|data-prize|data-later-fact|data-post-brief|class="card/);
   assert.ok(html.indexOf('id="claim"') < html.indexOf('data-empty-week="true"'));
 });

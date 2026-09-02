@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { test } from "node:test";
+import { isBriefUrlReady } from "../src/app/outbid-form";
 import { AboutCopy } from "../src/lib/about-copy";
 import { RaiseTooSmallCopy } from "../src/lib/raise-too-small-copy";
 import { RulesCopy } from "../src/lib/rules-copy";
@@ -9,6 +10,7 @@ import { CheckoutError, parseCheckoutInput } from "../src/lib/polar";
 import {
   briefUrlKey,
   canonicalizeBriefUrl,
+  normalizeBriefUrlInput,
   outboundBriefUrl,
   UrlError,
 } from "../src/lib/urls";
@@ -40,6 +42,25 @@ test("strips utm_* / fbclid and a tracker-only query; keeps a brief id", () => {
   assert.doesNotMatch(
     canonicalizeBriefUrl("https://example.com/brief?utm_source=x"),
     /utm_|fbclid|\?$/,
+  );
+});
+
+test("bare brief domains default to HTTPS before canonicalization", () => {
+  assert.equal(
+    normalizeBriefUrlInput("example.com/brief"),
+    "https://example.com/brief",
+  );
+  assert.equal(
+    normalizeBriefUrlInput("example.com:8443/brief"),
+    "https://example.com:8443/brief",
+  );
+  assert.equal(
+    canonicalizeBriefUrl("Example.com/brief?utm_source=campaign"),
+    "https://example.com/brief",
+  );
+  assert.equal(
+    canonicalizeBriefUrl("//example.com/brief"),
+    "https://example.com/brief",
   );
 });
 
@@ -211,6 +232,24 @@ test("checkout stores the stripped URL and rejects chat / NSFW / shortener / htt
       },
     );
   }
+});
+
+test("checkout accepts a bare brief domain and stores its HTTPS canonical", () => {
+  const draft = parseCheckoutInput({
+    brand: "Acme",
+    terms: "$800 flat, 1 TikTok",
+    briefUrl: "briefs.example.com/acme",
+    bidUsd: 5,
+    weekId: "2026-W34",
+  });
+  assert.equal(draft.briefUrl, "https://briefs.example.com/acme");
+});
+
+test("client readiness uses the same HTTPS default and rejects unsafe schemes", () => {
+  assert.equal(isBriefUrlReady("briefs.example.com/acme"), true);
+  assert.equal(isBriefUrlReady("https://briefs.example.com/acme"), true);
+  assert.equal(isBriefUrlReady("http://briefs.example.com/acme"), false);
+  assert.equal(isBriefUrlReady("javascript:alert(1)"), false);
 });
 
 test("rules state min $5, rank=bid, older wins, raise pays difference", () => {

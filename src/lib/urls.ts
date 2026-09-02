@@ -143,6 +143,31 @@ function hostnameOfHost(host: string): string {
     .replace(/^\.+/, "");
 }
 
+const URL_SCHEME_RE = /^([a-z][a-z\d+.-]*):/i;
+
+/**
+ * Form inputs commonly omit the scheme for a public brief domain. Treat that
+ * shorthand as HTTPS while preserving an explicitly supplied scheme so HTTP
+ * and non-web protocols still fail closed in parseAbsoluteUrl.
+ */
+export function normalizeBriefUrlInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+
+  const scheme = trimmed.match(URL_SCHEME_RE);
+  if (scheme) {
+    const rest = trimmed.slice(scheme[0].length);
+    const host = scheme[1].toLowerCase();
+    const looksLikeHostPort =
+      (host.includes(".") || host === "localhost") &&
+      /^\d+(?:[/?#]|$)/.test(rest);
+    if (!looksLikeHostPort) return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
+
 export function isChatUrl(parsed: URL): boolean {
   const host = hostnameOf(parsed);
   if (hostMatchesAny(host, CHAT_HOSTS) || host === "discord.com") {
@@ -174,9 +199,10 @@ function parseAbsoluteUrl(raw: string): URL {
   if (!trimmed) {
     throw new UrlError("invalid_url", "brief URL is required");
   }
+  const candidate = normalizeBriefUrlInput(trimmed);
   let parsed: URL;
   try {
-    parsed = new URL(trimmed);
+    parsed = new URL(candidate);
   } catch {
     throw new UrlError("invalid_url", "brief URL is not a valid URL");
   }
