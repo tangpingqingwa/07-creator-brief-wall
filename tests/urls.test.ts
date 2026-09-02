@@ -64,6 +64,72 @@ test("bare brief domains default to HTTPS before canonicalization", () => {
   );
 });
 
+test("server and client reject obfuscated schemes, relative paths, and private targets", () => {
+  const invalid = [
+    "javascript\n://example.com/brief",
+    "java\tscript:123",
+    "http\r://example.com/brief",
+    "java script:123",
+    "java\\script:123",
+    "https\\://example.com/brief",
+    "https//example.com/brief",
+    "http//example.com/brief",
+    "data//example.com/brief",
+    "/path",
+    "///example.com/brief",
+    "https:///example.com/brief",
+    "https://example.com\\evil",
+    "https://localhost/brief",
+    "https://brief.localhost/brief",
+    "https://brief.local/brief",
+    "https://brief.test/brief",
+    "https://brief.invalid/brief",
+    "https://brief.example/brief",
+    "https://127.0.0.1:3000/brief",
+    "127.0.0.1:3000/brief",
+    "https://10.0.0.1/brief",
+    "https://172.16.0.1/brief",
+    "https://192.168.1.1/brief",
+    "https://169.254.1.1/brief",
+    "https://[::1]/brief",
+    "https://[fd00::1]/brief",
+    "https://[fe80::1]/brief",
+  ];
+
+  for (const raw of invalid) {
+    assertUrlError(raw, "invalid_url");
+    assert.equal(isBriefUrlReady(raw), false, raw);
+  }
+});
+
+test("safe HTTPS, protocol-relative, and plausible bare public authorities remain accepted", () => {
+  for (const raw of [
+    "https://example.com/brief",
+    "//example.com/brief",
+    "example.com/brief",
+    "example.com:8443/brief",
+  ]) {
+    assert.equal(isBriefUrlReady(raw), true, raw);
+    assert.doesNotThrow(() => canonicalizeBriefUrl(raw));
+  }
+
+  assert.equal(normalizeBriefUrlInput("/path"), "/path");
+  assert.equal(normalizeBriefUrlInput("///example.com/brief"), "///example.com/brief");
+  assert.equal(normalizeBriefUrlInput("https//example.com/brief"), "https//example.com/brief");
+});
+
+test("repeated trailing dots cannot bypass denied hosts or public-host checks", () => {
+  for (const [raw, code] of [
+    ["https://t.me../acme", "chat_link_forbidden"],
+    ["https://onlyfans.com.../creator", "nsfw_forbidden"],
+    ["https://bit.ly.../acme", "shortener_forbidden"],
+    ["https://example.com../brief", "invalid_url"],
+  ] as const) {
+    assertUrlError(raw, code);
+    assert.equal(isBriefUrlReady(raw), false, raw);
+  }
+});
+
 test("https only; http, javascript, and data schemes are invalid_url", () => {
   for (const raw of [
     "http://example.com/brief",
