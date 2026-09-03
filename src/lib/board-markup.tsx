@@ -72,13 +72,22 @@ function PostBriefLink({
 }: {
   claimNumberOneAvailable: boolean;
 }) {
+  // The enabled occupied route keeps data-first-write="post" and href="#claim"; max state omits both.
   return (
     <a
       className="post-brief"
-      href="#claim"
+      href={claimNumberOneAvailable ? "#claim" : undefined}
       data-post-brief=""
-      data-first-write="post"
-      aria-label="Post a brief"
+      data-first-write={claimNumberOneAvailable ? "post" : undefined}
+      data-post-brief-unavailable={
+        claimNumberOneAvailable ? undefined : "max-bid"
+      }
+      aria-disabled={claimNumberOneAvailable ? undefined : true}
+      aria-label={
+        claimNumberOneAvailable
+          ? "Post a brief"
+          : "Post a brief unavailable — Claim #1 unavailable at the $50,000 maximum"
+      }
     >
       <span className="post-label">Post a brief</span>
       <span className="post-dest">

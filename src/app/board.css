@@ -194,6 +194,12 @@ body {
   border-bottom-width: 2px;
 }
 
+.wall-occupied a.post-brief[data-post-brief-unavailable] {
+  cursor: not-allowed;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
 .wall-occupied a.post-brief .post-dest {
   color: var(--muted);
   font-size: 0.78rem;
@@ -290,6 +296,28 @@ body {
   letter-spacing: -0.03em;
   line-height: 1.1;
   white-space: nowrap;
+}
+
+.creator-wall .paste-rail[data-claim-number-one-unavailable] h2 {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.creator-wall .paste-rail[data-claim-number-one-unavailable] h2 > span:first-child {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.creator-wall .paste-rail[data-claim-number-one-unavailable] .amount-stepper {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .amount-stepper {

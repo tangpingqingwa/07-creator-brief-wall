@@ -234,6 +234,39 @@ test("maxed occupied claim is unavailable without promising a tie", () => {
   assert.match(maxed, /aria-label="Increase bid by one dollar" disabled=""/);
   assert.match(maxed, /data-slot="claim-button"[^>]*disabled=""/);
   assert.match(maxed, /class="post-dest">Claim #1 unavailable/);
+  assert.match(maxed, /data-post-brief-unavailable="max-bid"/);
+  assert.match(
+    maxed,
+    /aria-label="Post a brief unavailable — Claim #1 unavailable at the \$50,000 maximum"/,
+  );
+  assert.match(
+    maxed,
+    /data-post-brief-unavailable="max-bid"[^>]*aria-disabled="true"/,
+  );
+  assert.doesNotMatch(
+    maxed,
+    /data-post-brief-unavailable="max-bid"[^>]*href="#claim"/,
+  );
+  assert.doesNotMatch(
+    maxed,
+    /data-post-brief-unavailable="max-bid"[^>]*data-first-write="post"/,
+  );
+  assert.match(
+    cssSource,
+    /\.creator-wall \.paste-rail\[data-claim-number-one-unavailable\] h2\s*\{[\s\S]*?width: 100%;[\s\S]*?min-width: 0;[\s\S]*?max-width: 100%;[\s\S]*?flex-wrap: wrap;[\s\S]*?white-space: normal;[\s\S]*?overflow-wrap: anywhere;/,
+  );
+  assert.match(
+    cssSource,
+    /\.creator-wall \.paste-rail\[data-claim-number-one-unavailable\] h2 > span:first-child\s*\{[\s\S]*?flex: 1 1 100%;[\s\S]*?min-width: 0;[\s\S]*?max-width: 100%;/,
+  );
+  assert.match(
+    cssSource,
+    /\.creator-wall \.paste-rail\[data-claim-number-one-unavailable\] \.amount-stepper\s*\{[\s\S]*?min-width: 0;[\s\S]*?max-width: 100%;/,
+  );
+  assert.match(
+    cssSource,
+    /\.wall-occupied a\.post-brief\[data-post-brief-unavailable\]\s*\{[\s\S]*?pointer-events: none;/,
+  );
   assert.doesNotMatch(maxed, /data-raise-difference=""/);
   assert.doesNotMatch(maxed, /Claim #1 for/);
   assert.doesNotMatch(maxed, FORBIDDEN);
