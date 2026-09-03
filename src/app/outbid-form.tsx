@@ -1,12 +1,23 @@
 "use client";
 
-import React, { useRef, useState } from "react";
-import { MAX_BID_USD, MIN_BID_USD } from "../lib/rank";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  claimNumberOneUsd,
+  MAX_BID_USD,
+  MIN_BID_USD,
+} from "../lib/rank";
 import { canonicalizeBriefUrl, normalizeBriefUrlInput } from "../lib/urls";
 
-function clampAmount(value: number): number {
-  if (!Number.isFinite(value)) return MIN_BID_USD;
-  return Math.max(MIN_BID_USD, Math.min(MAX_BID_USD, Math.trunc(value)));
+function clampAmount(value: number, minimum = MIN_BID_USD): number {
+  const normalizedMinimum = Number.isFinite(minimum)
+    ? Math.trunc(minimum)
+    : MIN_BID_USD;
+  const floor = Math.max(
+    MIN_BID_USD,
+    Math.min(MAX_BID_USD, normalizedMinimum),
+  );
+  if (!Number.isFinite(value)) return floor;
+  return Math.max(floor, Math.min(MAX_BID_USD, Math.trunc(value)));
 }
 
 type BriefFieldName = "brand" | "terms" | "briefUrl";
@@ -93,6 +104,8 @@ function BriefDetails({
     <details
       className="brief-details"
       data-slot="category-control"
+      data-required-fields=""
+      open
       ref={detailsRef}
     >
       <summary>
@@ -101,6 +114,7 @@ function BriefDetails({
           ·
         </span>
         <span className="brief-details-meta">Brand + Terms</span>
+        <span className="brief-details-required">required</span>
       </summary>
       <div
         className="brief-details-content"
@@ -218,7 +232,7 @@ function OccupiedCheckoutCopy({
   );
 }
 
-/** Keep the disabled state in lockstep with the server's URL hygiene rules. */
+/** Keep the disabled state in lockstep with the client/server validation rules. */
 export function isBriefUrlReady(raw: string): boolean {
   try {
     const normalized = normalizeBriefUrlInput(raw);
@@ -230,6 +244,20 @@ export function isBriefUrlReady(raw: string): boolean {
   }
 }
 
+/** The visible claim control must never offer a bid below its current floor. */
+export function claimFloorUsd(
+  defaultAmount = MIN_BID_USD,
+  topBidUsd?: number,
+): number {
+  const suggestedFloor =
+    topBidUsd === undefined ? defaultAmount : claimNumberOneUsd(topBidUsd);
+  return clampAmount(suggestedFloor);
+}
+
+export function isBidAmountReady(amount: number, floor: number): boolean {
+  return Number.isInteger(amount) && amount >= floor && amount <= MAX_BID_USD;
+}
+
 export function OutbidForm({
   defaultAmount = MIN_BID_USD,
   topBidUsd,
@@ -237,14 +265,19 @@ export function OutbidForm({
   defaultAmount?: number;
   topBidUsd?: number;
 }) {
-  const [amount, setAmount] = useState(() => clampAmount(defaultAmount));
+  const occupied = topBidUsd !== undefined;
+  const floor = claimFloorUsd(defaultAmount, topBidUsd);
+  const [amount, setAmount] = useState(() => clampAmount(defaultAmount, floor));
   const [brand, setBrand] = useState("");
   const [terms, setTerms] = useState("");
   const [briefUrl, setBriefUrl] = useState("");
-  const floor = clampAmount(defaultAmount);
-  const occupied = topBidUsd !== undefined;
-  const takesLead = amount > (topBidUsd ?? floor - 1);
+  useEffect(() => {
+    setAmount((current) => clampAmount(current, floor));
+  }, [floor]);
+  const effectiveAmount = clampAmount(amount, floor);
+  const takesLead = effectiveAmount > (topBidUsd ?? floor - 1);
   const formReady =
+    isBidAmountReady(effectiveAmount, floor) &&
     brand.trim().length > 0 &&
     terms.trim().length > 0 &&
     isBriefUrlReady(briefUrl);
@@ -260,6 +293,7 @@ export function OutbidForm({
       data-slot="claim-hero"
       id="claim"
       data-claim-amount={floor}
+      data-amount-floor={floor}
       data-top-bid={topBidUsd ?? ""}
       data-empty-claim-first={occupied ? undefined : ""}
       aria-label={occupied ? "Post a brief" : "Claim #1"}
@@ -274,7 +308,8 @@ export function OutbidForm({
             type="button"
             className="step"
             aria-label="Decrease bid by one dollar"
-            onClick={() => setAmount((current) => clampAmount(current - 1))}
+            disabled={effectiveAmount <= floor}
+            onClick={() => setAmount((current) => clampAmount(current - 1, floor))}
           >
             −
           </button>
@@ -282,20 +317,21 @@ export function OutbidForm({
             $
             <input
               id="bid-usd"
+              type="number"
               name="bidUsd"
               form="brief-form"
               aria-label="Bid amount in whole US dollars"
               inputMode="numeric"
               pattern="[0-9]*"
               required
-              min={MIN_BID_USD}
+              min={floor}
               max={MAX_BID_USD}
               step={1}
-              value={amount}
-              style={{ width: `${Math.max(2, String(amount).length)}ch` }}
+              value={effectiveAmount}
+              style={{ width: `${Math.max(2, String(effectiveAmount).length)}ch` }}
               onChange={(event) => {
                 const next = Number(event.target.value.replace(/[^\d]/g, ""));
-                setAmount(clampAmount(next || MIN_BID_USD));
+                setAmount(clampAmount(next || floor, floor));
               }}
             />
           </label>
@@ -303,7 +339,8 @@ export function OutbidForm({
             type="button"
             className="step"
             aria-label="Increase bid by one dollar"
-            onClick={() => setAmount((current) => clampAmount(current + 1))}
+            disabled={effectiveAmount >= MAX_BID_USD || floor >= MAX_BID_USD}
+            onClick={() => setAmount((current) => clampAmount(current + 1, floor))}
           >
             +
           </button>
@@ -312,7 +349,7 @@ export function OutbidForm({
       {occupied && topBidUsd !== undefined ? (
         <OccupiedCheckoutCopy
           floor={floor}
-          amount={amount}
+          amount={effectiveAmount}
           topBidUsd={topBidUsd}
           takesLead={takesLead}
         />
@@ -328,6 +365,7 @@ export function OutbidForm({
         method="post"
         action="/checkout"
         data-form-ready={formReady ? "true" : "false"}
+        data-amount-floor={floor}
       >
         {occupied ? (
           <OccupiedBriefWrite onFieldChange={onFieldChange} ready={formReady} />

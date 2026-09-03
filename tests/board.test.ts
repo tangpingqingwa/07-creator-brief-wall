@@ -10,6 +10,10 @@ import {
   incrementPublicClick as incrementPublicClickAt,
 } from "../src/lib/clicks";
 import { Board } from "../src/app/board";
+import {
+  claimFloorUsd,
+  isBidAmountReady,
+} from "../src/app/outbid-form";
 import { BoardCards, BoardChrome, OccupiedFlyers } from "../src/lib/board-markup";
 import { confirmBriefHtml } from "../src/lib/confirm-brief";
 import { openDatabase, type AppDb } from "../src/lib/db";
@@ -146,6 +150,55 @@ test("claim strip defaults to the rolling window's real #1 price", () => {
   assert.match(occupied, /data-top-bid="7"/);
   assert.match(occupied, /Need \$8 to take #1/);
   assert.doesNotMatch(occupied, /Blank plaster/);
+  assert.doesNotMatch(occupied, FORBIDDEN);
+});
+
+test("claim form keeps required details open and enforces the occupied floor", () => {
+  const empty = renderToStaticMarkup(
+    createElement(Board, { listings: [], weekId: WEEK }),
+  );
+  assert.match(
+    empty,
+    /<details class="brief-details"[^>]*data-required-fields="" open="">/,
+  );
+  assert.match(empty, /class="brief-details-required">required/);
+  assert.match(empty, /name="brand"/);
+  assert.match(empty, /name="terms"/);
+  assert.match(empty, /min="5"/);
+  assert.equal(claimFloorUsd(5), 5);
+  assert.equal(isBidAmountReady(4, claimFloorUsd(5)), false);
+  assert.equal(isBidAmountReady(5, claimFloorUsd(5)), true);
+
+  const occupied = renderToStaticMarkup(
+    createElement(Board, {
+      listings: rankListings([
+        listing({
+          id: "lst_floor",
+          bidUsd: 20,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+      ]),
+      weekId: WEEK,
+    }),
+  );
+  assert.match(occupied, /data-claim-amount="21"/);
+  assert.match(occupied, /data-amount-floor="21"/);
+  assert.match(occupied, /data-top-bid="20"/);
+  assert.match(occupied, /name="bidUsd"[^>]*value="21"/);
+  assert.match(occupied, /type="number"/);
+  assert.match(occupied, /min="21"/);
+  assert.match(occupied, /aria-label="Decrease bid by one dollar" disabled=""/);
+  assert.match(
+    occupied,
+    /<details class="brief-details"[^>]*data-required-fields="" open="">/,
+  );
+  assert.equal(claimFloorUsd(5, 20), 21);
+  assert.equal(isBidAmountReady(20, claimFloorUsd(5, 20)), false);
+  assert.equal(isBidAmountReady(21, claimFloorUsd(5, 20)), true);
+  assert.match(formSource, /clampAmount\(current - 1, floor\)/);
+  assert.match(formSource, /setAmount\(clampAmount\(next \|\| floor, floor\)\)/);
+  assert.match(formSource, /isBidAmountReady\(effectiveAmount, floor\)/);
+  assert.match(cssSource, /\.creator-wall \.brief-details\[open\]/);
   assert.doesNotMatch(occupied, FORBIDDEN);
 });
 

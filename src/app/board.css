@@ -319,6 +319,11 @@ body {
   cursor: pointer;
 }
 
+.step:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .amount-field {
   display: inline-flex;
   flex: 0 0 auto;
@@ -339,6 +344,17 @@ body {
   font: inherit;
   font-variant-numeric: tabular-nums;
   outline: none;
+}
+
+/* Keep the custom one-dollar controls as the only visible stepper. */
+.amount-field input[type="number"]::-webkit-inner-spin-button,
+.amount-field input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.amount-field input[type="number"] {
+  -moz-appearance: textfield;
 }
 
 .claim-note {
@@ -408,6 +424,11 @@ body {
 
 .outbid:hover {
   filter: brightness(1.06);
+}
+
+.outbid:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .plaster {
@@ -1344,7 +1365,7 @@ body {
   align-self: end;
 }
 
-/* The collapsed identity label uses a deliberate separator, not a run-on caption. */
+/* Required identity fields stay open so the first claim is visibly actionable. */
 .creator-wall .brief-details summary {
   display: flex;
   align-items: baseline;
@@ -1353,13 +1374,39 @@ body {
   cursor: pointer;
 }
 
+.creator-wall .brief-details[open] {
+  margin-top: 0.1rem;
+  padding: 0.45rem 0.55rem 0.55rem;
+  border-top: 1px dashed rgba(58, 45, 32, 0.42);
+  border-bottom: 1px dashed rgba(58, 45, 32, 0.42);
+  background: rgba(239, 226, 196, 0.34);
+}
+
+.creator-wall .brief-details[open] summary {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.creator-wall .brief-details-content {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+
 .creator-wall .brief-details-separator,
-.creator-wall .brief-details-meta {
+.creator-wall .brief-details-meta,
+.creator-wall .brief-details-required {
   color: var(--muted);
 }
 
 .creator-wall .brief-details-separator {
   font-weight: 700;
+}
+
+.creator-wall .brief-details-required {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .creator-wall .platform-lane {
