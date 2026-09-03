@@ -1,5 +1,6 @@
 import React, { type ReactNode } from "react";
 import {
+  canClaimNumberOne,
   isWaffoPaidListing,
   rankListings,
   type Platform,
@@ -66,7 +67,11 @@ function PlatformLanes({ listing }: { listing: RankedListing }) {
   );
 }
 
-function PostBriefLink() {
+function PostBriefLink({
+  claimNumberOneAvailable,
+}: {
+  claimNumberOneAvailable: boolean;
+}) {
   return (
     <a
       className="post-brief"
@@ -76,7 +81,9 @@ function PostBriefLink() {
       aria-label="Post a brief"
     >
       <span className="post-label">Post a brief</span>
-      <span className="post-dest">Claim #1</span>
+      <span className="post-dest">
+        {claimNumberOneAvailable ? "Claim #1" : "Claim #1 unavailable"}
+      </span>
     </a>
   );
 }
@@ -238,7 +245,9 @@ export function OccupiedFlyers({ listings }: { listings: RankedListing[] }) {
           </section>
         ) : null}
       </section>
-      <PostBriefLink />
+      <PostBriefLink
+        claimNumberOneAvailable={canClaimNumberOne(lead.bidUsd)}
+      />
     </div>
   );
 }

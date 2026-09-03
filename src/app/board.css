@@ -357,11 +357,22 @@ body {
   -moz-appearance: textfield;
 }
 
+.amount-field input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .claim-note {
   margin: 0.55rem 0 0.75rem;
   color: var(--muted);
   font-size: 0.92rem;
   line-height: 1.35;
+}
+
+.claim-note[data-claim-unavailable] {
+  padding-left: 0.55rem;
+  border-left: 2px solid var(--bid);
+  color: var(--ink);
 }
 
 .outbid-form {

@@ -10,14 +10,12 @@ import {
   incrementPublicClick as incrementPublicClickAt,
 } from "../src/lib/clicks";
 import { Board } from "../src/app/board";
-import {
-  claimFloorUsd,
-  isBidAmountReady,
-} from "../src/app/outbid-form";
+import { claimFloorUsd, isBidAmountReady } from "../src/app/outbid-form";
 import { BoardCards, BoardChrome, OccupiedFlyers } from "../src/lib/board-markup";
 import { confirmBriefHtml } from "../src/lib/confirm-brief";
 import { openDatabase, type AppDb } from "../src/lib/db";
 import {
+  canClaimNumberOne,
   claimNumberOneUsd,
   isWaffoPaidListing,
   paidListings,
@@ -197,9 +195,48 @@ test("claim form keeps required details open and enforces the occupied floor", (
   assert.equal(isBidAmountReady(21, claimFloorUsd(5, 20)), true);
   assert.match(formSource, /clampAmount\(current - 1, floor\)/);
   assert.match(formSource, /setAmount\(clampAmount\(next \|\| floor, floor\)\)/);
-  assert.match(formSource, /isBidAmountReady\(effectiveAmount, floor\)/);
+  assert.match(
+    formSource,
+    /isBidAmountReady\(effectiveAmount, requiredClaimAmount\)/,
+  );
   assert.match(cssSource, /\.creator-wall \.brief-details\[open\]/);
   assert.doesNotMatch(occupied, FORBIDDEN);
+});
+
+test("maxed occupied claim is unavailable without promising a tie", () => {
+  const maxed = renderToStaticMarkup(
+    createElement(Board, {
+      listings: rankListings([
+        listing({
+          id: "lst_maxed",
+          bidUsd: 50_000,
+          createdAt: "2026-08-17T00:00:00.000Z",
+        }),
+      ]),
+      weekId: WEEK,
+    }),
+  );
+  assert.equal(canClaimNumberOne(50_000), false);
+  assert.equal(canClaimNumberOne(49_999), true);
+  assert.match(maxed, /data-claim-number-one-available="false"/);
+  assert.match(maxed, /data-claim-number-one-unavailable="max-bid"/);
+  assert.match(maxed, /data-claim-required-amount="50001"/);
+  assert.match(maxed, /data-amount-floor="50001"/);
+  assert.match(maxed, /min="50001"/);
+  assert.match(maxed, /aria-label="Claim #1 unavailable"/);
+  assert.match(maxed, /Claim #1 unavailable/);
+  assert.match(maxed, /current #1 is already at the \$50,000 maximum/);
+  assert.match(maxed, /temporarily unavailable/);
+  assert.match(maxed, /data-form-ready="false"/);
+  assert.match(maxed, /name="bidUsd"/);
+  assert.match(maxed, /type="number"[^>]*disabled=""/);
+  assert.match(maxed, /aria-label="Decrease bid by one dollar" disabled=""/);
+  assert.match(maxed, /aria-label="Increase bid by one dollar" disabled=""/);
+  assert.match(maxed, /data-slot="claim-button"[^>]*disabled=""/);
+  assert.match(maxed, /class="post-dest">Claim #1 unavailable/);
+  assert.doesNotMatch(maxed, /data-raise-difference=""/);
+  assert.doesNotMatch(maxed, /Claim #1 for/);
+  assert.doesNotMatch(maxed, FORBIDDEN);
 });
 
 test("occupied wall keeps one obvious Open brief and one quiet Claim #1 route", () => {

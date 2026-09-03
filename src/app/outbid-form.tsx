@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import {
+  canClaimNumberOne,
   claimNumberOneUsd,
   MAX_BID_USD,
   MIN_BID_USD,
@@ -266,7 +267,10 @@ export function OutbidForm({
   topBidUsd?: number;
 }) {
   const occupied = topBidUsd !== undefined;
+  const claimNumberOneAvailable = canClaimNumberOne(topBidUsd);
   const floor = claimFloorUsd(defaultAmount, topBidUsd);
+  const requiredClaimAmount =
+    topBidUsd === undefined ? floor : topBidUsd + 1;
   const [amount, setAmount] = useState(() => clampAmount(defaultAmount, floor));
   const [brand, setBrand] = useState("");
   const [terms, setTerms] = useState("");
@@ -277,7 +281,8 @@ export function OutbidForm({
   const effectiveAmount = clampAmount(amount, floor);
   const takesLead = effectiveAmount > (topBidUsd ?? floor - 1);
   const formReady =
-    isBidAmountReady(effectiveAmount, floor) &&
+    claimNumberOneAvailable &&
+    isBidAmountReady(effectiveAmount, requiredClaimAmount) &&
     brand.trim().length > 0 &&
     terms.trim().length > 0 &&
     isBriefUrlReady(briefUrl);
@@ -293,23 +298,42 @@ export function OutbidForm({
       data-slot="claim-hero"
       id="claim"
       data-claim-amount={floor}
-      data-amount-floor={floor}
+      data-amount-floor={requiredClaimAmount}
+      data-claim-required-amount={requiredClaimAmount}
+      data-claim-number-one-available={
+        claimNumberOneAvailable ? "true" : "false"
+      }
+      data-claim-number-one-unavailable={
+        claimNumberOneAvailable ? undefined : "max-bid"
+      }
       data-top-bid={topBidUsd ?? ""}
       data-empty-claim-first={occupied ? undefined : ""}
-      aria-label={occupied ? "Post a brief" : "Claim #1"}
+      aria-label={
+        claimNumberOneAvailable
+          ? occupied
+            ? "Post a brief"
+            : "Claim #1"
+          : "Claim #1 unavailable"
+      }
     >
       <p className="paste-kicker">
-        {occupied ? "Post a brief in the rolling last 7 days" : "Rolling last 7 days wall"}
+        {occupied
+          ? "Post a brief in the rolling last 7 days"
+          : "Rolling last 7 days wall"}
       </p>
       <h2 data-slot="claim-heading">
-        <span>Claim #1 for</span>
+        <span>
+          {claimNumberOneAvailable ? "Claim #1 for" : "Claim #1 unavailable"}
+        </span>
         <span className="amount-stepper" data-slot="amount-stepper">
           <button
             type="button"
             className="step"
             aria-label="Decrease bid by one dollar"
-            disabled={effectiveAmount <= floor}
-            onClick={() => setAmount((current) => clampAmount(current - 1, floor))}
+            disabled={!claimNumberOneAvailable || effectiveAmount <= floor}
+            onClick={() =>
+              setAmount((current) => clampAmount(current - 1, floor))
+            }
           >
             −
           </button>
@@ -324,11 +348,14 @@ export function OutbidForm({
               inputMode="numeric"
               pattern="[0-9]*"
               required
-              min={floor}
+              min={requiredClaimAmount}
               max={MAX_BID_USD}
               step={1}
               value={effectiveAmount}
-              style={{ width: `${Math.max(2, String(effectiveAmount).length)}ch` }}
+              disabled={!claimNumberOneAvailable}
+              style={{
+                width: `${Math.max(2, String(effectiveAmount).length)}ch`,
+              }}
               onChange={(event) => {
                 const next = Number(event.target.value.replace(/[^\d]/g, ""));
                 setAmount(clampAmount(next || floor, floor));
@@ -339,14 +366,27 @@ export function OutbidForm({
             type="button"
             className="step"
             aria-label="Increase bid by one dollar"
-            disabled={effectiveAmount >= MAX_BID_USD || floor >= MAX_BID_USD}
-            onClick={() => setAmount((current) => clampAmount(current + 1, floor))}
+            disabled={
+              !claimNumberOneAvailable ||
+              effectiveAmount >= MAX_BID_USD ||
+              floor >= MAX_BID_USD
+            }
+            onClick={() =>
+              setAmount((current) => clampAmount(current + 1, floor))
+            }
           >
             +
           </button>
         </span>
       </h2>
-      {occupied && topBidUsd !== undefined ? (
+      {!claimNumberOneAvailable ? (
+        <p className="claim-note claim-unavailable" data-claim-unavailable="">
+          The current #1 is already at the ${MAX_BID_USD.toLocaleString(
+            "en-US",
+          )} maximum. Claim #1 is temporarily unavailable until that brief
+          leaves the rolling last-7-days wall.
+        </p>
+      ) : occupied && topBidUsd !== undefined ? (
         <OccupiedCheckoutCopy
           floor={floor}
           amount={effectiveAmount}
@@ -365,7 +405,7 @@ export function OutbidForm({
         method="post"
         action="/checkout"
         data-form-ready={formReady ? "true" : "false"}
-        data-amount-floor={floor}
+        data-amount-floor={requiredClaimAmount}
       >
         {occupied ? (
           <OccupiedBriefWrite onFieldChange={onFieldChange} ready={formReady} />

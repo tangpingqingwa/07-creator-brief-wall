@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  canClaimNumberOne,
+  MAX_BID_USD,
   RAISE_TOO_SMALL_COPY,
   claimNumberOneUsd,
   isWaffoPaidListing,
@@ -276,3 +278,38 @@ test("cannot steal #1 by paying only the incumbent’s difference", () => {
   assert.equal(ranked[1]?.id, "rival");
   assert.equal(ranked[1]?.bidUsd, 5);
 });
+
+test(
+  "maximum bid cannot claim an occupied #1, while separate placement stays valid",
+  () => {
+    assert.equal(takesNumberOne(MAX_BID_USD, MAX_BID_USD), false);
+    assert.equal(canClaimNumberOne(MAX_BID_USD), false);
+    assert.deepEqual(quoteCheckout(undefined, MAX_BID_USD), {
+      ok: true,
+      kind: "place",
+      bidUsd: MAX_BID_USD,
+      chargeUsd: MAX_BID_USD,
+    });
+    const incumbent = listing({
+      id: "max-incumbent",
+      bidUsd: MAX_BID_USD,
+      createdAt: "2026-08-17T00:00:00.000Z",
+    });
+    const tied = listing({
+      id: "max-tied",
+      bidUsd: MAX_BID_USD,
+      createdAt: "2026-08-18T00:00:00.000Z",
+    });
+    assert.deepEqual(
+      rankListings([incumbent, tied]).map((row) => ({
+        id: row.id,
+        rank: row.rank,
+        bidUsd: row.bidUsd,
+      })),
+      [
+        { id: "max-incumbent", rank: 1, bidUsd: MAX_BID_USD },
+        { id: "max-tied", rank: 2, bidUsd: MAX_BID_USD },
+      ],
+    );
+  },
+);

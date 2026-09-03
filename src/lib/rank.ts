@@ -163,6 +163,11 @@ export function takesNumberOne(
   return newBidUsd >= topBidUsd + 1;
 }
 
+/** Claim #1 is unavailable once the current top bid has reached the ceiling. */
+export function canClaimNumberOne(topBidUsd: number | undefined): boolean {
+  return takesNumberOne(MAX_BID_USD, topBidUsd);
+}
+
 /** Empty week: $5 claims #1. Occupied week: one dollar above the current top. */
 export function claimNumberOneUsd(topBidUsd: number | undefined): number {
   if (topBidUsd === undefined) {
