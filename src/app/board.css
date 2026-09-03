@@ -1415,6 +1415,14 @@ body {
 }
 
 @media (max-width: 820px) {
+  .creator-wall .step {
+    flex: 0 0 2.75rem;
+    width: 2.75rem;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    min-height: 2.75rem;
+  }
+
   .creator-wall .wall-mast {
     grid-template-columns: 1fr;
     grid-template-areas:
